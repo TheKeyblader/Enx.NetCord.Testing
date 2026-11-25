@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Enx.NetCord.Testing/Enx.NetCord.Testing.csproj" />
+    <Project Path="src/Enx.NetCord.Testing.Services/Enx.NetCord.Testing.Services.csproj" />
+    <Project Path="src/Enx.NetCord.Testing.Hosting/Enx.NetCord.Testing.Hosting.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Enx.NetCord.Testing.Tests/Enx.NetCord.Testing.Tests.csproj" />
+    <Project Path="tests/Enx.NetCord.Testing.Conformance/Enx.NetCord.Testing.Conformance.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/SampleBot/SampleBot.csproj" />
+    <Project Path="samples/SampleBot.Tests/SampleBot.Tests.csproj" />
+  </Folder>
+</Solution>

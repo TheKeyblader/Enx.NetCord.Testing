@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../TestProject.props" />
+  <ItemGroup>
+    <Compile Include="../Shared/ParityAttribute.cs" Link="ParityAttribute.cs" />
+    <ProjectReference Include="../../src/Enx.NetCord.Testing/Enx.NetCord.Testing.csproj" />
+    <ProjectReference Include="../../src/Enx.NetCord.Testing.Services/Enx.NetCord.Testing.Services.csproj" />
+    <ProjectReference Include="../../src/Enx.NetCord.Testing.Hosting/Enx.NetCord.Testing.Hosting.csproj" />
+  </ItemGroup>
+</Project>

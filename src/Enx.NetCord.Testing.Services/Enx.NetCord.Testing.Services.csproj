@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Test harness for NetCord.Services.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Enx.NetCord.Testing/Enx.NetCord.Testing.csproj" />
+    <PackageReference Include="NetCord.Services" />
+  </ItemGroup>
+</Project>

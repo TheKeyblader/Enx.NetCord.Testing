@@ -1,0 +1,94 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // L'orchestrateur est l'agent par défaut : il planifie et délègue, il ne code pas.
+  "default_agent": "orchestrator",
+
+  // Modèle par défaut. Le modèle de chaque agent est dans son fichier ; comparatif : docs/models.md.
+  "model": "claude-agent/opus",
+
+  // Documents chargés en plus d'AGENTS.md dans toutes les sessions.
+  "instructions": [
+    "docs/architecture.md",
+    "docs/parity/README.md"
+  ],
+
+  // Dépôts de référence, clonés et rafraîchis automatiquement (lecture seule).
+  "references": {
+    "netcord": {
+      "repository": "NetCordDev/NetCord",
+      "branch": "main",
+      "description": "Source of NetCord (the library under test). Use for seams (IRestRequestHandler, IWebSocketConnectionProvider, JsonModels, Interaction.CreateFromJson), RestClient routes and Gateway dispatch handling."
+    },
+    "discord-api-spec": {
+      "repository": "discord/discord-api-spec",
+      "branch": "main",
+      "description": "Official Discord OpenAPI spec (specs/openapi.json). Source of truth for REST endpoints, request/response schemas."
+    },
+    "discord-api-docs": {
+      "repository": "discord/discord-api-docs",
+      "branch": "main",
+      "description": "Official Discord developer docs (developers/**.mdx). Source of truth for Gateway opcodes/events, interactions, components, error codes, rate limits."
+    },
+    "fauxcord": {
+      "repository": "tomacheese/fauxcord",
+      "branch": "master",
+      "description": "Inspiration: stateful Discord REST+Gateway mock server (TypeScript). Use for behavioural details (error codes, stateful semantics, gotchas) and its spec-drift / coverage-matrix methodology."
+    },
+    "shardix": {
+      "repository": "euandrelucas/shardix",
+      "branch": "main",
+      "description": "Inspiration: packages/testing (createTestingApplication, mockInteraction, MockDiscordAdapter) for the developer-facing testing API ergonomics."
+    }
+  },
+
+  "permissions": [
+    // Lecture/recherche libres.
+    { "action": "read", "resource": "*", "effect": "allow" },
+    { "action": "glob", "resource": "*", "effect": "allow" },
+    { "action": "grep", "resource": "*", "effect": "allow" },
+    { "action": "webfetch", "resource": "*", "effect": "allow" },
+    { "action": "websearch", "resource": "*", "effect": "allow" },
+    { "action": "skill", "resource": "*", "effect": "allow" },
+    { "action": "subagent", "resource": "*", "effect": "allow" },
+
+    // Les agents peuvent poser des questions à l'utilisateur (cf. AGENTS.md "Questions").
+    { "action": "question", "resource": "*", "effect": "allow" },
+
+    // Shell : boucle dev .NET + git en lecture autorisés, le reste demande.
+    { "action": "shell", "resource": "*", "effect": "ask" },
+    { "action": "shell", "resource": "dotnet build *", "effect": "allow" },
+    { "action": "shell", "resource": "dotnet test *", "effect": "allow" },
+    { "action": "shell", "resource": "dotnet restore *", "effect": "allow" },
+    { "action": "shell", "resource": "dotnet format *", "effect": "allow" },
+    { "action": "shell", "resource": "dotnet pack *", "effect": "allow" },
+    { "action": "shell", "resource": "dotnet new *", "effect": "allow" },
+    { "action": "shell", "resource": "dotnet sln *", "effect": "allow" },
+    { "action": "shell", "resource": "dotnet add *", "effect": "allow" },
+    { "action": "shell", "resource": "dotnet list *", "effect": "allow" },
+    { "action": "shell", "resource": "git status *", "effect": "allow" },
+    { "action": "shell", "resource": "git diff *", "effect": "allow" },
+    { "action": "shell", "resource": "git log *", "effect": "allow" },
+    { "action": "shell", "resource": "git show *", "effect": "allow" },
+    { "action": "shell", "resource": "git -C *", "effect": "allow" },
+    { "action": "shell", "resource": "dotnet run *", "effect": "allow" },
+    { "action": "shell", "resource": "dotnet tool *", "effect": "allow" },
+    { "action": "shell", "resource": "git add *", "effect": "allow" },
+    { "action": "shell", "resource": "git commit *", "effect": "allow" },
+    { "action": "shell", "resource": "git switch *", "effect": "allow" },
+    { "action": "shell", "resource": "git worktree *", "effect": "allow" },
+    { "action": "shell", "resource": "ls *", "effect": "allow" },
+    { "action": "shell", "resource": "mkdir *", "effect": "allow" },
+    { "action": "shell", "resource": "find *", "effect": "allow" },
+    { "action": "shell", "resource": "rg *", "effect": "allow" },
+    { "action": "shell", "resource": "jq *", "effect": "allow" },
+
+    // Jamais de publication sans l'utilisateur.
+    { "action": "shell", "resource": "git push *", "effect": "deny" },
+    { "action": "shell", "resource": "dotnet nuget push *", "effect": "deny" },
+    { "action": "shell", "resource": "gh release *", "effect": "deny" },
+
+    // Les dépôts de référence sont en lecture seule.
+    { "action": "edit", "resource": "~/.local/share/opencode/repos/*", "effect": "deny" }
+  ]
+}

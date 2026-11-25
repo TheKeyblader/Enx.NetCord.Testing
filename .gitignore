@@ -1,0 +1,18 @@
+# .NET build and test outputs
+[Bb]in/
+[Oo]bj/
+[Aa]rtifacts/
+[Tt]est[Rr]esults*/
+*.trx
+*.coverage
+*.coveragexml
+*.nupkg
+*.snupkg
+
+# IDE and per-user settings
+.vs/
+.idea/
+*.user
+*.rsuser
+*.suo
+*.userprefs

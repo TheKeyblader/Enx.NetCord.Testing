@@ -1,0 +1,87 @@
+name: Parity drift
+
+on:
+  schedule:
+    - cron: '23 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: parity-drift
+  cancel-in-progress: false
+
+jobs:
+  check:
+    # Keep the issue report tied to the baselines on the default branch.
+    if: github.event_name == 'schedule' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check upstream heads and report drift
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { readFileSync } = require('node:fs');
+            const sources = readFileSync('docs/parity/sources.md', 'utf8');
+            const tracked = [
+              'discord/discord-api-spec',
+              'discord/discord-api-docs',
+              'NetCordDev/NetCord',
+            ];
+
+            const baselines = tracked.map(repository => {
+              const matches = sources.split(/\r?\n/)
+                .filter(line => line.startsWith('|'))
+                .map(line => line.split('|').map(cell => cell.trim()))
+                .filter(cells => cells[2] === repository);
+              if (matches.length !== 1) {
+                throw new Error(`Expected exactly one baseline for ${repository}.`);
+              }
+              const [, , , branch, shaCell] = matches[0];
+              const pinned = /^`([a-f0-9]{40})`$/.exec(shaCell)?.[1];
+              if (!branch || !pinned) {
+                throw new Error(`Invalid branch or SHA for ${repository}.`);
+              }
+              return { repository, branch, pinned };
+            });
+
+            const heads = await Promise.all(baselines.map(async baseline => {
+              const [owner, repo] = baseline.repository.split('/');
+              const { data } = await github.rest.repos.getBranch({ owner, repo, branch: baseline.branch });
+              return { ...baseline, head: data.commit.sha };
+            }));
+            const drift = heads.filter(({ pinned, head }) => pinned !== head);
+            if (drift.length === 0) {
+              core.info('All parity baselines match upstream.');
+              return;
+            }
+
+            const marker = '<!-- parity-drift-report -->';
+            const body = [
+              marker,
+              'Ces branches amont ont divergé des SHA épinglés dans `docs/parity/sources.md` :',
+              '',
+              '| Dépôt | Branche | SHA épinglé | Tête amont |',
+              '| --- | --- | --- | --- |',
+              ...drift.map(({ repository, branch, pinned, head }) =>
+                `| ${repository} | \`${branch}\` | \`${pinned}\` | [\`${head}\`](https://github.com/${repository}/commit/${head}) |`),
+              '',
+              'Lancer `/parity/sync` pour examiner les changements et mettre à jour les matrices.',
+            ].join('\n');
+
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              ...context.repo, state: 'open', creator: 'github-actions[bot]', per_page: 100,
+            });
+            const existing = issues.find(issue => !issue.pull_request && issue.body?.startsWith(marker));
+
+            if (!existing) {
+              await github.rest.issues.create({ ...context.repo, title: 'parity drift', body });
+            } else if (existing.body !== body) {
+              await github.rest.issues.update({ ...context.repo, issue_number: existing.number, body });
+            }

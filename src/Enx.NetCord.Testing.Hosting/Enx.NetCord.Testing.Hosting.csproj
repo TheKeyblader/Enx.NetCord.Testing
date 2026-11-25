@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>In-process Discord test integration for NetCord hosting.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Enx.NetCord.Testing.Services/Enx.NetCord.Testing.Services.csproj" />
+    <PackageReference Include="NetCord.Hosting" />
+    <PackageReference Include="NetCord.Hosting.Services" />
+    <PackageReference Include="NetCord.Hosting.AspNetCore" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>

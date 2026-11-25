@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../../tests/TestProject.props" />
+  <ItemGroup>
+    <ProjectReference Include="../SampleBot/SampleBot.csproj" />
+  </ItemGroup>
+</Project>

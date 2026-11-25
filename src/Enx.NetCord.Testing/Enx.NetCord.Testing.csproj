@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>In-process Discord fake for testing NetCord bots.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NetCord" />
+  </ItemGroup>
+</Project>
