@@ -18,7 +18,7 @@ Les ADR « à rédiger » se lancent avec `/adr <sujet>`.
 
 ADR à rédiger d'abord :
 
-- [ ] M1-ADR-03 — Modèle d'état & concurrence (`FakeDiscordState`, `StateChange`, Snowflakes, `TimeProvider`) — architect — M0-03
+- [x] M1-ADR-03 — Modèle d'état & concurrence (`FakeDiscordState`, `StateChange`, Snowflakes, `TimeProvider`) — architect — M0-03 — [ADR 0003](adr/0003-state-model-and-concurrency.md), review APPROVE
 - [ ] M1-ADR-04 — API publique `FakeDiscord` / `FakeDiscordOptions` / `Seed` / `Recorded` / création des clients NetCord — architect — M1-ADR-03
 - [ ] M1-ADR-05 — Table de routes, pipeline REST, `DiscordError`, mode Strict/Lenient, interception — architect — M1-ADR-03
 - [ ] M1-ADR-06 — Sérialisation (réutilisation `NetCord.JsonModels` vs DTO propres, contexte STJ source-gen, AOT) — architect — M1-ADR-03

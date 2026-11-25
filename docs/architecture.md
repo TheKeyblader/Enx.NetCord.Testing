@@ -40,13 +40,15 @@
 
 ### State
 
-- `FakeDiscordState` : entités internes (users, applications, guilds, channels/threads,
-  members, roles, emojis, stickers, messages, reactions, webhooks, invites, bans,
-  application commands, interactions en cours, entitlements…).
-- Thread-safe (verrou unique ou `ImmutableInterlocked`, à trancher : ADR 0003).
-- Chaque mutation émet un `StateChange` typé (ex. `MessageCreated`) consommé par la Gateway.
-- IDs via `ISnowflakeGenerator` (déterministe par défaut : séquence croissante à partir d'un
-  epoch fixe) ; temps via `TimeProvider`.
+- [ADR 0003 — Modèle d'état et concurrence](adr/0003-state-model-and-concurrency.md) :
+  un `FakeDiscordState` interne par fake, des dictionnaires mutables pour users, applications,
+  guilds, channels, roles, members (clé guilde/utilisateur) et messages en M1.
+- Lectures et commits sous un verrou synchrone unique. Seules des valeurs détachées en sortent ;
+  la guilde et son rôle `@everyone`, par exemple, sont créés en une seule mutation.
+- Au commit, les `StateChange` typés sont ordonnés et mis en file si la Gateway est abonnée.
+  Elle les traduit hors verrou ; RESUME rejoue les dispatchs numérotés par session, pas l'état.
+- `TimeProvider` et `ISnowflakeGenerator` injectables ; par défaut une horloge virtuelle fixe
+  et des Snowflakes Discord alloués avec un compteur de 22 bits par milliseconde.
 
 ### REST
 
