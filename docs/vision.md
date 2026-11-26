@@ -30,12 +30,13 @@ public async Task Ping_RepliesPong()
     await using var discord = FakeDiscord.Create();
     var guild = discord.Seed.Guild("Test");
     var alice = guild.Member("alice");
+    var general = guild.TextChannel("general");
 
     await using var bot = await discord.Services()
         .AddApplicationCommandModule<PingModule>()
         .BuildAsync();
 
-    var result = await bot.ExecuteSlashCommandAsync("ping", from: alice, @in: guild.TextChannel("general"));
+    var result = await bot.ExecuteSlashCommandAsync("ping", from: alice, @in: general);
 
     result.Callback.Type.Should().Be(InteractionCallbackType.Message);
     result.Response.Content.Should().Be("Pong!");
@@ -47,14 +48,17 @@ public async Task Ping_RepliesPong()
 public async Task Welcome_SendsMessageOnMemberJoin()
 {
     await using var discord = FakeDiscord.Create();
-    var guild = discord.Seed.Guild("Test").TextChannel("welcome", out var welcome);
+    var guild = discord.Seed.Guild("Test");
+    var welcome = guild.TextChannel("welcome");
     using var host = MyBot.CreateHost().UseFakeDiscord(discord).Build();
     await host.StartAsync();
 
     await discord.Gateway.GuildMemberAddAsync(guild, discord.Seed.User("bob"));
     await discord.Gateway.FlushAsync();
 
-    discord.State.Messages(welcome).Should().ContainSingle(m => m.Content.Contains("bob"));
+    using var rest = discord.CreateRestClient();
+    var messages = await rest.GetMessagesAsync(welcome.Id).ToListAsync();
+    messages.Should().ContainSingle(m => m.Content.Contains("bob"));
 }
 ```
 

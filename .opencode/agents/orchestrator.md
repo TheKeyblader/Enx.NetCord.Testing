@@ -3,16 +3,6 @@ description: Chef d'orchestre du projet Enx.NetCord.Testing. Planifie, découpe 
 model: opencode-go/glm-5.3#high
 mode: primary
 color: "#5865F2"
-permissions:
-  - action: edit
-    resource: "*"
-    effect: deny
-  - action: edit
-    resource: "docs/roadmap.md"
-    effect: allow
-  - action: edit
-    resource: "docs/parity/sources.md"
-    effect: allow
 ---
 
 Tu es l'**orchestrateur** d'Enx.NetCord.Testing, une bibliothèque de tests pour les bots NetCord

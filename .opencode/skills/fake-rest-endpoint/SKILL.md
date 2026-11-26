@@ -19,7 +19,7 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
 
 ## 2. État (`src/Enx.NetCord.Testing/State/`)
 
-- Ajouter/compléter l'entité (record immuable ou classe interne) et ses index.
+- Ajouter/compléter l'entité (classe interne mutable dans `State/`, ADR 0003 ; seules des valeurs détachées en sortent) et ses index.
 - Toute mutation passe par une méthode de `FakeDiscordState` qui :
   1. valide les invariants (existence, appartenance guilde/canal) ;
   2. applique la mutation sous verrou ;
@@ -32,7 +32,7 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   (`POST /channels/{channel_id}/messages`). Routes littérales avant paramétrées.
 - Entrée : `FakeRestRequest` (méthode, template, paramètres, query, corps JSON ou multipart,
   `Authorization`, `X-Audit-Log-Reason`). Sortie : `FakeRestResponse` (statut, JSON, en-têtes).
-- Sérialiser avec les `JsonModels` attendus par NetCord (même noms/champs que l'API Discord).
+- Pour une réponse JSON, projeter le résultat dans un DTO interne conforme à la spec Discord et le sérialiser avec `FakeDiscordJsonContext` (source-gen STJ). Le vrai client désérialise la réponse ; réserver les `NetCord.JsonModels` aux API NetCord qui les exigent, comme `Interaction.CreateFromJson`.
 - Erreurs : `DiscordError.*` (404 `10003 Unknown Channel`, 400 `50035 Invalid Form Body`
   avec arbre `errors`, 403 `50013 Missing Permissions`, 401 `0 401: Unauthorized`…). Ajouter
   le code à `docs/parity/errors.md` s'il est nouveau.

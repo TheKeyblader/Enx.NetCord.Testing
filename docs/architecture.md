@@ -38,6 +38,19 @@
 
 ## Couches
 
+### Façade et seed
+
+- [ADR 0004 — Façade, seed et journal](adr/0004-fake-discord-public-api.md) :
+  `await using var discord = FakeDiscord.Create(options)` crée un fake isolé et une identité
+  bot/application. `discord.CreateRestClient()` fournit un vrai client dont l'appelant est
+  propriétaire. Chaque client a son handler en mémoire ; tous ceux du même fake voient le même
+  état et alimentent le même journal. La fabrique Gateway est reportée à M3-ADR-09.
+- `var channel = discord.Seed.Guild("Test").TextChannel("general")` crée les deux ressources
+  immédiatement. La guilde et le salon sont des poignées avec `Id` ; les feuilles renvoient
+  des IDs (`Member` renvoie celui de l'utilisateur). Pas de `out`, de `Build()` ni de faux POST.
+- Le seed accepte un ID explicite non nul, jamais attribué dans ce fake. Sa milliseconde
+  encodée fixe la date de création sans faire reculer l'horloge ni avancer le générateur.
+
 ### State
 
 - [ADR 0003 — Modèle d'état et concurrence](adr/0003-state-model-and-concurrency.md) :
@@ -48,21 +61,36 @@
 - Au commit, les `StateChange` typés sont ordonnés et mis en file si la Gateway est abonnée.
   Elle les traduit hors verrou ; RESUME rejoue les dispatchs numérotés par session, pas l'état.
 - `TimeProvider` et `ISnowflakeGenerator` injectables ; par défaut une horloge virtuelle fixe
-  et des Snowflakes Discord alloués avec un compteur de 22 bits par milliseconde.
+  et des Snowflakes Discord strictement croissants, alloués avec un compteur de 22 bits
+  par milliseconde.
 
 ### REST
 
-- `FakeRestRequestHandler : IRestRequestHandler` : reçoit le `HttpRequestMessage` NetCord,
-  extrait le chemin après `/api/v{N}`, le corps (JSON / multipart `payload_json` + `files[n]`),
-  l'auth (`Bot <token>`, `Bearer`), puis route.
-- `RouteTable` : templates **identiques à la spec** (`/channels/{channel_id}/messages/{message_id}`),
-  littéraux avant paramètres. Une route inconnue ⇒ `404 {"message":"404: Not Found","code":0}`
-  + entrée « non implémentée » dans `Recorded` (option : lever une exception pour détecter les trous).
-- Pipeline : auth → résolution → validation → handler → sérialisation → en-têtes rate limit →
-  enregistrement.
-- Erreurs via `DiscordError` (catalogue = `docs/parity/errors.md`).
-- Hooks de test : `discord.Rest.Intercept("POST /channels/{channel_id}/messages", ...)` pour
-  forcer une erreur/latence/429 sur une route donnée.
+- [ADR 0005 — Table de routes, pipeline REST et interception](adr/0005-rest-routing-and-pipeline.md) :
+  `RouteTable` sépare l'inventaire statique dérivé hors ligne de la spec épinglée (méthode,
+  template, `operationId`, politique d'authentification) des handlers enregistrés explicitement
+  par clé `METHOD /template`. Une opération inventoriée peut ne pas encore avoir de handler.
+- `FakeRestRequestHandler` retire un seul préfixe `/api/v{N}`, sépare la query et découpe le
+  chemin **avant** de décoder chaque segment une fois (`%40me` → `@me`, `%2F` ne sépare pas
+  deux segments). Le littéral prime sur le paramètre ; si le chemin est connu mais pas la
+  méthode, le fake renvoie 405 avec les méthodes autorisées dans `Allow`.
+- Le pipeline identifie l'appelant, résout l'opération et applique sa politique d'authentification
+  (401, code `0` si l'authentification requise échoue). Suivent la validation structurelle,
+  l'interception, puis le handler : contrôles métier et commit sous le verrou de l'ADR 0003.
+  Hors verrou : sérialisation, ajout des en-têtes de quota, puis enregistrement de la tentative.
+  Un échec local est journalisé sans réponse HTTP fictive.
+- `DiscordError` est le catalogue interne de fabriques d'erreurs (statut HTTP et corps JSON), avec un arbre
+  `errors` pour `50035` ([catalogue](parity/errors.md)). Pour une route non implémentée,
+  `FakeDiscordOptions.UnimplementedRoutes` choisit `Lenient` (défaut : 404, code `0`) ou
+  `Strict` (journalise puis lève `NotSupportedException`). Ce choix ne modifie aucune réponse
+  d'un handler : un salon inconnu reste un 404, code `10003`.
+- `discord.Rest.Intercept(route, effect)` applique un `RestEffect` à la prochaine tentative
+  éligible, avant toute mutation : erreur du catalogue, délai virtuel via `TimeProvider` avant
+  le traitement normal, ou 429 par utilisateur.
+- En M1, NetCord lit les en-têtes de quota, mais les clients du fake utilisent un
+  `IRateLimitManager` interne sans attente, car le gestionnaire par défaut peut retarder l'appel
+  **avant** le handler, hors de l'horloge virtuelle. La simulation des quotas par bucket et
+  des 429 qui en découlent relève de M6-02.
 
 ### Gateway
 
@@ -95,26 +123,29 @@
 
 - `services.AddFakeDiscord(discord)` / `builder.UseFakeDiscord(discord)` : `PostConfigure` des
   options NetCord (`GatewayClientOptions`, `ShardedGatewayClientOptions`, `RestClientOptions`)
-  pour injecter `RequestHandler`, `WebSocketConnectionProvider`, `Compression`, `Hostname`, token
-  et `PublicKey`.
+  pour injecter `RequestHandler`, le `RateLimitManager` REST sans attente, `WebSocketConnectionProvider`,
+  `Compression`, `Hostname`, le token et `PublicKey`.
 - Signature Ed25519 des requêtes HTTP d'interaction (ADR à venir).
 
 ## Transverse
 
-- **Enregistrements** (`discord.Recorded`) : requêtes REST (méthode, template, params, corps,
-  réponse), frames Gateway envoyées/reçues, callbacks d'interaction.
+- **Enregistrements** : `discord.Recorded.Requests` renvoie un instantané détaché des
+  tentatives REST terminées (méthode, chemin, template, paramètres, query, corps JSON,
+  statut et réponse JSON). Le seed n'y écrit pas. Frames Gateway et callbacks relèvent
+  des jalons suivants.
 - **Assertions** : méthodes d'extension sans dépendance à un framework (lèvent
   `FakeDiscordAssertionException`), ex. `discord.Recorded.ShouldHaveRequested("POST /channels/{channel_id}/messages")`.
-- **Options** : `FakeDiscordOptions` (token, application, strictness : `Strict` lève sur route
-  non implémentée / `Lenient` renvoie 404, simulation rate limit, latence virtuelle).
-- **AOT** : sérialisation source-generated, pas de réflexion.
+- **Options** : `FakeDiscordOptions` fixe l'identité (`BotToken`, `ApplicationId`), l'horloge
+  et le générateur d'IDs. M1-ADR-05 précise l'option de traitement des routes non implémentées.
+- **AOT** : sérialisation source-generated, sans réflexion ([ADR 0006 — Sérialisation](adr/0006-wire-serialization.md)).
 
 ## Arborescence `src/Enx.NetCord.Testing/`
 
 ```
 FakeDiscord.cs  FakeDiscordOptions.cs
 State/        (entités, FakeDiscordState, StateChange, ISnowflakeGenerator)
-Rest/         (FakeRestRequestHandler, RouteTable, FakeRestRequest/Response, DiscordError, RateLimitHeaders)
+Rest/         (FakeDiscordRest, RestEffect, FakeRestRequestHandler, RouteTable, FakeRestRequest/Response,
+               DiscordError, RateLimitHeaders, gestionnaire de rate limit sans attente)
 Rest/Routes/<Domaine>/   (Channels, Messages, Reactions, Threads, Guilds, Members, Roles, Bans,
                           Emojis, Stickers, Webhooks, Invites, Users, Applications, Commands,
                           Interactions, AutoModeration, ScheduledEvents, StageInstances, Polls, …)
@@ -124,5 +155,5 @@ Interactions/ (Builders/, InteractionExecutor, InteractionResult)
 Seed/         (builders d'état fluents)
 Recording/    (journal)
 Assertions/
-Serialization/ (JsonSerializerContext du fake)
+Serialization/ (FakeDiscordJsonContext, DTO internes du protocole Discord)
 ```

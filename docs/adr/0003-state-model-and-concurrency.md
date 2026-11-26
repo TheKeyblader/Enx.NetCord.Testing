@@ -107,9 +107,9 @@ du handler Gateway du bot ; les barrières de livraison relèvent de M3-ADR-09.
 avancer temps et timers. Jamais de `DateTime.Now`, `UtcNow` statique ni de délai réel ; tout
 timer passe par ce fournisseur. En l'absence d'instant explicite, lire `GetUtcNow()` une fois
 par mutation et utiliser cet instant UTC pour les créations (`CreatedAt` interne), l'adhésion
-(`joined_at`), les éditions (`edited_timestamp`) et l'allocation des IDs. N'émettre que les champs Discord prévus, ex.
-`timestamp` et `edited_timestamp` (initialement `null`) pour le message, pas de champ JSON
-universel `created_timestamp` (`developers/resources/message.mdx`).
+(`joined_at`), les éditions (`edited_timestamp`) et l'allocation des IDs. N'émettre que les
+champs Discord prévus, ex. `timestamp` et `edited_timestamp` (initialement `null`) pour le
+message, pas de champ JSON universel `created_timestamp` (`developers/resources/message.mdx`).
 
 Le générateur par défaut est privé, neuf par fake. Il calcule `id = (msDepuis2015 << 22) | compteur`
 en `ulong`. Les 42 bits de poids fort codent les millisecondes depuis `2015-01-01T00:00:00Z`.
@@ -136,7 +136,8 @@ pagination `before`, sans exiger que toutes les fixtures soient créées par ord
 
 Les Snowflakes sont des `ulong` en mémoire et des chaînes décimales invariantes en JSON
 (`SnowflakeType` dans `specs/openapi.json`). Le verrou assure un ordre total, pas un vainqueur
-reproductible entre appels réellement concurrents ; un test qui dépend de leur ordre doit les séquencer.
+reproductible entre appels réellement concurrents ; un test qui dépend de leur ordre doit
+les séquencer.
 
 ## API publique proposée
 

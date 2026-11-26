@@ -40,8 +40,10 @@ Les agents peuvent poser des questions à l'utilisateur (outil `question`).
 - Dépendances runtime autorisées : `NetCord`, `NetCord.Services`, `NetCord.Hosting*`,
   `Microsoft.Extensions.*`. Rien d'autre sans ADR.
 - Compatible **Native AOT / trimming** comme NetCord (`IsAotCompatible=true`) : pas de
-  réflexion non annotée, sérialisation via `System.Text.Json` source-generated
-  (réutiliser `NetCord.JsonModels` + leurs contextes quand c'est possible).
+  réflexion non annotée, sérialisation `System.Text.Json` source-generated obligatoire. Pour
+  ses réponses JSON, le fake sérialise des DTO internes conformes à la spec Discord avec
+  `FakeDiscordJsonContext` dans `Serialization/` ; réserver les `NetCord.JsonModels` aux API
+  NetCord qui les exigent ([ADR 0006](docs/adr/0006-wire-serialization.md)).
 - Tests de la lib : **xUnit v3** (à confirmer dans l'ADR 0002) ; la lib publiée doit rester
   **agnostique du framework de test** (pas de dépendance xUnit/NUnit/MSTest dans `src/`).
 - Gestion centralisée des versions : `Directory.Packages.props`, `Directory.Build.props`,

@@ -15,7 +15,7 @@ Chemins relatifs à la référence opencode `netcord` (dépôt `NetCordDev/NetCo
 | --- | --- | --- |
 | `RestClientConfiguration.RequestHandler : IRestRequestHandler` | `NetCord/Rest/RestClientConfiguration.cs`, `NetCord/Rest/IRestRequestHandler.cs` | `FakeRestRequestHandler.SendAsync(HttpRequestMessage, CancellationToken)` route vers les handlers et renvoie un `HttpResponseMessage` Discord-fidèle. `AddDefaultHeader` : mémoriser (User-Agent, Authorization). |
 | `RestClientConfiguration.Hostname` | idem | Valeur sentinelle (`fake.discord.test`) pour reconnaître les URI. |
-| `RestClientConfiguration.RateLimitManager : IRateLimitManager` | `NetCord/Rest/RateLimits/` | Par défaut laisser celui de NetCord (il lit nos en-têtes `X-RateLimit-*`) ; option pour un manager no-op en tests rapides. |
+| `RestClientConfiguration.RateLimitManager : IRateLimitManager` | `NetCord/Rest/RateLimits/` | Toujours injecter le gestionnaire interne sans attente du fake (ADR 0005) : le limiteur par défaut de NetCord peut dormir en temps réel avant le handler, hors de l'horloge virtuelle. NetCord continue de lire les en-têtes `X-RateLimit-*`. |
 | URI construite | `NetCord/Rest/RestClient.cs` : `_baseUri = $"https://{Hostname}/api/v{N}"`, `uri = $"{_baseUri}{route}{query}"` | Retirer `/api/v{N}`, décoder (`%40me`), séparer la query. |
 | Routes | `NetCord/Rest/RestClient.*.cs` : `SendRequestAsync(HttpMethod.X, [content,] $"/route", query, new(TopLevelId), ...)` | Source de la colonne `NetCord` de `docs/parity/rest.md`. |
 | Corps | `JsonContent<T>` (JSON) ou `MultipartFormDataContent` (`payload_json` + `files[n]`) | Le fake doit parser les deux. |
@@ -27,7 +27,7 @@ Chemins relatifs à la référence opencode `netcord` (dépôt `NetCordDev/NetCo
 | `GatewayClientConfiguration.WebSocketConnectionProvider : IWebSocketConnectionProvider` | `NetCord/Gateway/GatewayClientConfiguration.cs`, `NetCord/Gateway/WebSockets/IWebSocketConnection*.cs` | `CreateConnection()` → `FakeWebSocketConnection` en mémoire (`OpenAsync`, `SendAsync`, `ReceiveAsync` → `WebSocketConnectionReceiveResult`, `CloseAsync`, `Abort`, `CloseStatus`). |
 | `GatewayClientConfiguration.Compression` | `NetCord/Gateway/Compression/UncompressedGatewayCompression.cs` | Forcer `new UncompressedGatewayCompression()`. |
 | `GatewayClientConfiguration.Hostname`, `Version`, `Intents`, `Shard` | idem | Hostname sentinelle ; intents/shard lus dans IDENTIFY côté fake. |
-| `GatewayClientConfiguration.RestClientConfiguration` | idem (ligne ~81) | Y injecter le `RequestHandler` fake : `GatewayClient.Rest` pointe alors sur le fake. |
+| `GatewayClientConfiguration.RestClientConfiguration` | idem (ligne ~81) | Y injecter le `RequestHandler` **et** le `RateLimitManager` sans attente du fake : `GatewayClient.Rest` pointe alors sur le fake sans attente réelle. |
 | `ReconnectStrategy`, `LatencyTimer`, `RateLimiterProvider` | `NetCord/Gateway/ReconnectStrategies/`, `LatencyTimers/`, `IRateLimiterProvider.cs` | Stratégie de reconnexion sans délai pour les tests ; `NullRateLimiterProvider` dispo. |
 | Sharding | `NetCord/Gateway/ShardedGatewayClient*.cs` | Même `RestClientConfiguration` + `WebSocketConnectionProvider` via la configuration factory. |
 | Dispatch | `NetCord/Gateway/GatewayClient.cs` : `case "EVENT_NAME":` | Source de la colonne `NetCord` de `docs/parity/gateway.md`. |
@@ -39,7 +39,7 @@ Chemins relatifs à la référence opencode `netcord` (dépôt `NetCordDev/NetCo
 | --- | --- | --- |
 | `Interaction.CreateFromJson(JsonInteraction, Guild?, InteractionResponseDelegate, RestClient)` | `NetCord/Interaction.cs` | Créer une interaction NetCord sans Gateway, avec un delegate de réponse qui enregistre le callback dans le fake. |
 | `Interaction.CreateFromJson(JsonInteraction, IGatewayClientCache, RestClient)` | idem | Variante « comme via Gateway » : la réponse part en REST `POST /interactions/{id}/{token}/callback` → passe par le handler fake. |
-| `NetCord.JsonModels.*` (public) | `NetCord/JsonModels/**` | Construire les payloads ; sérialiser avec les contextes source-generated de NetCord quand ils sont accessibles, sinon notre propre `JsonSerializerContext`. |
+| `NetCord.JsonModels.*` (public) | `NetCord/JsonModels/**` | Fournir un `JsonInteraction` à `Interaction.CreateFromJson`. Pour les réponses JSON, le fake sérialise ses DTO internes avec `FakeDiscordJsonContext` ; le vrai client les désérialise. |
 | Callbacks | `NetCord/Rest/InteractionCallback*.cs`, `InteractionCallbackType.cs` | Désérialiser ce que NetCord envoie pour remplir `InteractionResult`. |
 
 ## NetCord.Services
