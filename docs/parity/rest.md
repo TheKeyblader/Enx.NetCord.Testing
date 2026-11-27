@@ -572,11 +572,11 @@ Légende — `NetCord` : méthode(s) de `RestClient` (vide ⇒ non exposé ⇒ �
 
 | Method | Route | NetCord | Fake | Tests | Notes |
 | --- | --- | --- | --- | --- | --- |
-| GET | `/applications/{}/rpc` | `GetApplicationAsync` | ⬜ | ⬜ | |
-| GET | `/applications/{}/skus` | `GetSkusAsync` | ⬜ | ⬜ | |
-| POST | `/channels/{}/attachments` | `CreateGoogleCloudPlatformStorageBucketsAsync` | ⬜ | ⬜ | |
-| POST | `/guilds` | `CreateGuildAsync` | ⬜ | ⬜ | |
-| POST | `/guilds/templates/{}` | `CreateGuildFromGuildTemplateAsync` | ⬜ | ⬜ | |
-| DELETE | `/guilds/{}` | `DeleteGuildAsync` | ⬜ | ⬜ | |
-| POST | `/guilds/{}/members-search` | `SearchGuildUsersAsync` | ⬜ | ⬜ | |
-| POST | `/guilds/{}/mfa` | `ModifyGuildMfaLevelAsync` | ⬜ | ⬜ | |
+| GET | `/applications/{application_id}/rpc` | `GetApplicationAsync` | ⬜ | ⬜ | Dans l'inventaire du fake (`NetCordOnlyRoutes`, auth Bot) ; handler à venir |
+| GET | `/applications/{application_id}/skus` | `GetSkusAsync` | ⬜ | ⬜ | Dans l'inventaire du fake (`NetCordOnlyRoutes`, auth Bot) ; handler à venir |
+| POST | `/channels/{channel_id}/attachments` | `CreateGoogleCloudPlatformStorageBucketsAsync` | ⬜ | ⬜ | Dans l'inventaire du fake (`NetCordOnlyRoutes`, auth Bot) ; handler à venir |
+| POST | `/guilds` | `CreateGuildAsync` | ⬜ | ⬜ | Dans l'inventaire du fake (`NetCordOnlyRoutes`, auth Bot) ; handler à venir |
+| POST | `/guilds/templates/{code}` | `CreateGuildFromGuildTemplateAsync` | ⬜ | ⬜ | Dans l'inventaire du fake (`NetCordOnlyRoutes`, auth Bot) ; nom de paramètre `code` repris de la spec (`GET`) ; handler à venir |
+| DELETE | `/guilds/{guild_id}` | `DeleteGuildAsync` | ⬜ | ⬜ | Dans l'inventaire du fake (`NetCordOnlyRoutes`, auth Bot) ; `guild_id` repris de la spec (`GET`/`PATCH`) ; handler à venir |
+| POST | `/guilds/{guild_id}/members-search` | `SearchGuildUsersAsync` | ⬜ | ⬜ | Dans l'inventaire du fake (`NetCordOnlyRoutes`, auth Bot) ; handler à venir |
+| POST | `/guilds/{guild_id}/mfa` | `ModifyGuildMfaLevelAsync` | ⬜ | ⬜ | Dans l'inventaire du fake (`NetCordOnlyRoutes`, auth Bot) ; handler à venir |

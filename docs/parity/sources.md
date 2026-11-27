@@ -15,6 +15,18 @@ La branche `main` de NetCord peut être en avance sur NuGet : en cas d'écart de
 `main` et le package référencé, **le package fait foi** pour le code, `main` sert d'alerte
 précoce (tâche `PAR-SEAM-*`).
 
+## Inventaire REST embarqué
+
+`src/Enx.NetCord.Testing/Rest/RouteInventory.g.cs` est dérivé hors ligne de `specs/openapi.json` au SHA `discord-api-spec` ci-dessus
+(méthode, template, `operationId`, alternatives d'auth). Lors de `/parity/sync`, après avoir avancé ce SHA, le régénérer puis relire le diff :
+
+```bash
+python3 tools/generate-route-inventory.py <chemin>/discord-api-spec/specs/openapi.json <SHA-complet-du-commit>
+```
+
+Le test `SourcesPinTests` échoue si `RouteInventory.SpecificationCommit` ne correspond plus au SHA épinglé ici. Les routes NetCord hors spec
+(`Rest/NetCordOnlyRoutes.cs`) se contrôlent à part, contre `NetCord/Rest/RestClient.*.cs` et la section « Routes NetCord hors spec publique » de `rest.md`.
+
 Inspirations (non suivies pour la parité) : `fauxcord` (tomacheese/fauxcord, master),
 `shardix` (euandrelucas/shardix, main).
 
