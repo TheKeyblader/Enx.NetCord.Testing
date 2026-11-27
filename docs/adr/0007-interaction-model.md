@@ -1,6 +1,6 @@
 # 0007 — Modèle d'interaction : requêtes, exécution, capture et cycle de vie
 
-- **Statut** : Proposée
+- **Statut** : Acceptée
 - **Date** : 2026-11-27
 - **Auteur** : agent `architect`
 - **Tâches liées** : M2-ADR-07, M2-01 à M2-07, M2-ADR-08, M3-ADR-09, M3-08, M5-ADR-10, M5-02
@@ -126,9 +126,9 @@ de réponses REST : pas d'objet NetCord à fournir.
 
 **Validation.** Un appel fluent ne vérifie que ses arguments (`ArgumentException`). Tout ce
 qui dépend de l'état est vérifié à l'exécution, sous le verrou, avant tout commit : références
-absentes, utilisateur non membre de la guilde, message sans ce `custom_id`, composant désactivé
-ou d'un autre type, valeur hors des options du menu, option en double, sous-commande
-incohérente. Ces fautes sont celles du test : `InvalidOperationException` locale, jamais une
+absentes, utilisateur non membre de la guilde, message sans ce `custom_id`, message éphémère
+visé par un autre utilisateur que son destinataire, composant désactivé ou d'un autre type,
+valeur hors des options du menu, option en double, sous-commande incohérente. Ces fautes sont celles du test : `InvalidOperationException` locale, jamais une
 erreur Discord, comme pour le seed de l'[ADR 0004](0004-fake-discord-public-api.md).
 
 Pour une commande, la validation suit le registre de l'application, livré par M2-07 et appliqué
@@ -181,9 +181,11 @@ Tous les champs viennent de l'état, aucun n'est inventé par la requête :
 **Journal.** `interaction_token` et `webhook_token` sont des paramètres de route masqués
 (ADR 0004 et [0005](0005-rest-routing-and-pipeline.md)). Le jeton n'apparaît pas dans
 `InteractionResult` : le bot le lit sur `interaction.Token`. Le pipeline rattache une requête
-REST à son interaction au moment de l'enregistrer (étape 6 de l'ADR 0005), par le paramètre
-`interaction_id` ou par l'index des jetons. Ce rattachement ne dépend pas du handler : une
-tentative refusée à la validation, ou interceptée, est rattachée elle aussi.
+REST à son interaction au moment de l'enregistrer (étape 6 de l'ADR 0005) : sur la route de
+callback, par le paramètre `interaction_id`, même si le jeton n'est pas le bon ; sur les routes
+`/webhooks/{webhook_id}/{webhook_token}…`, par le jeton, cherché dans l'index. Un jeton
+inconnu ne rattache rien. Ce rattachement ne dépend pas du handler : une tentative refusée à
+la validation, ou interceptée, est rattachée elle aussi.
 
 ### 3. Trois voies, une capture
 
@@ -206,8 +208,9 @@ Un module écrit pour HTTP qui lirait `interaction.Guild` passerait sinon ses te
   comme ASP.NET Core quand la réponse HTTP a commencé. Rien n'atteint Discord : ce n'est pas
   une tentative refusée, et l'exception locale est le signal.
 - Répondre par `client.SendInteractionResponseAsync` reste possible : c'est l'entrée REST,
-  avec ses `RestException`. En HTTP réel, le bot rend alors un 202 sans corps
-  (`receiving-and-responding.mdx:334`), que M5-02 ne lit pas comme une réponse inline.
+  avec ses `RestException`. En HTTP réel, Discord demande alors un 202 sans corps
+  (`receiving-and-responding.mdx:334`) et NetCord.Hosting laisse un 200 sans corps : M5-02
+  lit tout corps vide comme une absence de réponse inline, quel que soit le statut.
 
 Seule différence voulue : la voie directe **propage** l'exception du handler dans les deux
 transports, alors que NetCord.Hosting la journalise.
@@ -242,8 +245,10 @@ Elle montre ce que voit l'utilisateur qui a déclenché l'interaction, messages 
 - `Requests` : les entrées de `Recorded.Requests` rattachées à cette interaction, dans l'ordre
   du journal. L'historique (éditions successives, suppression) se lit là, avec les corps JSON.
 - `RejectedCallbacks` : les tentatives de réponse initiale **refusées**, dans l'ordre : type
-  demandé, statut et code de l'erreur, entrée (REST ou inline), `Δ` écoulé depuis la création.
-  Les deux entrées l'alimentent. Côté REST, y figure toute tentative rattachée sur la route de
+  demandé, statut et code de l'erreur, entrée (REST ou inline), `Elapsed` depuis la création.
+  Pour un refus qui dépend de l'état, `Elapsed` est le `Δ` lu par la mutation, celui qui a
+  décidé du refus ; pour les autres (validation, interception), il est pris à l'instant de
+  l'enregistrement. Les deux entrées l'alimentent. Côté REST, y figure toute tentative rattachée sur la route de
   callback qui reçoit une réponse d'erreur, refus de validation et effet `Intercept` compris ;
   elle figure aussi dans `Requests`. Une faute locale ou une annulation n'y figure pas.
 
@@ -268,7 +273,11 @@ de l'ADR 0006. Rejeté : un type `InteractionMessage` propre, et le `JsonElement
    réévaluée quand ces listes changent. Seul garde-fou : le `CancellationToken` du test.
 3. Voies Gateway et HTTP : barrière propre à la voie, fixée par M3-ADR-09 et M5-ADR-10. À
    défaut, elles rendent la main à la **première tentative** de réponse initiale, acceptée ou
-   refusée : `WaitForAsync(id, r => r.Callback is not null || r.RejectedCallbacks.Count > 0)`.
+   refusée pour de bon :
+   `WaitForAsync(id, r => r.Callback is not null || r.RejectedCallbacks.Any(c => c.StatusCode != HttpStatusCode.TooManyRequests))`.
+   Un 429 est exclu : NetCord réessaie par défaut (`NetCord/Rest/RestRequestProperties.cs:10`),
+   et la tentative suivante décide. Avec `RestRateLimitHandling.NoRetry`, le test attend
+   lui-même sur `RejectedCallbacks`.
 
 `GetResult(interactionId)` reprend une photographie à tout moment. Pour `GetResult` comme pour
 `WaitForAsync`, un ID que ce fake n'a pas attribué à une interaction lève
@@ -284,7 +293,7 @@ l'instant lu une fois sur le `TimeProvider`. Les refus passent par `DiscordError
 | Règle | Comportement du fake | Source |
 | --- | --- | --- |
 | Interaction inconnue, ou jeton qui n'est pas le sien | callback ⇒ 404 `10062` | non documenté ; corroboré par fauxcord |
-| Réponse initiale unique | second callback par REST ⇒ 400 `40060` ; reçu par l'entrée inline, même refus, tracé sans exception | code documenté ; statut corroboré par fauxcord |
+| Réponse initiale unique | second callback par REST ⇒ 400 `40060` ; reçu par l'entrée inline après une première réponse REST, même refus, tracé sans exception | code documenté ; statut corroboré par fauxcord |
 | Délai de 3 s | callback avec `Δ ≥ 3 s` ⇒ 404 `10062` | délai : `receiving-and-responding.mdx:351` ; code observé |
 | Type de callback interdit | 6 et 7 hors composant et modal ; 9 sur modal ; 1 hors `PING` ⇒ 400 `50035` | matrice : l. 266-282 ; code : hypothèse |
 | Autocomplétion | n'accepte que 8, et 8 n'est accepté que par elle (donc 9 y est refusé) ⇒ 400 `50035` | hypothèse : la matrice ne le dit pas |
@@ -325,7 +334,7 @@ sur la route de callback. Le piège est l'avance **incidente** :
 `FakeTimeProvider.AutoAdvanceAmount` consomme du délai à chaque lecture de l'horloge, et un
 test qui avance l'horloge pendant le handler, pour un cooldown par exemple, fait refuser la
 réponse qui suit. Le diagnostic est dans le résultat : `RejectedCallbacks` porte `10062` et un
-`Elapsed` d'au moins 3 s. Le remède est de répondre, ou de différer, avant d'avancer l'horloge.
+`Elapsed` d'au moins 3 s, qui est exactement le `Δ` comparé par la mutation. Le remède est de répondre, ou de différer, avant d'avancer l'horloge.
 Cette décision remplace la note « opt-in, désactivé par défaut » de `rule:3s-deadline`. La
 limite de cinq followups des installations utilisateur seules (l. 474) n'est pas modélisée.
 
@@ -347,7 +356,8 @@ Extension de l'ADR 0003, même verrou, même règle d'atomicité, pas de second 
 - **Atomicité** : un callback valide commit en une mutation l'acquittement, le message créé ou
   modifié et leurs faits. Un refus ne laisse ni acquittement, ni message, ni fait ; sa trace
   est une observation de `Recording/`, ajoutée hors verrou : par le pipeline à l'enregistrement
-  pour REST, par l'entrée inline sinon.
+  pour REST, par l'entrée inline sinon. Dans les deux cas elle est enregistrée **avant** que
+  la main revienne au bot.
 - **Faits** : `InteractionCreated` porte la photographie de l'interaction et sa voie
   (directe, Gateway, HTTP). M3 n'en tire `INTERACTION_CREATE` que pour la voie Gateway : passer
   par le flux ordonné garantit que le bot reçoit d'abord les dispatchs des faits antérieurs.
@@ -537,13 +547,14 @@ public sealed class RejectedInteractionCallback
     /// <summary>Gets the Discord JSON error code, such as 40060, or zero if the error carries none.</summary>
     public int ErrorCode { get; }
     /// <summary>Gets the entry that received the attempt.</summary>
-    public InteractionCallbackChannel Channel { get; }
-    /// <summary>Gets the time elapsed since the interaction was created.</summary>
+    public InteractionCallbackEntry Entry { get; }
+    /// <summary>Gets the time elapsed since the interaction was created, as compared by the refusing rule
+    /// when the refusal depends on state, otherwise as read when the attempt was recorded.</summary>
     public TimeSpan Elapsed { get; }
 }
 
 /// <summary>Identifies how an initial response reached the fake.</summary>
-public enum InteractionCallbackChannel
+public enum InteractionCallbackEntry
 {
     /// <summary>Through the REST callback route.</summary>
     Rest = 0,
@@ -618,12 +629,12 @@ Assert.True(deferred.Callback!.IsDeferred);
 var twice = await Assert.ThrowsAsync<RestException>(() => kept.SendResponseAsync(InteractionCallback.Message("again")));
 Assert.Equal(40060, twice.Error!.Code);
 var refused = Assert.Single(discord.Interactions.GetResult(deferred.InteractionId).RejectedCallbacks);
-Assert.Equal(InteractionCallbackChannel.Rest, refused.Channel);
+Assert.Equal(InteractionCallbackEntry.Rest, refused.Entry);
 
 await kept.ModifyResponseAsync(m => m.Components =
     [new ActionRowProperties([new ButtonProperties("confirm", "OK", ButtonStyle.Primary)])]);
 var shown = await discord.Interactions.WaitForAsync(deferred.InteractionId,
-    r => r.Response is { } m && !m.Flags.HasFlag(MessageFlags.Loading), cancellationToken);
+    r => r.Response is { } m && !m.Flags.HasFlag(MessageFlags.Loading), TestContext.Current.CancellationToken);
 
 var click = await discord.Interactions.Button("confirm", alice, shown.Response!.Id)
     .ExecuteAsync(i => i.SendResponseAsync(InteractionCallback.DeferredModifyMessage));
@@ -645,7 +656,7 @@ var late = await discord.Interactions.SlashCommand("slow", alice, general.Id).Ex
 }, http);
 Assert.Null(late.Callback);
 var missed = Assert.Single(late.RejectedCallbacks);
-Assert.Equal((10062, InteractionCallbackChannel.Inline), (missed.ErrorCode, missed.Channel));
+Assert.Equal((10062, InteractionCallbackEntry.Inline), (missed.ErrorCode, missed.Entry));
 Assert.True(missed.Elapsed >= TimeSpan.FromSeconds(3));
 ```
 
@@ -691,7 +702,8 @@ Assert.True(missed.Elapsed >= TimeSpan.FromSeconds(3));
 - **M3-08** : terminal `DispatchAsync` sur `InteractionRequest`, traduction du fait
   `InteractionCreated` de voie Gateway ; M3-ADR-09 fixe la barrière. **M3-03** filtre les
   messages éphémères.
-- **M5-02** : POST signé des mêmes octets, entrée inline, 202 sans corps, `PING`. M5-ADR-10
+- **M5-02** : POST signé des mêmes octets, entrée inline, corps vide lu comme une absence de
+  réponse inline (200 de NetCord.Hosting comme 202), `PING`. M5-ADR-10
   choisit comment le package Hosting atteint les trois opérations internes (matérialiser,
   entrée inline, photographie) : `InternalsVisibleTo` ou petite API publique.
 
