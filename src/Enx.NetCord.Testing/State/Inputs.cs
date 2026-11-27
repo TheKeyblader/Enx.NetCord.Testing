@@ -45,6 +45,9 @@ internal sealed record CreateRoleInput(
     bool Mentionable = false,
     int? Position = null);
 
+// JoinedAt is an explicit instant, allowed by ADR 0003 ("instant explicite" for seeded fixtures): a member that
+// joined a year ago is a legitimate fixture. Unlike an ID it is not validated against the clock or the last
+// allocation, and it never feeds the allocator; null means "the clock's instant of this mutation".
 internal sealed record AddMemberInput(
     ulong GuildId,
     ulong UserId,

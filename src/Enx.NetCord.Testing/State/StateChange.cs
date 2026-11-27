@@ -27,8 +27,11 @@ internal sealed record MessageCreated(
     UserSnapshot Author,
     MemberSnapshot? AuthorMember) : StateChange(Number);
 
-internal sealed record MessageEdited(long Number, MessageSnapshot Message, UserSnapshot Author)
-    : StateChange(Number);
+internal sealed record MessageEdited(
+    long Number,
+    MessageSnapshot Message,
+    UserSnapshot Author,
+    MemberSnapshot? AuthorMember) : StateChange(Number);
 
 internal sealed record MessageDeleted(long Number, ulong? GuildId, ulong ChannelId, ulong MessageId)
     : StateChange(Number);

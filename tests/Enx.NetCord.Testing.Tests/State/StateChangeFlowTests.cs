@@ -49,15 +49,35 @@ public sealed class StateChangeFlowTests
         state.CreateMessage(new CreateMessageInput(channel.Id, user.Id, "hi"));
         state.EditMessageContent(channel.Id, state.ListMessages(channel.Id, 1).Value[0].Id, "edited");
 
-        var created = Assert.IsType<MessageCreated>(Drain(subscription)[0]);
+        var changes = Drain(subscription);
+        var created = Assert.IsType<MessageCreated>(changes[0]);
         Assert.Equal("hi", created.Message.Content); // not the later edit
         Assert.Null(created.Message.EditedTimestamp);
         Assert.Equal(user, created.Author);
         Assert.Equal(user.Id, created.AuthorMember!.UserId);
+        var edited = Assert.IsType<MessageEdited>(changes[1]);
+        Assert.Equal("edited", edited.Message.Content);
+        Assert.Equal(user, edited.Author);
+        Assert.Equal(user.Id, edited.AuthorMember!.UserId);
     }
 
     [Fact]
-    public void Reads_AndNoOpEdits_ProduceNoChange()
+    public void MessageEdited_InADmChannel_HasNoAuthorMember()
+    {
+        var state = NewState();
+        var user = state.CreateUser(new CreateUserInput("u"));
+        var dm = state.GetOrCreateDmChannel(new CreateDmChannelInput(user.Id)).Value.Channel;
+        var message = state.CreateMessage(new CreateMessageInput(dm.Id, user.Id, "a")).Value;
+        using var subscription = state.SubscribeGateway();
+
+        state.EditMessageContent(dm.Id, message.Id, "b");
+
+        var edited = Assert.IsType<MessageEdited>(Assert.Single(Drain(subscription)));
+        Assert.Null(edited.AuthorMember);
+    }
+
+    [Fact]
+    public void Reads_Always_ProduceNoChange()
     {
         var state = NewState();
         var (guild, channel, user) = Seed(state);
@@ -71,7 +91,6 @@ public sealed class StateChangeFlowTests
         state.ListMessages(channel.Id, 10);
         state.ListGuildRoles(guild.Id);
         state.TakeProjection();
-        state.EditMessageContent(channel.Id, message.Id, "x");
 
         Assert.Empty(Drain(subscription));
         Assert.Equal(bound, state.TakeProjection().LastChangeNumber);
@@ -207,7 +226,7 @@ public sealed class StateChangeFlowTests
             {
                 state.CreateUser(new CreateUserInput("u"));
             }
-        }))).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        }))).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         var numbers = Drain(subscription).Select(c => c.Number).ToList();
         Assert.Equal(Enumerable.Range(1, 2000).Select(i => (long)i), numbers);

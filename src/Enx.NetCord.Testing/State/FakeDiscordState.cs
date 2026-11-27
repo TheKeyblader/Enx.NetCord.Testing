@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Threading.Channels;
 
 namespace Enx.NetCord.Testing.State;
 
@@ -34,7 +33,7 @@ internal sealed partial class FakeDiscordState
     private ulong? _lastAllocated;
     private long _ordinal;
     private long _lastChangeNumber;
-    private Channel<StateChange>? _subscriber;
+    private ChangeSubscription? _subscriber;
 
     internal FakeDiscordState(TimeProvider clock, ISnowflakeGenerator ids)
     {
@@ -65,14 +64,9 @@ internal sealed partial class FakeDiscordState
                 throw new InvalidOperationException("The state already has a Gateway subscriber.");
             }
 
-            var channel = Channel.CreateUnbounded<StateChange>(new UnboundedChannelOptions
-            {
-                SingleReader = true,
-                SingleWriter = true, // every write happens under _gate
-                AllowSynchronousContinuations = false,
-            });
-            _subscriber = channel;
-            return new ChangeSubscription(this, channel, ProjectUnderLock());
+            var subscription = new ChangeSubscription(this, ProjectUnderLock());
+            _subscriber = subscription;
+            return subscription;
         }
     }
 
@@ -80,13 +74,13 @@ internal sealed partial class FakeDiscordState
     {
         lock (_gate)
         {
-            if (!ReferenceEquals(_subscriber, subscription.Channel))
+            if (!ReferenceEquals(_subscriber, subscription))
             {
                 return;
             }
 
             _subscriber = null;
-            subscription.Channel.Writer.TryComplete();
+            subscription.Complete();
         }
     }
 
@@ -112,7 +106,7 @@ internal sealed partial class FakeDiscordState
     private long NextChangeNumber() => ++_lastChangeNumber;
 
     /// <summary>Queues a committed change if the Gateway is subscribed; otherwise nothing is retained.</summary>
-    private void Publish(StateChange change) => _subscriber?.Writer.TryWrite(change);
+    private void Publish(StateChange change) => _subscriber?.Write(change);
 
     // ----- IDs, time, ordinals (call only under the lock) -----------------------------------
 
@@ -195,12 +189,12 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            var now = ReadClock();
             if (_botId is not null)
             {
                 throw new InvalidOperationException("The bot identity already exists.");
             }
 
+            var now = ReadClock();
             var id = ResolveNewId(input.Id, now);
             _assigned.Add(id); // user and application share this one assignment
             _botId = id;
@@ -285,12 +279,12 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            var now = ReadClock();
             if (input.OwnerId is { } ownerId && !_users.ContainsKey(ownerId))
             {
                 return new StateFailure(StateFailureKind.UnknownUser, ownerId);
             }
 
+            var now = ReadClock();
             var id = ResolveNewId(input.Id, now);
             _assigned.Add(id);
 
@@ -331,12 +325,12 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            var now = ReadClock();
             if (!_guilds.TryGetValue(input.GuildId, out var guild))
             {
                 return new StateFailure(StateFailureKind.UnknownGuild, input.GuildId);
             }
 
+            var now = ReadClock();
             var id = ResolveNewId(input.Id, now);
             _assigned.Add(id);
 
@@ -388,12 +382,12 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            var now = ReadClock();
             if (!_guilds.TryGetValue(input.GuildId, out var guild))
             {
                 return new StateFailure(StateFailureKind.UnknownGuild, input.GuildId);
             }
 
+            var now = ReadClock();
             var id = ResolveNewId(input.Id, now);
             _assigned.Add(id);
 
@@ -414,20 +408,30 @@ internal sealed partial class FakeDiscordState
         }
     }
 
-    /// <summary>Creates a DM channel with one recipient (the other party is implicitly the bot).</summary>
-    internal StateResult<ChannelSnapshot> CreateDmChannel(CreateDmChannelInput input)
+    /// <summary>
+    /// Returns the DM channel of a recipient, creating it if none exists, under one lock: a recipient can never
+    /// end up with two DM channels. When the channel already exists nothing is allocated, committed or published,
+    /// and an explicit <see cref="CreateDmChannelInput.Id"/> is ignored. The other party is implicitly the bot.
+    /// </summary>
+    internal StateResult<(ChannelSnapshot Channel, bool Created)> GetOrCreateDmChannel(CreateDmChannelInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
         ValidateExplicitId(input.Id, nameof(input));
 
         lock (_gate)
         {
-            var now = ReadClock();
             if (!_users.ContainsKey(input.RecipientId))
             {
                 return new StateFailure(StateFailureKind.UnknownUser, input.RecipientId);
             }
 
+            var existing = FindDmChannelUnderLock(input.RecipientId);
+            if (existing is not null)
+            {
+                return (existing.ToSnapshot(), false);
+            }
+
+            var now = ReadClock();
             var id = ResolveNewId(input.Id, now);
             _assigned.Add(id);
 
@@ -437,9 +441,15 @@ internal sealed partial class FakeDiscordState
 
             var snapshot = channel.ToSnapshot();
             Publish(new ChannelCreated(NextChangeNumber(), snapshot));
-            return snapshot;
+            return (snapshot, true);
         }
     }
+
+    private ChannelEntity? FindDmChannelUnderLock(ulong recipientId) =>
+        _channels.Values
+            .Where(c => c.Kind == ChannelKind.Dm && c.RecipientIds.Contains(recipientId))
+            .OrderBy(c => c.Ordinal)
+            .FirstOrDefault();
 
     internal ChannelSnapshot? FindChannel(ulong channelId)
     {
@@ -454,11 +464,7 @@ internal sealed partial class FakeDiscordState
     {
         lock (_gate)
         {
-            return _channels.Values
-                .Where(c => c.Kind == ChannelKind.Dm && c.RecipientIds.Contains(recipientId))
-                .OrderBy(c => c.Ordinal)
-                .Select(c => c.ToSnapshot())
-                .FirstOrDefault();
+            return FindDmChannelUnderLock(recipientId)?.ToSnapshot();
         }
     }
 
@@ -478,10 +484,10 @@ internal sealed partial class FakeDiscordState
     internal StateResult<MemberSnapshot> AddMember(AddMemberInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
+        var requestedRoleIds = input.RoleIds?.ToArray() ?? []; // copy: the caller's list may change under us
 
         lock (_gate)
         {
-            var now = ReadClock();
             if (!_guilds.TryGetValue(input.GuildId, out var guild))
             {
                 return new StateFailure(StateFailureKind.UnknownGuild, input.GuildId);
@@ -499,7 +505,7 @@ internal sealed partial class FakeDiscordState
 
             // Validate the whole role list before writing anything; @everyone is implicit, never listed.
             var roleIds = new List<ulong>();
-            foreach (var roleId in input.RoleIds ?? [])
+            foreach (var roleId in requestedRoleIds)
             {
                 if (!_roles.TryGetValue(roleId, out var role) || role.GuildId != guild.Id)
                 {
@@ -512,6 +518,7 @@ internal sealed partial class FakeDiscordState
                 }
             }
 
+            var now = ReadClock();
             var member = new MemberEntity(guild.Id, user.Id, input.JoinedAt ?? now, NextOrdinal())
             {
                 Nick = input.Nick,
@@ -557,7 +564,6 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            var now = ReadClock();
             if (!_channels.TryGetValue(input.ChannelId, out var channel))
             {
                 return new StateFailure(StateFailureKind.UnknownChannel, input.ChannelId);
@@ -568,6 +574,7 @@ internal sealed partial class FakeDiscordState
                 return new StateFailure(StateFailureKind.UnknownUser, input.AuthorId);
             }
 
+            var now = ReadClock();
             var id = ResolveNewId(input.Id, now);
             _assigned.Add(id);
 
@@ -587,10 +594,7 @@ internal sealed partial class FakeDiscordState
             }
 
             var snapshot = message.ToSnapshot(channel.GuildId);
-            var authorMember = channel.GuildId is { } guildId && _members.TryGetValue((guildId, author.Id), out var member)
-                ? member.ToSnapshot()
-                : null;
-            Publish(new MessageCreated(NextChangeNumber(), snapshot, author.ToSnapshot(), authorMember));
+            Publish(new MessageCreated(NextChangeNumber(), snapshot, author.ToSnapshot(), AuthorMemberOf(channel, author.Id)));
             return snapshot;
         }
     }
@@ -652,8 +656,8 @@ internal sealed partial class FakeDiscordState
     }
 
     /// <summary>
-    /// Replaces the content of a message. An identical content is not a mutation: the current snapshot is
-    /// returned, <c>edited_timestamp</c> is untouched and no change is committed.
+    /// Replaces the content of a message. Like Discord, any edit counts: <c>edited_timestamp</c> is set to the
+    /// clock and a change is committed even when the content is identical.
     /// </summary>
     internal StateResult<MessageSnapshot> EditMessageContent(ulong channelId, ulong messageId, string content)
     {
@@ -661,31 +665,34 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            var now = ReadClock();
             if (!TryGetMessage(channelId, messageId, out var channel, out var message, out var failure))
             {
                 return failure;
             }
 
-            if (message.Content != content)
-            {
-                message.Content = content;
-                message.EditedTimestamp = now;
-                var snapshot = message.ToSnapshot(channel.GuildId);
-                Publish(new MessageEdited(NextChangeNumber(), snapshot, _users[message.AuthorId].ToSnapshot()));
-                return snapshot;
-            }
-
-            return message.ToSnapshot(channel.GuildId);
+            message.Content = content;
+            message.EditedTimestamp = ReadClock();
+            var snapshot = message.ToSnapshot(channel.GuildId);
+            Publish(new MessageEdited(
+                NextChangeNumber(),
+                snapshot,
+                _users[message.AuthorId].ToSnapshot(),
+                AuthorMemberOf(channel, message.AuthorId)));
+            return snapshot;
         }
     }
+
+    /// <summary>The author's membership in the channel's guild as of now, or null (DM, or not a member).</summary>
+    private MemberSnapshot? AuthorMemberOf(ChannelEntity channel, ulong authorId) =>
+        channel.GuildId is { } guildId && _members.TryGetValue((guildId, authorId), out var member)
+            ? member.ToSnapshot()
+            : null;
 
     /// <summary>Deletes a message and returns what it was. Its ID is never reused in this fake.</summary>
     internal StateResult<MessageSnapshot> DeleteMessage(ulong channelId, ulong messageId)
     {
         lock (_gate)
         {
-            _ = ReadClock();
             if (!TryGetMessage(channelId, messageId, out var channel, out var message, out var failure))
             {
                 return failure;

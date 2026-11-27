@@ -52,9 +52,9 @@ public sealed class FakeDiscordStateTests
             }
         }));
 
-        await Task.WhenAll(writers).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await Task.WhenAll(writers).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Volatile.Write(ref writersDone, true);
-        await reader.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await reader.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         var final = state.TakeProjection();
         Assert.Equal(1000, final.Guilds.Length);
@@ -467,7 +467,7 @@ public sealed class FakeDiscordStateTests
     [Fact]
     public void CreateMessage_UnknownChannel_FailsWithoutCommitOrAllocation()
     {
-        var ids = new ScriptedGenerator(t => IdAt(t, (ulong)Random.Shared.Next(1, 1000)));
+        var ids = new ScriptedGenerator(t => IdAt(t, 500));
         var state = NewState(ids: ids);
         var user = state.CreateUser(new CreateUserInput("u", Id: 7));
         using var subscription = state.SubscribeGateway();
@@ -613,19 +613,63 @@ public sealed class FakeDiscordStateTests
     }
 
     [Fact]
-    public void CreateDmChannel_ForAUser_HasNoGuildAndIsFoundByRecipient()
+    public void GetOrCreateDmChannel_FirstCall_CreatesAChannelWithoutGuildFoundByRecipient()
     {
         var state = NewState();
         var user = state.CreateUser(new CreateUserInput("u"));
 
-        var dm = state.CreateDmChannel(new CreateDmChannelInput(user.Id)).Value;
+        var (dm, created) = state.GetOrCreateDmChannel(new CreateDmChannelInput(user.Id)).Value;
 
+        Assert.True(created);
         Assert.Equal(ChannelKind.Dm, dm.Kind);
         Assert.Null(dm.GuildId);
         Assert.Equal([user.Id], dm.RecipientIds);
         Assert.Equal(dm.Id, state.FindDmChannel(user.Id)!.Id);
         Assert.Null(state.FindDmChannel(999));
-        Assert.Equal(StateFailureKind.UnknownUser, state.CreateDmChannel(new CreateDmChannelInput(999)).Failure.Kind);
+        Assert.Equal(StateFailureKind.UnknownUser, state.GetOrCreateDmChannel(new CreateDmChannelInput(999)).Failure.Kind);
+    }
+
+    [Fact]
+    public void GetOrCreateDmChannel_SecondCall_ReturnsTheSameChannelWithoutAllocationOrChange()
+    {
+        var next = 100UL;
+        var ids = new ScriptedGenerator(t => IdAt(t, next++));
+        var state = NewState(ids: ids);
+        var user = state.CreateUser(new CreateUserInput("u", Id: 7));
+        var first = state.GetOrCreateDmChannel(new CreateDmChannelInput(user.Id)).Value;
+        using var subscription = state.SubscribeGateway();
+        var callsBefore = ids.Calls;
+
+        var again = state.GetOrCreateDmChannel(new CreateDmChannelInput(user.Id, Id: 12345)).Value;
+
+        Assert.True(first.Created);
+        Assert.False(again.Created);
+        Assert.Equal(first.Channel.Id, again.Channel.Id);
+        Assert.Equal(callsBefore, ids.Calls);
+        Assert.Empty(Drain(subscription));
+        Assert.Single(state.TakeProjection().Channels);
+    }
+
+    [Fact]
+    public async Task GetOrCreateDmChannel_ConcurrentCallsForOneRecipient_CreateExactlyOneChannel()
+    {
+        var state = NewState();
+        var user = state.CreateUser(new CreateUserInput("u"));
+        using var subscription = state.SubscribeGateway();
+        using var start = new ManualResetEventSlim(false);
+
+        var tasks = Enumerable.Range(0, 16).Select(_ => Task.Run(() =>
+        {
+            start.Wait(TestContext.Current.CancellationToken);
+            return state.GetOrCreateDmChannel(new CreateDmChannelInput(user.Id)).Value;
+        })).ToArray();
+        start.Set();
+        var results = await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, results.Count(r => r.Created));
+        Assert.Single(results.Select(r => r.Channel.Id).Distinct());
+        Assert.Single(state.TakeProjection().Channels);
+        Assert.IsType<ChannelCreated>(Assert.Single(Drain(subscription)));
     }
 
     [Fact]
@@ -633,7 +677,7 @@ public sealed class FakeDiscordStateTests
     {
         var state = NewState();
         var user = state.CreateUser(new CreateUserInput("u"));
-        var dm = state.CreateDmChannel(new CreateDmChannelInput(user.Id)).Value;
+        var dm = state.GetOrCreateDmChannel(new CreateDmChannelInput(user.Id)).Value.Channel;
 
         var message = state.CreateMessage(new CreateMessageInput(dm.Id, user.Id, "hi")).Value;
 
@@ -693,17 +737,88 @@ public sealed class FakeDiscordStateTests
     }
 
     [Fact]
-    public void EditMessageContent_SameContent_IsNotAMutation()
+    public void EditMessageContent_SameContent_StillSetsEditedTimestampAndCommits()
     {
-        var state = NewState();
+        var clock = new FakeTimeProvider(Start);
+        var state = NewState(clock);
         var (_, channel, user) = Seed(state);
         var message = state.CreateMessage(new CreateMessageInput(channel.Id, user.Id, "same")).Value;
         using var subscription = state.SubscribeGateway();
+        clock.Advance(TimeSpan.FromMinutes(2));
 
         var result = state.EditMessageContent(channel.Id, message.Id, "same").Value;
 
-        Assert.Equal(message, result);
-        Assert.Empty(Drain(subscription));
+        Assert.Equal("same", result.Content);
+        Assert.Equal(Start.AddMinutes(2), result.EditedTimestamp);
+        var change = Assert.IsType<MessageEdited>(Assert.Single(Drain(subscription)));
+        Assert.Equal(result, change.Message);
+    }
+
+    [Fact]
+    public void Mutation_BusinessFailure_DoesNotReadTheClock()
+    {
+        var clock = new CountingTimeProvider(Start);
+        var state = NewState(clock);
+        var (guild, channel, user) = Seed(state);
+        var message = state.CreateMessage(new CreateMessageInput(channel.Id, user.Id, "x")).Value;
+        var before = clock.Reads;
+
+        state.CreateGuild(new CreateGuildInput("g", OwnerId: 999));
+        state.CreateRole(new CreateRoleInput(999, "r"));
+        state.CreateTextChannel(new CreateTextChannelInput(999, "c"));
+        state.GetOrCreateDmChannel(new CreateDmChannelInput(999));
+        state.AddMember(new AddMemberInput(999, user.Id));
+        state.AddMember(new AddMemberInput(guild.Id, 999));
+        state.AddMember(new AddMemberInput(guild.Id, user.Id)); // already a member
+        state.CreateMessage(new CreateMessageInput(999, user.Id, "x"));
+        state.CreateMessage(new CreateMessageInput(channel.Id, 999, "x"));
+        state.EditMessageContent(999, message.Id, "y");
+        state.EditMessageContent(channel.Id, 999, "y");
+        state.DeleteMessage(channel.Id, 999);
+        state.DeleteMessage(channel.Id, message.Id);
+
+        Assert.Equal(before, clock.Reads);
+    }
+
+    [Fact]
+    public void GetOrCreateDmChannel_ExistingChannel_DoesNotReadTheClock()
+    {
+        var clock = new CountingTimeProvider(Start);
+        var state = NewState(clock);
+        var user = state.CreateUser(new CreateUserInput("u"));
+        state.GetOrCreateDmChannel(new CreateDmChannelInput(user.Id));
+        var before = clock.Reads;
+
+        state.GetOrCreateDmChannel(new CreateDmChannelInput(user.Id));
+
+        Assert.Equal(before, clock.Reads);
+    }
+
+    [Fact]
+    public void StateResult_Default_IsNeitherSuccessNorAFailure()
+    {
+        var result = default(StateResult<int>);
+
+        Assert.False(result.IsSuccess);
+        Assert.Throws<InvalidOperationException>(() => result.Value);
+        Assert.Throws<InvalidOperationException>(() => result.Failure);
+        Assert.False(result.TryGetValue(out _));
+    }
+
+    [Fact]
+    public void AddMember_CallerMutatesRoleListAfterwards_DoesNotAffectTheMember()
+    {
+        var state = NewState();
+        var guild = state.CreateGuild(new CreateGuildInput("g")).Value.Guild;
+        var role = state.CreateRole(new CreateRoleInput(guild.Id, "r")).Value;
+        var user = state.CreateUser(new CreateUserInput("u"));
+        var roles = new List<ulong> { role.Id };
+
+        var member = state.AddMember(new AddMemberInput(guild.Id, user.Id, RoleIds: roles)).Value;
+        roles.Clear();
+
+        Assert.Equal([role.Id], member.RoleIds);
+        Assert.Equal([role.Id], state.FindMember(guild.Id, user.Id)!.RoleIds);
     }
 
     [Fact]
