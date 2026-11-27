@@ -44,17 +44,19 @@ Implémentation :
 
 ## M2 — Interactions & NetCord.Services
 
-- [~] (architect) M2-ADR-07 — Modèle d'interaction (builders, `InteractionResult`, 3 voies d'exécution, règles 40060/15 min) — architect — M1-ADR-04
+- [x] M2-ADR-07 — Modèle d'interaction (builders, `InteractionResult`, 3 voies d'exécution, règles 40060/15 min) — architect — M1-ADR-04 — [ADR 0007](adr/0007-interaction-model.md) (`884eb26`, `8c9eb78`, `5fbc9a0`), review APPROVE
 - [ ] M2-ADR-08 — Harnais `Enx.NetCord.Testing.Services` (API, DI, enregistrement des commandes) — architect — M2-ADR-07
 - [ ] M2-01 — Builders slash command (options, sous-commandes, `resolved`) + exécution directe — interactions-implementer — M2-ADR-07
-- [ ] M2-02 — Callbacks : Pong, Message, DeferredMessage, DeferredModifyMessage, ModifyMessage, Autocomplete, Modal — interactions-implementer — M2-01
-- [ ] M2-03 — REST interactions : `POST /interactions/{id}/{token}/callback`, original response get/edit/delete, followups (`/webhooks/{application_id}/{token}…`) — interactions-implementer — M2-02, M1-REST-03
+- [ ] M2-02 — Callbacks : Pong, Message, DeferredMessage, DeferredModifyMessage, ModifyMessage, Autocomplete, Modal + route `POST /interactions/{interaction_id}/{interaction_token}/callback` (ADR 0007) — interactions-implementer — M2-01, M1-03, M1-04
+- [ ] M2-03 — REST interactions à jeton : original response get/edit/delete, followups (`/webhooks/{application_id}/{token}…`), `WaitForAsync`, `GetResult` — interactions-implementer — M2-02, M1-REST-03
 - [ ] M2-04 — User/Message commands, Autocomplete — interactions-implementer — M2-01
 - [ ] M2-05 — Composants : bouton, string/user/role/mentionable/channel menus ; modals (text input, Label, FileUpload, Radio/Checkbox) — interactions-implementer — M2-02
 - [ ] M2-06 — Components V2 (Section, TextDisplay, Thumbnail, MediaGallery, File, Separator, Container) dans les messages — interactions-implementer — M2-05
 - [ ] M2-07 — Application commands REST (global/guild CRUD + bulk overwrite + permissions) — rest-implementer — M1-03
 - [ ] M2-08 — Harnais Services : ApplicationCommandService (Gateway & Http contexts) — interactions-implementer — M2-ADR-08, M2-07
 - [ ] M2-09 — Harnais Services : ComponentInteractionService, CommandService (text commands via MESSAGE_CREATE) — interactions-implementer — M2-08
+- [ ] M2-10 — `Interaction.Guild` en voie directe (projection `GUILD_CREATE` minimale partagée avec M3-02) — interactions-implementer — M2-01, M1-REST-06
+- [ ] M2-11 — Validation des requêtes d'interaction contre les commandes visibles (guilde du salon + globales) — interactions-implementer — M2-04, M2-07
 - [ ] M2-T-01 — Sample bot : `/ping`, `/greet user`, bouton de confirmation, modal + tests — test-engineer — M2-08
 - [ ] M2-R — Review de jalon + `/parity/audit interactions` — reviewer, parity-auditor — M2-*
 
@@ -106,3 +108,6 @@ Implémentation :
 ## Backlog parité
 
 <!-- Ajouté par parity-auditor : - [ ] PAR-<domaine>-NN — écart — agent — dépend de -->
+
+- [ ] PAR-INT-01 — `interactions.md` selon ADR 0007 : ajouter `rule:callback-type`, `rule:followup-after-defer`, `rule:unacked-token`, `rule:rejected-callbacks`, `harness:direct-http-transport` ; corriger `rule:3s-deadline`, `rule:original-response`, `rule:followups`, note `interaction:2/primary_entry_point` ; lier `rule:token-15min`/`rule:ephemeral` à l'ADR — parity-auditor — M2-ADR-07
+- [ ] PAR-ERR-01 — Confirmer contre Discord (hypothèses ADR 0007) : statuts/libellés `40060`, `10062`, `10015`, `50027`, `10008` ; jeton jamais émis (401/50027 vs 404/10015 fauxcord) ; followup avant réponse initiale ; type de callback interdit ; règles autocomplete ; type 12 ; paramètres de followup ignorés ; non-dispatch des éphémères — parity-auditor — M2-ADR-07
