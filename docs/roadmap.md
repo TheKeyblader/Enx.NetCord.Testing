@@ -25,7 +25,7 @@ ADR à rédiger d'abord :
 
 Implémentation :
 
-- [~] (rest-implementer) M1-01 — `FakeDiscordState` + entités de base (user, application, guild, channel, role, member, message) — rest-implementer — M1-ADR-03
+- [x] M1-01 — `FakeDiscordState` + entités de base (user, application, guild, channel, role, member, message) — rest-implementer — M1-ADR-03 — [`State/`](../src/Enx.NetCord.Testing/State/) (`27c6325`, `1327b98`), review APPROVE
 - [ ] M1-02 — `FakeDiscord` façade + `Seed` (guild/channel/member/role) + `CreateRestClient()` — rest-implementer — M1-ADR-04, M1-01
 - [~] (rest-implementer) M1-03 — `FakeRestRequestHandler` + `RouteTable` + auth `Bot` + `DiscordError` + en-têtes rate limit — rest-implementer — M1-ADR-05
 - [ ] M1-04 — `Recorded.Requests` + assertions de base — rest-implementer — M1-03
