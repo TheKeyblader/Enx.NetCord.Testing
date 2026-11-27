@@ -27,7 +27,8 @@ Implémentation :
 
 - [x] M1-01 — `FakeDiscordState` + entités de base (user, application, guild, channel, role, member, message) — rest-implementer — M1-ADR-03 — [`State/`](../src/Enx.NetCord.Testing/State/) (`27c6325`, `1327b98`), review APPROVE
 - [ ] M1-02 — `FakeDiscord` façade + `Seed` (guild/channel/member/role) + `CreateRestClient()` (via `RestClientFactory`) + câblage `FakeDiscord.Rest`, `FakeDiscordOptions.UnimplementedRoutes`, `RestPipelineContext.Close()` au dispose — rest-implementer — M1-ADR-04, M1-01, M1-03
-- [~] (rest-implementer) M1-03 — `FakeRestRequestHandler` + `RouteTable` + auth `Bot` + `DiscordError` + en-têtes rate limit — rest-implementer — M1-ADR-05
+- [x] M1-03 — `FakeRestRequestHandler` + `RouteTable` + auth `Bot` + `DiscordError` + en-têtes rate limit — rest-implementer — M1-ADR-05 — [`Rest/`](../src/Enx.NetCord.Testing/Rest/), [`Serialization/`](../src/Enx.NetCord.Testing/Serialization/) (`cf488a4`, `2cd2c6c`), review APPROVE
+- [ ] M1-DEBT-01 — NITs M1-03 : `FakeRestRequest.Payload` immuable après validation (`init`/ctor) ; `errors.md:12-14` ligne `+ en-têtes` (liste CommonMark involontaire) — rest-implementer — M1-03
 - [ ] M1-04 — `Recorded.Requests` + assertions de base — rest-implementer — M1-03
 - [ ] M1-REST-01 — Users : `GET/PATCH /users/@me`, `GET /users/{user_id}`, `POST /users/@me/channels` (DM) — rest-implementer — M1-03
 - [ ] M1-REST-02 — Channels : `GET/PATCH/DELETE /channels/{channel_id}` — rest-implementer — M1-03
