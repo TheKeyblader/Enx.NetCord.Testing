@@ -22,7 +22,7 @@
 │  │             (HELLO/IDENTIFY/READY/HEARTBEAT/RESUME, intents, shards)       │
 │  ├─ Interactions : requêtes → payload unique → 3 voies → InteractionResult    │
 │  ├─ Seed     : builders d'état (guildes, salons, membres, rôles, messages…)   │
-│  ├─ Recorded : journal des requêtes REST, frames Gateway, callbacks           │
+│  ├─ Recorded : journal des requêtes REST, frames Gateway                      │
 │  └─ State    : FakeDiscordState (source unique) ──StateChange──► Gateway      │
 │                ISnowflakeGenerator · TimeProvider · options                    │
 └────────────────────────────────────────────────────────────────────────────────┘
@@ -112,7 +112,8 @@
 - Trois voies de livraison :
   1. **Directe** (M2) : `request.ExecuteAsync(handler)` relit les octets avec NetCord, appelle
      `Interaction.CreateFromJson` puis le handler. Transport `Gateway` : la réponse initiale part
-     en REST. Transport `Http` : pas de guilde, réponse inline comme `NetCord.Hosting.AspNetCore`.
+     en REST. Transport `Http` : pas de guilde, réponse inline comme `NetCord.Hosting.AspNetCore`,
+     donc sans `RestException` ; une seconde réponse lève `InvalidOperationException`.
   2. **Gateway** (M3-08) : le fait `InteractionCreated` devient un dispatch `INTERACTION_CREATE`
      pour un `GatewayClient` connecté ; la réponse revient par REST.
   3. **HTTP** (M5-02) : POST signé des mêmes octets vers l'endpoint ASP.NET Core du bot ; la
@@ -123,13 +124,17 @@
   distinguées par `webhook_id` = ID de l'application.
 - Réponse et followups sont de vrais messages de l'état. Un message éphémère est lisible par
   les routes à jeton, inconnu des routes de salon et absent des dispatchs Gateway.
-- Règles appliquées sous le verrou avec le `TimeProvider`, sans attente : réponse initiale
-  unique (`40060`), délai de 3 s (`10062`), jeton de 15 min (`50027`), suite avant réponse
-  initiale (`10015`), types de callback permis par type d'interaction.
-- `InteractionResult` est une photographie détachée : `Callback`, `Response` et `Followups`
-  (des `RestMessage` NetCord dans leur état courant), `Modal`, `AutocompleteChoices`, et les
-  `Requests` du journal rattachées à l'interaction. `GetResult` en reprend une ;
-  `WaitForAsync(id, condition)` réévalue une condition à chaque commit qui touche l'interaction.
+- La validation structurelle reste à l'étape 3 du pipeline REST (`50035`, `50109`), avant
+  l'interception. Les règles qui dépendent de l'état sont appliquées ensuite sous le verrou,
+  avec le `TimeProvider` et sans attente : réponse initiale unique (`40060`), délai de 3 s
+  (`10062`), jeton de 15 min (`50027`), suite avant réponse initiale (`10015`), types de
+  callback permis par type d'interaction.
+- `InteractionResult` est une photographie détachée. Lus dans l'état : `Callback`, `Response`
+  et `Followups` (des `RestMessage` NetCord dans leur état courant), `Modal`,
+  `AutocompleteChoices`. Observations tenues avec le journal : les `Requests` rattachées à
+  l'interaction et les `RejectedCallbacks`, tentatives de réponse initiale refusées par l'une
+  ou l'autre entrée. `GetResult` reprend une photographie ; `WaitForAsync(id, condition)`
+  réévalue une condition après chaque commit, ajout au journal rattaché ou refus.
 
 ### Services (package dédié)
 
@@ -150,8 +155,8 @@
 - **Enregistrements** : `discord.Recorded.Requests` renvoie un instantané détaché des
   tentatives REST terminées (méthode, chemin, template, paramètres, query, corps JSON,
   statut et réponse JSON). Le seed n'y écrit pas. Les réponses d'interaction se lisent dans
-  `InteractionResult`, qui renvoie aussi aux requêtes du journal (ADR 0007) ; les frames Gateway
-  relèvent de M3.
+  `InteractionResult`, qui renvoie aussi aux requêtes du journal et aux réponses refusées
+  (ADR 0007) ; les frames Gateway relèvent de M3.
 - **Assertions** : méthodes d'extension sans dépendance à un framework (lèvent
   `FakeDiscordAssertionException`), ex. `discord.Recorded.ShouldHaveRequested("POST /channels/{channel_id}/messages")`.
 - **Options** : `FakeDiscordOptions` fixe l'identité (`BotToken`, `ApplicationId`), l'horloge
