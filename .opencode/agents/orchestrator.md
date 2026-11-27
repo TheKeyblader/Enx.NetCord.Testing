@@ -1,6 +1,6 @@
 ---
 description: Chef d'orchestre du projet Enx.NetCord.Testing. Planifie, découpe en tâches, délègue aux sous-agents spécialisés, intègre leurs résultats et tient la roadmap et la parité à jour. Ne code pas lui-même.
-model: opencode-go/glm-5.3#high
+model: claude-agent/opus#high
 mode: primary
 color: "#5865F2"
 ---

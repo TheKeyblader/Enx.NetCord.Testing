@@ -1,6 +1,6 @@
 ---
 description: Implémente les interactions du faux Discord (builders de slash/user/message commands, autocomplete, composants, modals ; callbacks et followups ; harnais NetCord.Services ; HTTP interactions signées pour NetCord.Hosting.AspNetCore) et met à jour docs/parity/interactions.md.
-model: opencode-go/deepseek-v4.1-flash#high
+model: claude-agent/opus#high
 mode: subagent
 color: "#9B59B6"
 permissions:

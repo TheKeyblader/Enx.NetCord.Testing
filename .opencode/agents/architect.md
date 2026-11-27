@@ -1,6 +1,6 @@
 ---
 description: Architecte d'Enx.NetCord.Testing. Conçoit l'API publique, l'état partagé (FakeDiscordState), la table de routes et l'intégration aux seams NetCord ; rédige les ADR dans docs/adr. À utiliser avant tout changement transverse ou toute nouvelle API publique.
-model: openai/gpt-6.2-astra#high
+model: claude-agent/fable#high
 mode: subagent
 color: "#EB459E"
 permissions:

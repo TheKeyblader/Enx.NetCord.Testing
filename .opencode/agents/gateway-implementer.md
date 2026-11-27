@@ -1,6 +1,6 @@
 ---
 description: Implémente la Gateway du faux Discord (IWebSocketConnection en mémoire, HELLO/IDENTIFY/READY/HEARTBEAT/RESUME, close codes, dispatch d'events à partir de l'état) et met à jour docs/parity/gateway.md.
-model: opencode-go/deepseek-v4.1-flash#high
+model: claude-agent/opus#high
 mode: subagent
 color: "#ED4245"
 permissions:

@@ -1,6 +1,6 @@
 ---
 description: Auditeur de parité Discord. Compare la spec/docs Discord, ce que NetCord expose et ce que le fake implémente ; met à jour docs/parity/*.md et docs/parity/sources.md, signale la dérive et crée les tâches correspondantes. Ne touche pas au code.
-model: openai/gpt-6.2-sol#high
+model: claude-agent/sonnet#medium
 mode: subagent
 color: "#57F287"
 permissions:

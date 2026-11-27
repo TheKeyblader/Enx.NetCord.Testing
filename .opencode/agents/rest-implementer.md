@@ -1,6 +1,6 @@
 ---
 description: Implémente des endpoints REST du faux Discord (handler + état + validation + erreurs Discord + tests) pour une famille de routes donnée, et met à jour la ligne correspondante de docs/parity/rest.md.
-model: opencode-go/deepseek-v4.1-flash#high
+model: claude-agent/sonnet#high
 mode: subagent
 color: "#FEE75C"
 permissions:
