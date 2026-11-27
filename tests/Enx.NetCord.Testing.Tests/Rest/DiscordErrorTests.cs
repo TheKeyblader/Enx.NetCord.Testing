@@ -122,7 +122,7 @@ public sealed class DiscordErrorTests
     [Fact]
     [Parity("50035")]
     [Parity("http:400")]
-    public async Task SendMessage_HandlerReportsAMissingField_NetCordSees400With50035AndTheErrorTree()
+    public async Task SendMessage_ValidatorReportsAMissingField_NetCordSees400With50035AndTheErrorTree()
     {
         using var harness = new RestTestHarness();
         using var client = harness.CreateClient();
@@ -157,7 +157,7 @@ public sealed class DiscordErrorTests
     }
 
     [Fact]
-    public async Task SendMessage_ValidJson_ReachesTheHandlerWithTheBodyBytes()
+    public async Task SendMessage_ValidJson_ReachesTheHandlerWithTheValidatedPayloadAndTheBodyBytes()
     {
         using var harness = new RestTestHarness();
         using var client = harness.CreateClient();

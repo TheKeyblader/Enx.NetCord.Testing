@@ -10,6 +10,7 @@ Forme d'erreur Discord (à reproduire exactement, via `DiscordError`) :
 ```
 
 Rate limit (429) : corps `{ "message": "You are being rate limited.", "retry_after": 1.5, "global": false, "code"?: … }`
+(Discord renvoie un flottant ; le 429 injecté par `Intercept` écrit un **entier**, ADR 0005 — les flottants relèvent de M6-02)
 + en-têtes `Retry-After`, `X-RateLimit-*`, `X-RateLimit-Scope`.
 
 Progression `Fake` : ✅ **4** · 🟡 **9** · ⬜ **29** · ⛔ **0**
@@ -22,12 +23,12 @@ Progression `Fake` : ✅ **4** · 🟡 **9** · ⬜ **29** · ⛔ **0**
 | `http:201` | 201 Created | création quand Discord le fait (ex. PUT ban ? vérifier spec) | ⬜ | ⬜ | suivre les `responses` de la spec par opération |
 | `http:204` | 204 No Content | DELETE, PUT réaction/pin, typing… | ⬜ | ⬜ | |
 | `http:400` | 400 Bad Request | corps invalide (avec `50035`) | 🟡 | ✅ | `DiscordError.InvalidFormBody`/`InvalidJson` testés via le vrai `RestClient` avec des handlers factices (M1-03) ; reste à les produire depuis les vrais handlers (M1-REST) |
-| `http:401` | 401 Unauthorized | token absent/inconnu | ✅ | ✅ | `{"message":"401: Unauthorized","code":0}` ; absent, inconnu ou `Bearer <token bot>` ; une opération `{}` accepte l'anonyme (M1-03) |
+| `http:401` | 401 Unauthorized | token absent/inconnu | ✅ | ✅ | `{"message":"401: Unauthorized","code":0}` ; absent, inconnu ou `Bearer <token bot>` ; une opération `{}` accepte l'anonyme **et** un token inconnu (le header est ignoré, `Caller.Kind == Unrecognized`). Source : fauxcord `src/middleware/auth.ts:109-118` (chemins exemptés, dont le callback d'interaction et les webhooks à token, sans contrôle de l'en-tête) ; le comportement réel de Discord pour un token invalide sur ces routes n'est **pas vérifié** (M1-03) |
 | `http:403` | 403 Forbidden | permission manquante (`50013`) / accès (`50001`) | 🟡 | ✅ | produit via `Intercept`/handler factice seulement ; calcul de permissions : M4-REST-05 ; `50001` pas encore dans le catalogue |
 | `http:404` | 404 Not Found | ressource inconnue (`10xxx`) ou route inconnue (`code 0`) | 🟡 | ✅ | route inconnue / non implémentée (Lenient) : produit par le pipeline ; ressources `10xxx` : via handler factice, vrais handlers à venir (M1-REST) |
 | `http:405` | 405 Method Not Allowed | méthode non supportée sur une route connue | ✅ | ✅ | en-tête `Allow` = méthodes inventoriées du chemin ; Lenient et Strict ; pas d'en-têtes de rate limit (aucune opération résolue) |
 | `http:429` | 429 Too Many Requests | simulation de rate limit (opt-in) ou `Intercept` | 🟡 | ✅ | `Intercept(RestEffect.RateLimited(s))` : corps `{"message":"You are being rate limited.","retry_after":s,"global":false}`, scope `user`, sans `code` (exemple Discord) ; un 429 injecté ne prouve pas un quota : M6-02 |
-| `http:5xx` | 500/502 | injecté par le test via `Intercept` | ✅ | ✅ | `RestEffect.Error(500|502)` → corps `{"message":"500: Internal Server Error","code":0}` ; NetCord ne réessaie pas sur 5xx (`RestException`) |
+| `http:5xx` | 500/502 | injecté par le test via `Intercept` | ✅ | ✅ | `RestEffect.Error` 500 ou 502 → corps `{"message":"500: Internal Server Error","code":0}` ; NetCord ne réessaie pas sur 5xx (`RestException`) |
 
 ## Codes JSON
 
@@ -60,8 +61,8 @@ Progression `Fake` : ✅ **4** · 🟡 **9** · ⬜ **29** · ⛔ **0**
 | `50013` | Missing Permissions | permission calculée insuffisante | 🟡 | ✅ | injecté via `Intercept(403, 50013)` : ne prouve pas un calcul de permission ; dépend de M4-REST-05 |
 | `50024` | Cannot execute action on this channel type | ex. thread sur DM | ⬜ | ⬜ | |
 | `50027` | Invalid Webhook Token | token d'interaction expiré | ⬜ | ⬜ | |
-| `50035` | Invalid Form Body | validation (arbre `errors`) | 🟡 | ✅ | arbre `errors` (objets par propriété/indice décimal, `_errors` à la feuille, pas d'`errors: null`) lu par NetCord ; handlers factices seulement, vrais validateurs en M1-REST-03 ; codes de champ `BASE_TYPE_*` |
+| `50035` | Invalid Form Body | validation (arbre `errors`) | 🟡 | ✅ | arbre `errors` (objets par propriété/indice décimal, `_errors` à la feuille, pas d'`errors: null`) lu par NetCord ; validateur et handler factices seulement (un 50035 de validateur ne consomme pas de règle `Intercept`), vrais validateurs en M1-REST-03 ; codes de champ `BASE_TYPE_*` |
 | `50083` | Operation on archived thread | threads archivés | ⬜ | ⬜ | |
-| `50109` | The request body contains invalid JSON. | corps JSON syntaxiquement invalide | 🟡 | ✅ | produit par `RestRequestBody.TryParseJson` (aide partagée des handlers), testé via un handler factice ; à brancher dans les vrais handlers (M1-REST) |
+| `50109` | The request body contains invalid JSON. | corps JSON syntaxiquement invalide | 🟡 | ✅ | produit par `RestRequestBody.TryParseJson` (aide partagée des handlers), testé via un validateur factice (n'arme ni ne consomme de règle `Intercept`) ; à brancher dans les vrais validateurs (M1-REST) |
 | `160004` | Thread already created for this message | `POST /channels/{id}/messages/{id}/threads` | ⬜ | ⬜ | |
 | `220001` | Forum webhook needs `thread_name`/`thread_id` | webhooks forum | ⬜ | ⬜ | |

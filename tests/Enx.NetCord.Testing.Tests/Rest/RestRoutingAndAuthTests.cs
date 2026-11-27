@@ -275,6 +275,20 @@ public sealed class RestRoutingAndAuthTests
     }
 
     [Fact]
+    public async Task InteractionCallback_WithAnUnknownBotToken_IsAcceptedAndTheCallerStaysUnrecognized()
+    {
+        const string Key = "POST /interactions/{interaction_id}/{interaction_token}/callback";
+        using var harness = new RestTestHarness();
+
+        using var response = await harness.SendRawAsync(
+            HttpMethod.Post, "/interactions/1/some-token/callback", authorization: "Bot NDM.other.token", cancellationToken: Ct);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(1, harness.Calls(Key));
+        Assert.Equal(RestCallerKind.Unrecognized, harness.LastCaller(Key).Kind);
+    }
+
+    [Fact]
     public async Task SendRequest_OnlyOAuth2Operation_RefusesTheBotToken()
     {
         using var harness = new RestTestHarness(extraBindings: [RouteBinding.Of("GET /users/@me/guilds/{guild_id}/member", _ => RestResult.NoContent())]);

@@ -103,6 +103,26 @@ internal sealed class RestPipeline(RestPipelineContext context)
 
         var body = await ReadBodyAsync(request, attempt, cancellationToken).ConfigureAwait(false);
 
+        var fakeRequest = new FakeRestRequest(
+            entry.Operation,
+            resolution.Parameters,
+            target.Query,
+            body,
+            caller,
+            context.TimeProvider);
+
+        // Structural validation comes first: an invalid request never consumes an interception rule (ADR 0005).
+        if (entry.Validator is { } validator)
+        {
+            var validation = validator(fakeRequest);
+            if (validation.IsInvalid)
+            {
+                return WithOrdinaryHeaders(FakeRestResponse.From(validation.Error), entry);
+            }
+
+            fakeRequest.Payload = validation.Payload;
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
         var effect = context.Interceptions.TryTake(entry.Operation.Key);
         if (effect is not null)
@@ -123,13 +143,6 @@ internal sealed class RestPipeline(RestPipelineContext context)
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        var fakeRequest = new FakeRestRequest(
-            entry.Operation,
-            resolution.Parameters,
-            target.Query,
-            body,
-            caller,
-            context.TimeProvider);
         var result = await handler(fakeRequest, cancellationToken).ConfigureAwait(false);
         return WithOrdinaryHeaders(FakeRestResponse.From(result), entry);
     }

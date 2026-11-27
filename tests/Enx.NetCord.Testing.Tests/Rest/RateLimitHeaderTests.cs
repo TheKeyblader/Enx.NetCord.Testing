@@ -91,11 +91,10 @@ public sealed class RateLimitHeaderTests
     }
 
     [Fact]
-    public async Task Burst_TwoHundredRequestsWithoutAdvancingTheClock_NeverWaitsOnAGlobalLimit()
+    public async Task Burst_TwoHundredRequestsWithoutAdvancingTheClock_AreAllRecorded()
     {
         using var harness = new RestTestHarness();
         using var client = harness.CreateClient();
-        var started = System.Diagnostics.Stopwatch.StartNew();
 
         for (var i = 0; i < 200; i++)
         {
@@ -103,7 +102,21 @@ public sealed class RateLimitHeaderTests
         }
 
         Assert.Equal(200, harness.Journal.Attempts.Count);
-        Assert.True(started.Elapsed < TimeSpan.FromSeconds(2), $"200 requests took {started.Elapsed}");
+    }
+
+    [Fact]
+    public void CreateConfiguration_EveryClient_GetsItsOwnNoWaitManagerHandlerAndTheSentinelHostname()
+    {
+        using var harness = new RestTestHarness();
+
+        var first = RestClientFactory.CreateConfiguration(harness.Context);
+        var second = RestClientFactory.CreateConfiguration(harness.Context);
+
+        Assert.IsType<NoWaitRateLimitManager>(first.RateLimitManager);
+        Assert.IsType<FakeRestRequestHandler>(first.RequestHandler);
+        Assert.Equal(RestPipelineContext.DefaultHostname, first.Hostname);
+        Assert.NotSame(first.RateLimitManager, second.RateLimitManager);
+        Assert.NotSame(first.RequestHandler, second.RequestHandler);
     }
 
     [Fact]

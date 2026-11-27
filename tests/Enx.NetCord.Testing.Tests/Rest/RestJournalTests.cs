@@ -33,7 +33,7 @@ public sealed class RestJournalTests
         Assert.Equal("{\"content\":\"hi\"}", Encoding.UTF8.GetString(attempt.RequestBody!));
         Assert.Equal(RestAttemptOutcome.Responded, attempt.Outcome);
         Assert.Equal(HttpStatusCode.OK, attempt.StatusCode);
-        Assert.Equal("{\"id\":\"1\",\"username\":\"message\"}", Encoding.UTF8.GetString(attempt.ResponseBody!));
+        Assert.Equal("{\"id\":\"1\",\"username\":\"hi\"}", Encoding.UTF8.GetString(attempt.ResponseBody!));
         Assert.Contains(attempt.ResponseHeaders, h => h.Key == "X-RateLimit-Bucket");
         Assert.Null(attempt.FaultMessage);
     }

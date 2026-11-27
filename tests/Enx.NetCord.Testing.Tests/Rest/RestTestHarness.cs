@@ -50,6 +50,7 @@ internal sealed class RestTestHarness : IDisposable
 
     private readonly List<IDisposable> _owned = [];
     private readonly Dictionary<string, int> _calls = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, RestCaller> _callers = new(StringComparer.Ordinal);
 
     public RestTestHarness(
         UnimplementedRouteMode mode = UnimplementedRouteMode.Lenient,
@@ -88,6 +89,8 @@ internal sealed class RestTestHarness : IDisposable
     public FakeDiscordRest Rest { get; }
 
     public int Calls(string key) => _calls.GetValueOrDefault(key);
+
+    public RestCaller LastCaller(string key) => _callers[key];
 
     public RestClient CreateClient(string? rawToken = BotRawToken)
     {
@@ -144,44 +147,55 @@ internal sealed class RestTestHarness : IDisposable
             ? DiscordError.UnknownChannel()
             : UserResult(r.RouteParameters["channel_id"], "channel"));
         yield return Bind("GET /channels/{channel_id}/messages/{message_id}", _ => DiscordError.UnknownMessage());
-        yield return Bind("POST /channels/{channel_id}/messages", r =>
-        {
-            if (r.Body is null)
-            {
-                return DiscordError.InvalidJson();
-            }
-
-            if (!r.Body.TryParseJson(out var document, out var error))
-            {
-                return error;
-            }
-
-            using (document)
-            {
-                if (!document.RootElement.TryGetProperty("content", out _))
-                {
-                    return DiscordError.InvalidFormBody(new FormErrors()
-                        .Add("content", "BASE_TYPE_REQUIRED", "This field is required"));
-                }
-            }
-
-            return UserResult("1", "message");
-        });
+        yield return Bind(
+            "POST /channels/{channel_id}/messages",
+            r => UserResult("1", r.GetPayload<string>()),
+            ValidateMessage);
         yield return Bind("POST /interactions/{interaction_id}/{interaction_token}/callback", _ => RestResult.NoContent());
         yield return Bind("GET /webhooks/{webhook_id}/{webhook_token}", _ => UserResult("1", "webhook"));
         yield return Bind("PATCH /channels/{channel_id}", _ => DiscordError.MissingPermissions());
     }
 
-    private RouteBinding Bind(string key, Func<FakeRestRequest, RestResult> handler)
-        => RouteBinding.Of(key, request =>
+    private static RestValidation ValidateMessage(FakeRestRequest request)
+    {
+        if (request.Body is null)
         {
-            lock (_calls)
-            {
-                _calls[key] = _calls.GetValueOrDefault(key) + 1;
-            }
+            return DiscordError.InvalidJson();
+        }
 
-            return handler(request);
-        });
+        if (!request.Body.TryParseJson(out var document, out var error))
+        {
+            return error;
+        }
+
+        using (document)
+        {
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("content", out var content)
+                && content.ValueKind == JsonValueKind.String)
+            {
+                return RestValidation.Valid(content.GetString());
+            }
+        }
+
+        return DiscordError.InvalidFormBody(
+            new FormErrors().Add("content", "BASE_TYPE_REQUIRED", "This field is required"));
+    }
+
+    private RouteBinding Bind(string key, Func<FakeRestRequest, RestResult> handler, RestRequestValidator? validator = null)
+        => RouteBinding.Of(
+            key,
+            request =>
+            {
+                lock (_calls)
+                {
+                    _calls[key] = _calls.GetValueOrDefault(key) + 1;
+                    _callers[key] = request.Caller;
+                }
+
+                return handler(request);
+            },
+            validator);
 
     private static RestResult UserResult(string id, string username)
         => RestResult.Ok(new TestUserDto(id, username), TestJsonContext.Default.TestUserDto);

@@ -11,6 +11,8 @@ public sealed class RestInterceptionTests
 {
     private const string Me = "GET /users/@me";
 
+    private static readonly TimeSpan Guard = TimeSpan.FromSeconds(5);
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Theory]
@@ -266,6 +268,72 @@ public sealed class RestInterceptionTests
     }
 
     [Fact]
+    [Parity("50109")]
+    [Parity("50035")]
+    public async Task Intercept_InvalidBodyOrFields_AreRejectedBeforeTheRuleIsTakenAndTheNextValidRequestGetsTheEffect()
+    {
+        const string Key = "POST /channels/{channel_id}/messages";
+        using var harness = new RestTestHarness();
+        using var client = harness.CreateClient();
+        using var registration = harness.Rest.Intercept(Key, RestEffect.Error(HttpStatusCode.BadGateway));
+
+        var malformed = await Assert.ThrowsAsync<RestException>(() => Post(client, "{\"content\":"));
+        Assert.Equal(50109, malformed.Error!.Code);
+
+        var missingField = await Assert.ThrowsAsync<RestException>(() => Post(client, "{}"));
+        Assert.Equal(50035, missingField.Error!.Code);
+
+        var effect = await Assert.ThrowsAsync<RestException>(() => Post(client, "{\"content\":\"hi\"}"));
+        Assert.Equal(HttpStatusCode.BadGateway, effect.StatusCode);
+        Assert.Equal(0, harness.Calls(Key));
+
+        await using var stream = await Post(client, "{\"content\":\"hi\"}");
+        Assert.Equal(1, harness.Calls(Key));
+
+        var attempts = harness.Journal.Attempts;
+        Assert.Equal([null, null, RestEffectKind.Error, null], attempts.Select(a => a.Effect));
+        Assert.Equal(
+            [HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadGateway, HttpStatusCode.OK],
+            attempts.Select(a => a.StatusCode!.Value));
+
+        static Task<Stream> Post(global::NetCord.Rest.RestClient client, string json)
+            => client.SendRequestAsync(
+                HttpMethod.Post, new StringContent(json, Encoding.UTF8, "application/json"), $"/channels/{1UL}/messages", cancellationToken: Ct);
+    }
+
+    [Fact]
+    public async Task Intercept_RejectedByValidatorWithDelayRule_DoesNotArmATimer()
+    {
+        var clock = new FakeTimeProvider(RestTestHarness.Start);
+        var probe = new TimerProbe(clock);
+        using var harness = new RestTestHarness(timeProvider: probe);
+        using var client = harness.CreateClient();
+        using var registration = harness.Rest.Intercept("POST /channels/{channel_id}/messages", RestEffect.Delay(TimeSpan.FromSeconds(3)));
+
+        var exception = await Assert.ThrowsAsync<RestException>(() => client.SendRequestAsync(
+            HttpMethod.Post, new StringContent("{", Encoding.UTF8, "application/json"), $"/channels/{1UL}/messages", cancellationToken: Ct));
+
+        Assert.Equal(50109, exception.Error!.Code);
+        Assert.Equal(0, probe.TimerCount);
+    }
+
+    [Fact]
+    public void GetPayload_WithoutAValidatorPayload_IsABindingBugReportedWithTheOperationKey()
+    {
+        var request = new FakeRestRequest(
+            new RouteOperation("GET", "/x", null, RouteSecurity.Bot),
+            new Dictionary<string, string>(),
+            [],
+            null,
+            RestCaller.Anonymous,
+            TimeProvider.System);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => request.GetPayload<string>());
+
+        Assert.Contains("GET /x", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Delay_AfterReadingASuspendedBody_ArmsOnlyOnInterceptionAndRunsTheHandlerOnceAtTheDeadline()
     {
         const string Key = "POST /channels/{channel_id}/messages";
@@ -279,13 +347,13 @@ public sealed class RestInterceptionTests
 
         Assert.False(probe.Armed.IsCompleted);
         var pending = client.SendRequestAsync(HttpMethod.Post, content, $"/channels/{1UL}/messages", cancellationToken: Ct);
-        await content.Started.WaitAsync(Ct);
+        await content.Started.WaitAsync(Guard, Ct);
 
         Assert.False(probe.Armed.IsCompleted);
         Assert.Equal(0, probe.TimerCount);
 
         content.Release();
-        Assert.Same(probe.Armed, await Task.WhenAny(probe.Armed, pending));
+        Assert.Same(probe.Armed, await Task.WhenAny(probe.Armed, pending).WaitAsync(Guard, Ct));
         Assert.False(pending.IsCompleted);
         Assert.Equal(0, harness.Calls(Key));
 
@@ -294,7 +362,7 @@ public sealed class RestInterceptionTests
         Assert.Equal(0, harness.Calls(Key));
 
         clock.Advance(TimeSpan.FromSeconds(1));
-        await using var stream = await pending;
+        await using var stream = await pending.WaitAsync(Guard, Ct);
         Assert.Equal(1, harness.Calls(Key));
         Assert.Equal(1, probe.TimerCount);
         Assert.Equal(RestEffectKind.Delay, Assert.Single(harness.Journal.Attempts).Effect);
@@ -326,10 +394,10 @@ public sealed class RestInterceptionTests
         using var registration = harness.Rest.Intercept(Me, RestEffect.Delay(TimeSpan.FromSeconds(3)));
 
         var pending = client.GetCurrentUserAsync(cancellationToken: cancellation.Token);
-        await probe.Armed.WaitAsync(Ct);
+        await probe.Armed.WaitAsync(Guard, Ct);
         await cancellation.CancelAsync();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(Guard, Ct));
         var attempt = Assert.Single(harness.Journal.Attempts);
         Assert.Equal(RestAttemptOutcome.Canceled, attempt.Outcome);
         Assert.Equal(RestEffectKind.Delay, attempt.Effect);

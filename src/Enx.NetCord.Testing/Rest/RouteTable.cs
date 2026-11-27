@@ -8,7 +8,7 @@ namespace Enx.NetCord.Testing.Rest;
 internal sealed class RouteTable
 {
     private static readonly Lazy<RouteTable> DefaultTable = new(
-        static () => Create(RouteInventory.All, []));
+        static () => Create(RouteInventory.All, RestRoutes.Bindings));
 
     private readonly Dictionary<string, RouteEntry> _byKey;
     private readonly Dictionary<int, List<TemplateNode>> _bySegmentCount;
@@ -19,7 +19,7 @@ internal sealed class RouteTable
         _bySegmentCount = bySegmentCount;
     }
 
-    /// <summary>Gets the table built from the embedded inventory and the handlers registered so far.</summary>
+    /// <summary>Gets the table built from the embedded inventory and <see cref="RestRoutes.Bindings"/>.</summary>
     public static RouteTable Default => DefaultTable.Value;
 
     /// <summary>Gets every inventoried entry.</summary>
@@ -101,13 +101,13 @@ internal sealed class RouteTable
             throw new RouteTableException(problems);
         }
 
-        var handlers = bindingList.ToDictionary(static b => b.Key, static b => b.Handler, StringComparer.Ordinal);
+        var bindingsByKey = bindingList.ToDictionary(static b => b.Key, StringComparer.Ordinal);
         var byKey = new Dictionary<string, RouteEntry>(StringComparer.Ordinal);
         var nodes = new Dictionary<string, TemplateNode>(StringComparer.Ordinal);
         foreach (var operation in operationList)
         {
-            handlers.TryGetValue(operation.Key, out var handler);
-            var entry = new RouteEntry(operation, handler);
+            bindingsByKey.TryGetValue(operation.Key, out var binding);
+            var entry = new RouteEntry(operation, binding?.Handler, binding?.Validator);
             byKey[operation.Key] = entry;
 
             if (!nodes.TryGetValue(operation.Template, out var node))
