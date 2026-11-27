@@ -25,9 +25,9 @@ ADR à rédiger d'abord :
 
 Implémentation :
 
-- [ ] M1-01 — `FakeDiscordState` + entités de base (user, application, guild, channel, role, member, message) — rest-implementer — M1-ADR-03
+- [~] (rest-implementer) M1-01 — `FakeDiscordState` + entités de base (user, application, guild, channel, role, member, message) — rest-implementer — M1-ADR-03
 - [ ] M1-02 — `FakeDiscord` façade + `Seed` (guild/channel/member/role) + `CreateRestClient()` — rest-implementer — M1-ADR-04, M1-01
-- [ ] M1-03 — `FakeRestRequestHandler` + `RouteTable` + auth `Bot` + `DiscordError` + en-têtes rate limit — rest-implementer — M1-ADR-05
+- [~] (rest-implementer) M1-03 — `FakeRestRequestHandler` + `RouteTable` + auth `Bot` + `DiscordError` + en-têtes rate limit — rest-implementer — M1-ADR-05
 - [ ] M1-04 — `Recorded.Requests` + assertions de base — rest-implementer — M1-03
 - [ ] M1-REST-01 — Users : `GET/PATCH /users/@me`, `GET /users/{user_id}`, `POST /users/@me/channels` (DM) — rest-implementer — M1-03
 - [ ] M1-REST-02 — Channels : `GET/PATCH/DELETE /channels/{channel_id}` — rest-implementer — M1-03
@@ -43,7 +43,7 @@ Implémentation :
 
 ## M2 — Interactions & NetCord.Services
 
-- [ ] M2-ADR-07 — Modèle d'interaction (builders, `InteractionResult`, 3 voies d'exécution, règles 40060/15 min) — architect — M1-ADR-04
+- [~] (architect) M2-ADR-07 — Modèle d'interaction (builders, `InteractionResult`, 3 voies d'exécution, règles 40060/15 min) — architect — M1-ADR-04
 - [ ] M2-ADR-08 — Harnais `Enx.NetCord.Testing.Services` (API, DI, enregistrement des commandes) — architect — M2-ADR-07
 - [ ] M2-01 — Builders slash command (options, sous-commandes, `resolved`) + exécution directe — interactions-implementer — M2-ADR-07
 - [ ] M2-02 — Callbacks : Pong, Message, DeferredMessage, DeferredModifyMessage, ModifyMessage, Autocomplete, Modal — interactions-implementer — M2-01
