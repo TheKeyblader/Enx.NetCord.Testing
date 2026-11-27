@@ -20,9 +20,9 @@
 │  │              enregistrement des requêtes)                                  │
 │  ├─ Gateway  : FakeGatewayServer → sessions → FakeWebSocketConnection         │
 │  │             (HELLO/IDENTIFY/READY/HEARTBEAT/RESUME, intents, shards)       │
-│  ├─ Interactions : builders → JsonInteraction → exécution → InteractionResult │
+│  ├─ Interactions : requêtes → payload unique → 3 voies → InteractionResult    │
 │  ├─ Seed     : builders d'état (guildes, salons, membres, rôles, messages…)   │
-│  ├─ Recorded : journal des requêtes REST, frames Gateway, callbacks           │
+│  ├─ Recorded : journal des requêtes REST, frames Gateway                      │
 │  └─ State    : FakeDiscordState (source unique) ──StateChange──► Gateway      │
 │                ISnowflakeGenerator · TimeProvider · options                    │
 └────────────────────────────────────────────────────────────────────────────────┘
@@ -104,14 +104,37 @@
 
 ### Interactions
 
-- Builders → `JsonInteraction` cohérent avec l'état.
-- Trois voies d'exécution :
-  1. **Directe** : `Interaction.CreateFromJson(json, guild, delegate, rest)` ; le delegate
-     enregistre le callback dans l'état (la plus rapide, pour tester un module isolé).
-  2. **Gateway** : dispatch `INTERACTION_CREATE` vers un `GatewayClient` connecté ; la réponse
-     revient par REST `POST /interactions/{id}/{token}/callback`.
-  3. **HTTP** : POST signé vers l'endpoint ASP.NET Core du bot (`Hosting`).
-- `InteractionResult` agrège callback, followups, edits, suppressions, modal, choix d'autocomplete.
+- [ADR 0007 — Modèle d'interaction](adr/0007-interaction-model.md) :
+  `discord.Interactions.SlashCommand("greet", alice, general.Id).WithUser("user", bob)` décrit le
+  geste d'un utilisateur à partir d'IDs du seed. À l'exécution, l'interaction devient une
+  ressource de l'état (ID, jeton, instant de création) et le fake sérialise **un** payload,
+  identique pour les trois voies.
+- Trois voies de livraison :
+  1. **Directe** (M2) : `request.ExecuteAsync(handler)` relit les octets avec NetCord, appelle
+     `Interaction.CreateFromJson` puis le handler. Transport `Gateway` : la réponse initiale part
+     en REST. Transport `Http` : pas de guilde, réponse inline comme `NetCord.Hosting.AspNetCore`,
+     donc sans `RestException` ; une seconde réponse lève `InvalidOperationException`.
+  2. **Gateway** (M3-08) : le fait `InteractionCreated` devient un dispatch `INTERACTION_CREATE`
+     pour un `GatewayClient` connecté ; la réponse revient par REST.
+  3. **HTTP** (M5-02) : POST signé des mêmes octets vers l'endpoint ASP.NET Core du bot ; la
+     réponse initiale est le corps de la réponse HTTP.
+- Une seule capture, côté serveur : la route `POST /interactions/{interaction_id}/{interaction_token}/callback`
+  et l'entrée inline mènent à la même mutation d'état. Réponse originale et followups passent
+  par les routes `/webhooks/{webhook_id}/{webhook_token}…`, partagées avec les webhooks et
+  distinguées par `webhook_id` = ID de l'application.
+- Réponse et followups sont de vrais messages de l'état. Un message éphémère est lisible par
+  les routes à jeton, inconnu des routes de salon et absent des dispatchs Gateway.
+- La validation structurelle reste à l'étape 3 du pipeline REST (`50035`, `50109`), avant
+  l'interception. Les règles qui dépendent de l'état sont appliquées ensuite sous le verrou,
+  avec le `TimeProvider` et sans attente : réponse initiale unique (`40060`), délai de 3 s
+  (`10062`), jeton de 15 min (`50027`), suite avant réponse initiale (`10015`), types de
+  callback permis par type d'interaction.
+- `InteractionResult` est une photographie détachée. Lus dans l'état : `Callback`, `Response`
+  et `Followups` (des `RestMessage` NetCord dans leur état courant), `Modal`,
+  `AutocompleteChoices`. Observations tenues avec le journal : les `Requests` rattachées à
+  l'interaction et les `RejectedCallbacks`, tentatives de réponse initiale refusées par l'une
+  ou l'autre entrée. `GetResult` reprend une photographie ; `WaitForAsync(id, condition)`
+  réévalue une condition après chaque commit, ajout au journal rattaché ou refus.
 
 ### Services (package dédié)
 
@@ -131,8 +154,9 @@
 
 - **Enregistrements** : `discord.Recorded.Requests` renvoie un instantané détaché des
   tentatives REST terminées (méthode, chemin, template, paramètres, query, corps JSON,
-  statut et réponse JSON). Le seed n'y écrit pas. Frames Gateway et callbacks relèvent
-  des jalons suivants.
+  statut et réponse JSON). Le seed n'y écrit pas. Les réponses d'interaction se lisent dans
+  `InteractionResult`, qui renvoie aussi aux requêtes du journal et aux réponses refusées
+  (ADR 0007) ; les frames Gateway relèvent de M3.
 - **Assertions** : méthodes d'extension sans dépendance à un framework (lèvent
   `FakeDiscordAssertionException`), ex. `discord.Recorded.ShouldHaveRequested("POST /channels/{channel_id}/messages")`.
 - **Options** : `FakeDiscordOptions` fixe l'identité (`BotToken`, `ApplicationId`), l'horloge
@@ -143,7 +167,7 @@
 
 ```
 FakeDiscord.cs  FakeDiscordOptions.cs
-State/        (entités, FakeDiscordState, StateChange, ISnowflakeGenerator)
+State/        (entités dont l'interaction et son jeton, FakeDiscordState, StateChange, ISnowflakeGenerator)
 Rest/         (FakeDiscordRest, RestEffect, FakeRestRequestHandler, RouteTable, FakeRestRequest/Response,
                DiscordError, RateLimitHeaders, gestionnaire de rate limit sans attente)
 Rest/Routes/<Domaine>/   (Channels, Messages, Reactions, Threads, Guilds, Members, Roles, Bans,
@@ -151,7 +175,8 @@ Rest/Routes/<Domaine>/   (Channels, Messages, Reactions, Threads, Guilds, Member
                           Interactions, AutoModeration, ScheduledEvents, StageInstances, Polls, …)
 Gateway/      (FakeWebSocketConnection*, FakeGatewayServer, FakeGatewaySession, EventIntents)
 Gateway/Dispatch/<Domaine>Dispatches.cs
-Interactions/ (Builders/, InteractionExecutor, InteractionResult)
+Interactions/ (FakeDiscordInteractions, Requests/, exécution directe, traitement des callbacks,
+               InteractionResult)
 Seed/         (builders d'état fluents)
 Recording/    (journal)
 Assertions/
