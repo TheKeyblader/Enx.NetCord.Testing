@@ -416,20 +416,22 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
 ### UR-019 — Membres de guilde : codes, statuts et ordre (`test-manuel`)
 
 - **Statut** : Ouvert
-- **Origine** : M1-REST-07 (`2790ada`, `762b99f`, corrections de revue en cours)
+- **Origine** : M1-REST-07 (`2790ada`, `762b99f`, `73b256b`)
 - **Concerne** : `rest.md` `/guilds/{guild_id}/members…` (9 lignes) ; `errors.md` `10007`, `10011`, `10013`, `50013`, `50025`, `50028`, `50035` ; tests `tests/Enx.NetCord.Testing.Tests/Rest/Members/*`, `Conformance/Rest/MembersConformanceTests.cs`
 - **Hypothèse** :
   1. `GET`/`PATCH`/`DELETE …/members/{user_id}` : utilisateur inexistant ⇒ 404 `10013`,
-     utilisateur existant non membre ⇒ 404 `10007` (correction de revue en cours).
+     utilisateur existant non membre ⇒ 404 `10007`.
   2. Ordre : guilde (`10004`/`50001`) → membre (`10007`) → `@everyone` (`50028`) → rôle (`10011`) ;
      rôle inconnu dans `roles` d'un `PATCH` ⇒ 404 `10011` (pas `50035`), rien n'est modifié.
   3. `PUT`/`DELETE …/roles/{guild_id}` (`@everyone`) ⇒ 400 `50028` ; `@everyone` dans `roles`
      d'un `PATCH` ignoré.
   4. Expulser le bot lui-même ou le propriétaire ⇒ 403 `50013` (souvenir de discord.py, non documenté).
   5. `PUT …/members/{user_id}` (OAuth2) ⇒ toujours 403 `50025` après `10004`/`50001` (pas de grants
-     modélisés) ; cas « déjà membre » (204 d'après `guild.mdx:1048`) en cours de traitement.
+     modélisés), sauf utilisateur déjà membre ⇒ 204 sans fait (`guild.mdx:1048`), vérifié
+     **avant** le jeton (ordre supposé).
   6. Timeout au-delà de 28 jours ⇒ `50035` avec un code de champ **inventé**
-     `GUILD_MEMBER_TIMEOUT_TOO_LONG` ; date illisible ⇒ `DATE_TIME_TYPE_PARSE`.
+     `GUILD_MEMBER_TIMEOUT_TOO_LONG` ; date illisible (non ISO 8601, ex. `12/25/2026`) ⇒
+     `DATE_TYPE_PARSE` (code partagé avec le `before` des pins, UR-017).
   7. `mute`/`deaf`/`channel_id` acceptés hors vocal (Discord : 400, `40032` ?), faute de voice states.
   8. `search` trié par ID d'utilisateur croissant (Discord : pertinence, non documenté).
 - **Procédure** (G1, bot avec `MANAGE_ROLES`, `KICK_MEMBERS`, `MODERATE_MEMBERS`, `MANAGE_NICKNAMES`) :
