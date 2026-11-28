@@ -313,7 +313,7 @@ public sealed class ModifyChannelTests
                 o =>
                 {
                     o.Name = "renamed";
-                    o.ChannelType = ChannelType.AnnouncementGuildChannel;
+                    o.ChannelType = ChannelType.VoiceGuildChannel;
                 },
                 cancellationToken: Ct));
 

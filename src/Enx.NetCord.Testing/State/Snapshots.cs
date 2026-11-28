@@ -64,6 +64,9 @@ internal readonly record struct ChannelTraits(
     /// <summary>Default bitrate of a new voice or stage channel (hypothesis of ADR 0013, lot C).</summary>
     internal const int DefaultBitrate = 64000;
 
+    /// <summary>Gets whether the kind has default thread settings (<c>default_auto_archive_duration</c>, <c>default_thread_rate_limit_per_user</c>): text, announcement, forum and media.</summary>
+    internal bool HasThreadDefaults => Family is ChannelFamily.Text or ChannelFamily.Forum;
+
     /// <summary>Gets the traits of a channel kind.</summary>
     /// <param name="kind">The kind.</param>
     /// <returns>The traits.</returns>

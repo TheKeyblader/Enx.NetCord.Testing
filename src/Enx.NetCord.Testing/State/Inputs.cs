@@ -43,9 +43,12 @@ internal sealed record CreateGuildChannelInput(
 
 internal sealed record CreateDmChannelInput(ulong RecipientId, ulong? Id = null);
 
-// A partial channel update: null means "unchanged", except for the topic, where a null Topic only clears it
-// when ChangeTopic is set (the wire distinguishes an absent topic from a null one). Type and ParentId are requests the
-// state checks under its lock: a type other than the channel's, or any parent, is refused.
+// A partial channel update: null means "unchanged", except for the three-state fields, where the wire distinguishes an
+// absent key from a null one: Topic, ParentId (null leaves the category) and RtcRegion (null is automatic) and
+// DefaultSortOrder (null clears it) are applied only when their Change* flag is set. Type and ParentId are requests the state
+// checks under its lock (ADR 0013, § 2 and § 5): the type converts only between text and announcement, the parent must pass the
+// four invariants. Fields the channel's type has no use for are ignored. Name through DefaultForumLayout are validated against
+// the channel's type after the conversion.
 internal sealed record UpdateChannelInput(
     ulong ChannelId,
     string? Name = null,
@@ -55,7 +58,18 @@ internal sealed record UpdateChannelInput(
     int? RateLimitPerUser = null,
     int? Position = null,
     int? Type = null,
-    ulong? ParentId = null);
+    ulong? ParentId = null,
+    bool ChangeParent = false,
+    int? Bitrate = null,
+    int? UserLimit = null,
+    bool ChangeRtcRegion = false,
+    string? RtcRegion = null,
+    int? VideoQualityMode = null,
+    int? DefaultAutoArchiveDuration = null,
+    int? DefaultThreadRateLimitPerUser = null,
+    bool ChangeDefaultSortOrder = false,
+    int? DefaultSortOrder = null,
+    int? DefaultForumLayout = null);
 
 internal sealed record CreateRoleInput(
     ulong GuildId,

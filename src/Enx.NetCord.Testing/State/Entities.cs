@@ -51,7 +51,8 @@ internal sealed class GuildEntity(ulong id, string name, long ordinal)
 internal sealed class ChannelEntity(ulong id, ChannelKind kind, long ordinal)
 {
     internal ulong Id { get; } = id;
-    internal ChannelKind Kind { get; } = kind;
+    // Changes only by the text <-> announcement conversion of UpdateChannel (ADR 0013, § 5), which stays in the text family.
+    internal ChannelKind Kind { get; set; } = kind;
     internal long Ordinal { get; } = ordinal;
     internal ulong? GuildId { get; set; }
     internal string? Name { get; set; }

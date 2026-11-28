@@ -131,14 +131,45 @@ public sealed class DiscordErrorTests
     [InlineData((int)StateFailureKind.InvalidChannelType, "type", "CHANNEL_TYPE_INVALID")]
     [InlineData((int)StateFailureKind.InvalidChannelParent, "parent_id", "CHANNEL_PARENT_INVALID")]
     [InlineData((int)StateFailureKind.InvalidChannelName, "name", "BASE_TYPE_BAD_LENGTH")]
+    [InlineData((int)StateFailureKind.ChannelParentNotCategory, "parent_id", "CHANNEL_PARENT_INVALID_TYPE")]
+    [InlineData((int)StateFailureKind.ChannelCannotHaveParent, "parent_id", "CHANNEL_PARENT_INVALID")]
+    [InlineData((int)StateFailureKind.ChannelParentFull, "parent_id", "CHANNEL_PARENT_MAX_CHANNELS")]
+    [InlineData((int)StateFailureKind.InvalidChannelTopic, "topic", "BASE_TYPE_BAD_LENGTH")]
+    [InlineData((int)StateFailureKind.InvalidChannelUserLimit, "user_limit", "NUMBER_TYPE_MAX")]
     public void FromStateFailure_ChannelFieldRefusal_MapsTo50035OnTheField(int kind, string field, string fieldCode)
     {
-        var error = DiscordError.FromStateFailure(new StateFailure((StateFailureKind)kind, 1));
+        var error = DiscordError.FromStateFailure(new StateFailure((StateFailureKind)kind, 1, 99));
 
         Assert.Equal((HttpStatusCode.BadRequest, 50035), (error.Status, error.Code));
         using var json = JsonDocument.Parse(error.ToJson());
         var first = json.RootElement.GetProperty("errors").GetProperty(field).GetProperty("_errors")[0];
         Assert.Equal(fieldCode, first.GetProperty("code").GetString());
+    }
+
+    [Theory]
+    [InlineData((int)StateFailureKind.InvalidChannelParent, "Category does not exist")]
+    [InlineData((int)StateFailureKind.ChannelParentNotCategory, "Not a category")]
+    [InlineData((int)StateFailureKind.ChannelCannotHaveParent, "Categories cannot have subcategories")]
+    [InlineData((int)StateFailureKind.ChannelParentFull, "Maximum number of channels in category reached (50)")]
+    [InlineData((int)StateFailureKind.InvalidChannelUserLimit, "int value should be less than or equal to 99.")]
+    public void FromStateFailure_ChannelFieldRefusal_CarriesTheMessage(int kind, string message)
+    {
+        var error = DiscordError.FromStateFailure(new StateFailure((StateFailureKind)kind, 1, 99));
+
+        using var json = JsonDocument.Parse(error.ToJson());
+        var field = json.RootElement.GetProperty("errors").EnumerateObject().Single().Value.GetProperty("_errors")[0];
+        Assert.Equal(message, field.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    [Parity("30052")]
+    public void FromStateFailure_BitrateTooHigh_Maps30052WithTheDocumentedMessage()
+    {
+        var error = DiscordError.FromStateFailure(new StateFailure(StateFailureKind.ChannelBitrateTooHigh, 1));
+
+        Assert.Equal((HttpStatusCode.BadRequest, 30052, "Bitrate is too high for channel of this type"), (error.Status, error.Code, error.Message));
+        Assert.True(DiscordError.TryCreateSimple(HttpStatusCode.BadRequest, 30052, out var simple));
+        Assert.Equal(30052, simple.Code);
     }
 
     [Fact]

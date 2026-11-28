@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using Enx.NetCord.Testing.Serialization;
@@ -91,6 +92,49 @@ internal sealed class DiscordError
     /// <returns>The error.</returns>
     public static DiscordError MessageTooOldToBulkDelete() => new(HttpStatusCode.BadRequest, 50034, "You can only bulk delete messages that are under 14 days old.");
 
+    /// <summary>
+    /// 400 with code 30052: the bitrate of a voice or stage channel exceeds what the channel type allows. The code and message are
+    /// documented; the HTTP status is not (hypothesis, see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError BitrateTooHigh() => new(HttpStatusCode.BadRequest, 30052, "Bitrate is too high for channel of this type");
+
+    /// <summary>400 <c>50035</c> on <c>type</c>: a guild channel cannot become the requested type (only text and announcement convert). The field code is a hypothesis.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError InvalidChannelType()
+        => InvalidFormBody(new FormErrors().Add("type", "CHANNEL_TYPE_INVALID", "Invalid channel type."));
+
+    /// <summary>400 <c>50035</c> on <c>parent_id</c>: the parent does not exist in the guild. The field code and message are hypotheses (the message is reported by a third party).</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError InvalidChannelParent()
+        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID", "Category does not exist"));
+
+    /// <summary>400 <c>50035</c> on <c>parent_id</c>: the parent exists but is not a category. The field code and message are hypotheses.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError ChannelParentNotCategory()
+        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID_TYPE", "Not a category"));
+
+    /// <summary>400 <c>50035</c> on <c>parent_id</c>: the channel is a category, which cannot have a parent. The field code and message are hypotheses.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError ChannelCannotHaveParent()
+        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID", "Categories cannot have subcategories"));
+
+    /// <summary>400 <c>50035</c> on <c>parent_id</c>: the category already holds 50 channels (documented limit; field code and message are hypotheses).</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError ChannelParentFull()
+        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_MAX_CHANNELS", "Maximum number of channels in category reached (50)"));
+
+    /// <summary>400 <c>50035</c> on <c>topic</c>: longer than the 1024 characters of a channel that is not a forum or media channel. The form is a hypothesis.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError InvalidChannelTopic()
+        => InvalidFormBody(new FormErrors().Add("topic", "BASE_TYPE_BAD_LENGTH", "Must be between 0 and 1024 in length."));
+
+    /// <summary>400 <c>50035</c> on <c>user_limit</c>: above what the voice (99) or stage (10000) channel allows. The form is a hypothesis.</summary>
+    /// <param name="limit">The maximum of the channel type.</param>
+    /// <returns>The error.</returns>
+    public static DiscordError InvalidChannelUserLimit(int limit)
+        => InvalidFormBody(new FormErrors().Add("user_limit", "NUMBER_TYPE_MAX", $"int value should be less than or equal to {limit.ToString(CultureInfo.InvariantCulture)}."));
+
     /// <summary>403 with code 50013.</summary>
     /// <returns>The error.</returns>
     public static DiscordError MissingPermissions() => new(HttpStatusCode.Forbidden, 50013, "Missing Permissions");
@@ -143,10 +187,16 @@ internal sealed class DiscordError
             StateFailureKind.CannotExecuteInDm => CannotExecuteOnDm(),
             StateFailureKind.CannotExecuteOnChannelType => CannotExecuteOnChannelType(),
 
-            // Hypotheses, see docs/parity/errors.md: the codes of these two field errors are not documented by Discord.
-            StateFailureKind.InvalidChannelType => InvalidFormBody(new FormErrors().Add("type", "CHANNEL_TYPE_INVALID", "Invalid channel type.")),
-            StateFailureKind.InvalidChannelParent => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID", "Invalid parent channel.")),
+            // Hypotheses, see docs/parity/errors.md: the codes of these field errors are not documented by Discord.
+            StateFailureKind.InvalidChannelType => InvalidChannelType(),
+            StateFailureKind.InvalidChannelParent => InvalidChannelParent(),
+            StateFailureKind.ChannelParentNotCategory => ChannelParentNotCategory(),
+            StateFailureKind.ChannelCannotHaveParent => ChannelCannotHaveParent(),
+            StateFailureKind.ChannelParentFull => ChannelParentFull(),
             StateFailureKind.InvalidChannelName => InvalidFormBody(new FormErrors().Add("name", "BASE_TYPE_BAD_LENGTH", "Must be between 1 and 100 in length.")),
+            StateFailureKind.InvalidChannelTopic => InvalidChannelTopic(),
+            StateFailureKind.InvalidChannelUserLimit => InvalidChannelUserLimit(failure.Limit),
+            StateFailureKind.ChannelBitrateTooHigh => BitrateTooHigh(),
 
             // Hypothesis (docs/parity/errors.md): the code of the field error of a reply to a message that does not exist.
             StateFailureKind.UnknownMessageReference => InvalidFormBody(new FormErrors().Add("message_reference", "MESSAGE_REFERENCE_UNKNOWN_MESSAGE", "Unknown message")),
@@ -174,6 +224,7 @@ internal sealed class DiscordError
             (HttpStatusCode.BadRequest, 50006) => EmptyMessage(),
             (HttpStatusCode.BadRequest, 50024) => CannotExecuteOnChannelType(),
             (HttpStatusCode.BadRequest, 50034) => MessageTooOldToBulkDelete(),
+            (HttpStatusCode.BadRequest, 30052) => BitrateTooHigh(),
             (HttpStatusCode.NotFound, 10013) => UnknownUser(),
             (HttpStatusCode.Forbidden, 50025) => InvalidOAuth2AccessToken(),
             (HttpStatusCode.InternalServerError, 0) => InternalServerError(),

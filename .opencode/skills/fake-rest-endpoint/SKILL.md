@@ -32,6 +32,20 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   un échec d'invariant sort **avant** d'allouer un ID (un refus ne consomme pas le générateur). Supprimer une catégorie
   détache ses enfants dans le même commit (`ChannelUpdated` par enfant, puis `ChannelDeleted`). Un champ que le type n'a
   pas est ignoré par l'état (et validé en amont), jamais stocké. Les listes de salons sont rendues par ID croissant.
+- **`PATCH` d'un salon** (M1-REST-02B2) : `UpdateChannel` vérifie **tout avant la première écriture**, dans l'ordre `type`, `parent_id`,
+  `name`, `topic`, `bitrate`, `user_limit` (un seul refus rendu), puis écrit ; la conversion texte ↔ annonces (`TryConvertKind`) s'applique
+  d'abord et les autres champs sont jugés contre le **nouveau** type (`ChannelTraits.Of(kind)`). Le validateur structurel, qui ignore le type,
+  prend la borne la plus large de la spec (topic 4096, bitrate ≥ 8000, user_limit ≥ 0) ; la borne propre au type (topic 1024, plafonds
+  vocaux) est un `StateFailureKind` décidé sous le verrou, avec sa fabrique `DiscordError`. Un refus qui a besoin d'un nombre dans son message
+  le porte dans `StateFailure.Limit` (`InvalidChannelUserLimit` : 99 voix, 10000 stage), sans multiplier les `StateFailureKind`.
+- **Champ à trois états** (absent / `null` / valeur) : le validateur lit la clé avec `root.TryGetProperty` et rend un drapeau `ChangeX`
+  à côté de la valeur (`ChangeTopic`, `ChangeParent`, `ChangeRtcRegion`, `ChangeDefaultSortOrder`) ; l'état n'applique la valeur nulle
+  que si le drapeau est levé. Un champ où `null` veut dire « inchangé » (NetCord n'envoie jamais `null`) reste un `int?` lu par
+  `ReadOptionalInteger`. Une valeur égale à l'état courant (le parent courant, `null` sans parent) ne se contrôle pas et ne publie rien.
+  Un test de route qui envoie `null` construit la requête à la main (`SendRequestAsync` + `StringContent`) et note l'écart avec NetCord
+  dans la ligne de parité ; l'opération d'état se teste aussi directement.
+- Champ « validé puis ignoré » (tags, `default_reaction_emoji`, `flags`) : le validateur lit et borne la valeur (`Scope`), le payload ne la
+  porte pas. Entier d'une énumération de la spec : `BASE_TYPE_CHOICES` « Value must be one of (a, b). » (`ChannelValidators.ReadChoice`).
 - Tests d'état qui comptent les salons d'une guilde : `FakeDiscordState.MaxChannelsPerGuild` / `MaxChannelsPerCategory`.
   Un `[Theory]` public ne peut pas prendre un type `internal` (`ChannelKind`…) en paramètre : passer des `int`/`string`.
 
