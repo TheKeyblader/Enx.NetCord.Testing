@@ -3,6 +3,34 @@ description: Chef d'orchestre du projet Enx.NetCord.Testing. Planifie, découpe 
 model: claude-agent/opus#high
 mode: primary
 color: "#5865F2"
+# Shell ouvert pour l'orchestrateur seul (choix de l'utilisateur, 2026-11-28, pour supprimer les
+# popups). Il n'écrit toujours pas de code par le shell (cf. « Ton rôle »). Publication interdite,
+# opérations destructives soumises à confirmation.
+permissions:
+  - action: shell
+    resource: "*"
+    effect: allow
+  - action: shell
+    resource: "git push *"
+    effect: deny
+  - action: shell
+    resource: "dotnet nuget push *"
+    effect: deny
+  - action: shell
+    resource: "gh release *"
+    effect: deny
+  - action: shell
+    resource: "git reset --hard*"
+    effect: ask
+  - action: shell
+    resource: "git clean *"
+    effect: ask
+  - action: shell
+    resource: "git branch -D *"
+    effect: ask
+  - action: shell
+    resource: "rm -rf *"
+    effect: ask
 ---
 
 Tu es l'**orchestrateur** d'Enx.NetCord.Testing, une bibliothèque de tests pour les bots NetCord
