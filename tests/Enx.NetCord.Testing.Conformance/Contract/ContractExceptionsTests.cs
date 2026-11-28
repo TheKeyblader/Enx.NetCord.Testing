@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using Enx.NetCord.Testing.Rest;
 using Xunit;
+using Xunit.Sdk;
 
 namespace Enx.NetCord.Testing.Conformance.Contract;
 
@@ -26,12 +27,15 @@ public sealed class ContractExceptionsTests
     [Fact]
     public void Collection_DisplayName_IsTheOneTheOrdererPutsLast()
     {
-        var collection = TestContext.Current.TestCase!.TestCollection;
+        var audit = TestContext.Current.TestCase!.TestCollection;
+        var other = new NamedCollection("another collection", audit.TestAssembly);
 
-        Assert.Equal(ContractExceptionsCollection.Name, collection.TestCollectionDisplayName);
-        Assert.Equal(
-            [collection.TestCollectionDisplayName],
-            new ExceptionsLastCollectionOrderer().OrderTestCollections([collection, collection]).Skip(1).Select(static c => c.TestCollectionDisplayName));
+        var ordered = new ExceptionsLastCollectionOrderer().OrderTestCollections<ITestCollection>([audit, other]);
+        var reversed = new ExceptionsLastCollectionOrderer().OrderTestCollections<ITestCollection>([other, audit]);
+
+        Assert.Equal(ContractExceptionsCollection.Name, audit.TestCollectionDisplayName);
+        Assert.Equal([other.TestCollectionDisplayName, audit.TestCollectionDisplayName], ordered.Select(static c => c.TestCollectionDisplayName));
+        Assert.Equal([other.TestCollectionDisplayName, audit.TestCollectionDisplayName], reversed.Select(static c => c.TestCollectionDisplayName));
     }
 
     [Fact]
@@ -200,6 +204,19 @@ public sealed class ContractExceptionsTests
         var problems = ContractExceptions.Audit([Registered("UserResponse", "x"), Registered("UserResponse", "x")], OpenApiContract.Current);
 
         Assert.Contains(problems, p => p.Contains("registered more than once", StringComparison.Ordinal));
+    }
+
+    private sealed class NamedCollection(string displayName, ITestAssembly assembly) : ITestCollection
+    {
+        public ITestAssembly TestAssembly { get; } = assembly;
+
+        public string? TestCollectionClassName => null;
+
+        public string TestCollectionDisplayName { get; } = displayName;
+
+        public IReadOnlyDictionary<string, IReadOnlyCollection<string>> Traits { get; } = new Dictionary<string, IReadOnlyCollection<string>>();
+
+        public string UniqueID { get; } = Guid.NewGuid().ToString("N");
     }
 
     private const string UserJson = """{"id":"1","username":"a","avatar":null,"discriminator":"0","public_flags":0,"flags":0,"global_name":null,"primary_guild":null}""";

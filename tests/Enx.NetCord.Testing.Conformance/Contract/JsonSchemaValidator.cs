@@ -324,6 +324,11 @@ internal sealed class JsonSchemaValidator(
     {
         var evaluation = new Evaluation();
         Evaluate(instance, schema, path, errors, evaluation);
+        if (IsUnconstrained(schema, []))
+        {
+            evaluation.Open = true; // {} / annotations only / true, as the schema of the node itself: any value, so any property.
+        }
+
         if (instance.ValueKind != JsonValueKind.Object)
         {
             return;
@@ -341,6 +346,35 @@ internal sealed class JsonSchemaValidator(
         {
             ReportUndeclared(instance, path, errors, evaluation);
         }
+    }
+
+    private bool IsUnconstrained(JsonElement schema, HashSet<string> visited)
+    {
+        if (schema.ValueKind == JsonValueKind.True)
+        {
+            return true;
+        }
+
+        if (schema.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        var reference = default(string);
+        foreach (var keyword in schema.EnumerateObject())
+        {
+            if (keyword.Name == "$ref")
+            {
+                reference = keyword.Value.GetString();
+            }
+            else if (!Annotations.Contains(keyword.Name))
+            {
+                return false;
+            }
+        }
+
+        // A bare $ref to an unconstrained component is itself unconstrained.
+        return reference is null || (visited.Add(reference) && IsUnconstrained(Resolve(reference), visited));
     }
 
     private void ReportUndeclared(JsonElement instance, string path, List<string> errors, Evaluation evaluation)
@@ -369,8 +403,7 @@ internal sealed class JsonSchemaValidator(
     {
         if (schema.ValueKind == JsonValueKind.True)
         {
-            evaluation.Open = true;
-            return;
+            return; // As a branch, the true schema declares no property (it is open only as the schema of a node, see Check).
         }
 
         if (schema.ValueKind == JsonValueKind.False)
@@ -379,20 +412,12 @@ internal sealed class JsonSchemaValidator(
             return;
         }
 
-        var constrained = false;
         foreach (var keyword in schema.EnumerateObject())
         {
             if (!Supported.Contains(keyword.Name) && !Annotations.Contains(keyword.Name))
             {
                 throw new NotSupportedException($"Unsupported schema keyword '{keyword.Name}' at {path}.");
             }
-
-            constrained |= !Annotations.Contains(keyword.Name);
-        }
-
-        if (!constrained)
-        {
-            evaluation.Open = true; // {} (annotations only) is the true schema: it accepts any value, and so any property.
         }
 
         if (schema.TryGetProperty("$ref", out var reference))

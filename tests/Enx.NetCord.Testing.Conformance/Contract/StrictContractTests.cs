@@ -31,6 +31,10 @@ public sealed class StrictContractTests
           "First": {"type":"object","properties":{"kind":{"const":1},"child":{"$ref":"#/components/schemas/Child"}},"required":["kind"]},
           "Second": {"type":"object","properties":{"kind":{"const":2}},"required":["kind"]},
           "Choice": {"oneOf":[{"$ref":"#/components/schemas/First"},{"$ref":"#/components/schemas/Second"}]},
+          "Annotated": {"allOf":[{"$ref":"#/components/schemas/Base"},{"description":"annotations only"}]},
+          "AnnotatedAny": {"anyOf":[{"$ref":"#/components/schemas/Cat"},{"description":"annotations only"}]},
+          "Anything": {"description":"the true schema"},
+          "ViaRef": {"$ref":"#/components/schemas/Anything"},
           "Free": {"type":"object","additionalProperties":true},
           "Tags": {"type":"object","additionalProperties":{"type":"string"}}
         }
@@ -50,6 +54,8 @@ public sealed class StrictContractTests
     [InlineData("Holder", """{"any":{"x":1,"y":[1]},"described":{"z":1}}""")] // {} and annotation-only schemas are the true schema
     [InlineData("Holder", """{"any":5,"described":"text"}""")]
     [InlineData("Choice", """{"kind":1,"child":{"a":1}}""")]
+    [InlineData("Anything", """{"whatever":1}""")] // the schema of the node itself is the true schema
+    [InlineData("ViaRef", """{"whatever":1}""")] // a bare $ref to it as well
     [InlineData("Free", """{"whatever":[1,2],"nested":{"x":1}}""")] // additionalProperties: true
     [InlineData("Tags", """{"x":"1","y":"2"}""")] // additionalProperties: schema
     public void Validate_OnlyDeclaredProperties_IsAccepted(string schema, string json)
@@ -66,6 +72,8 @@ public sealed class StrictContractTests
     [InlineData("Pet", """{"kind":"cat","barks":true}""", "$: undeclared property 'barks'", "Cat")] // oneOf: only the branch that validates declares
     [InlineData("Pet", """{"kind":"dog","purrs":true}""", "$: undeclared property 'purrs'", "Dog")]
     [InlineData("Either", """{"a":1,"c":2}""", "$: undeclared property 'c'", "Either")]
+    [InlineData("Annotated", """{"id":"1","zzz":1}""", "$: undeclared property 'zzz'", "Base")] // allOf with an annotations-only branch does not open the node
+    [InlineData("AnnotatedAny", """{"kind":"cat","zzz":1}""", "$: undeclared property 'zzz'", "Cat")] // nor does an anyOf branch
     [InlineData("Nullable", """{"id":"1","x":1}""", "$: undeclared property 'x'", "Base")] // oneOf [null, $ref]
     [InlineData("NullableObject", """{"a":1,"x":1}""", "$: undeclared property 'x'", "NullableObject")] // type: [object, null]
     [InlineData("ClosedEmpty", """{"x":1}""", "$: undeclared property 'x'", "ClosedEmpty")] // properties: {} stays closed
