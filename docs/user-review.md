@@ -288,19 +288,20 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   externe, laissée à ton initiative.
 - **Réponse** : _(à remplir)_
 
+## Traités
+
 ### UR-013 — Garde « un scénario de conformité par handler », sans exemption (`décision`)
 
-- **Statut** : Ouvert
+- **Statut** : Traité (2026-11-28)
 - **Origine** : M1-T-01 ; `ContractInfrastructureTests.ConformanceTests_EveryImplementedOperation_HasAScenarioTaggedWithItsKey` ; skill `dotnet-test-conventions` § Conformité
 - **Concerne** : toutes les futures tâches REST/interactions
 - **Décision** : tout handler REST enregistré doit avoir au moins un test non ignoré
   `[Parity("METHOD /path")]` dans le projet de conformité, terminé par `ContractAssert.Conforms` ;
   sinon `dotnet test` échoue. Pas de liste d'exemptions. L'extrait couvre toutes les opérations
-  de la spec : ajouter un handler n'exige jamais de régénérer le contrat. Les propriétés non
-  déclarées par la spec ne sont pas encore rejetées (M1-T-04).
-- **Réponse** : _(à remplir ; à assouplir si la garde gêne)_
-
-## Traités
+  de la spec : ajouter un handler n'exige jamais de régénérer le contrat. Depuis M1-T-04 (merge
+  `3b13a29`), le contrat est strict : les propriétés non déclarées par la spec sont rejetées.
+- **Réponse** : validé (en session, 2026-11-28). Garde maintenue telle quelle ; aucune tâche
+  à créer.
 
 ### UR-006 — API de seed des salons (`décision`)
 
