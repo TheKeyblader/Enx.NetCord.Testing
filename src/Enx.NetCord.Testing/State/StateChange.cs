@@ -12,6 +12,9 @@ internal sealed record BotIdentityCreated(long Number, UserSnapshot User, Applic
 
 internal sealed record UserCreated(long Number, UserSnapshot User) : StateChange(Number);
 
+/// <summary>A user changed; the snapshot is the user after the change (the Gateway turns it into <c>USER_UPDATE</c>).</summary>
+internal sealed record UserUpdated(long Number, UserSnapshot User) : StateChange(Number);
+
 internal sealed record GuildCreated(long Number, GuildSnapshot Guild, RoleSnapshot Everyone)
     : StateChange(Number);
 

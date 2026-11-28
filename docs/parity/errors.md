@@ -59,8 +59,8 @@ Progression `Fake` : ✅ **5** · 🟡 **10** · ⬜ **28** · ⛔ **0**
 | `50007` | Cannot send messages to this user | DM refusé (option du seed) | ⬜ | ⬜ | |
 | `50008` | Cannot send messages in a non-text channel | voix/catégorie | ⬜ | ⬜ | |
 | `50013` | Missing Permissions | permission calculée insuffisante | 🟡 | ✅ | injecté via `Intercept(403, 50013)` : ne prouve pas un calcul de permission ; dépend de M4-REST-05 |
-| `50025` | Invalid OAuth2 access token provided | `POST /users/@me/channels` avec `access_tokens` (group DM) | 🟡 | ✅ | le fake n'a aucun grant OAuth2 : tout jeton est refusé. **Statut HTTP 401 non vérifié** (la doc ne donne que le code JSON) ; à confirmer si un group DM simulé est un jour modélisé (M1-REST-01) |
 | `50024` | Cannot execute action on this channel type | ex. thread sur DM | ⬜ | ⬜ | |
+| `50025` | Invalid OAuth2 access token provided | `POST /users/@me/channels` avec `access_tokens` (group DM) | 🟡 | ✅ | le fake n'a aucun grant OAuth2 : tout jeton est refusé. HTTP **403** : documenté pour `50025` dans `discord-social-sdk/development-guides/provisional-accounts/merging-accounts.mdx:347` (`external_auth_token` invalide), **non vérifié pour un group DM** (la page des codes JSON ne donne pas de statut) (M1-REST-01) |
 | `50027` | Invalid Webhook Token | token d'interaction expiré | ⬜ | ⬜ | |
 | `50035` | Invalid Form Body | validation (arbre `errors`) | 🟡 | ✅ | produit par les vrais validateurs des routes `/users` (M1-REST-01 : `BASE_TYPE_BAD_LENGTH`, `BASE_TYPE_BAD_TYPE`, `BASE_TYPE_REQUIRED`, `NUMBER_TYPE_COERCE`, `IMAGE_INVALID`, `MODEL_TYPE_CONVERT`) ; arbre `errors` (objets par propriété/indice décimal, `_errors` à la feuille, pas d'`errors: null`) lu par NetCord ; testé aussi avec un validateur factice (un 50035 de validateur ne consomme pas de règle `Intercept`), autres familles en M1-REST ; codes de champ `BASE_TYPE_*` |
 | `50083` | Operation on archived thread | threads archivés | ⬜ | ⬜ | |

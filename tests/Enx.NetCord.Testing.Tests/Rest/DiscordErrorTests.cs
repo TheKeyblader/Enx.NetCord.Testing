@@ -73,7 +73,7 @@ public sealed class DiscordErrorTests
     [InlineData(HttpStatusCode.NotFound, 10003)]
     [InlineData(HttpStatusCode.NotFound, 10008)]
     [InlineData(HttpStatusCode.NotFound, 10013)]
-    [InlineData(HttpStatusCode.Unauthorized, 50025)]
+    [InlineData(HttpStatusCode.Forbidden, 50025)]
     [InlineData(HttpStatusCode.InternalServerError, 0)]
     [InlineData(HttpStatusCode.BadGateway, 0)]
     public void TryCreateSimple_CatalogPair_ReturnsMatchingError(HttpStatusCode status, int code)

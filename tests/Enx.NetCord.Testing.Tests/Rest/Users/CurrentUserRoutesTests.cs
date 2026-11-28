@@ -54,6 +54,8 @@ public sealed class CurrentUserRoutesTests
         Assert.True(root.GetProperty("bot").GetBoolean());
         Assert.False(root.GetProperty("mfa_enabled").GetBoolean());
         Assert.Equal("en-US", root.GetProperty("locale").GetString());
+        Assert.True(root.GetProperty("verified").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("email").ValueKind);
     }
 
     [Fact]
@@ -207,7 +209,6 @@ public sealed class CurrentUserRoutesTests
 
     [Fact]
     [Parity("PATCH /users/@me")]
-    [Parity("50035")]
     public async Task ModifyCurrentUserAsync_UsernameLengthCountsCharactersNotUtf16Units_AcceptsTwoEmoji()
     {
         await using var discord = FakeDiscord.Create();

@@ -246,7 +246,7 @@ public sealed class UserLookupAndDmRoutesTests
                 new GroupDMChannelProperties(["not-a-granted-token"]) { Nicknames = new Dictionary<ulong, string> { [aliceId] = "Al" } },
                 cancellationToken: Ct));
 
-        Assert.Equal(HttpStatusCode.Unauthorized, exception.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, exception.StatusCode);
         Assert.Equal(50025, exception.Error!.Code);
         Assert.Empty(Drain(subscription));
     }

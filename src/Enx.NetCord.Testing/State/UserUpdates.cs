@@ -11,6 +11,3 @@ internal sealed record UpdateUserInput(
     string? AvatarHash = null,
     bool ChangeBanner = false,
     string? BannerHash = null);
-
-/// <summary>A user changed; the snapshot is the user after the change (the Gateway turns it into <c>USER_UPDATE</c>).</summary>
-internal sealed record UserUpdated(long Number, UserSnapshot User) : StateChange(Number);
