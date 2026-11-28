@@ -110,7 +110,7 @@ existante. Les références numériques sont résolues dans **ce** fake ; un nom
 prouve pas sa provenance. Parent supprimé, référence absente, double adhésion : échec avant
 commit (`InvalidOperationException`), sans modification ni notification.
 
-> **Amendement 04B (proposé, 2026-11-28).** `Guild` inscrit aussi le bot du fake, dans le même
+> **Amendement 04B (accepté, 2026-11-28).** `Guild` inscrit aussi le bot du fake, dans le même
 > commit, sauf `withBot: false`. Voir [la section en fin de document](#amendement-04b--adhésion-du-bot-aux-guildes-seedées).
 
 **Fixtures historiques : un ID facultatif, pas deux sources de temps.** Pour toute création

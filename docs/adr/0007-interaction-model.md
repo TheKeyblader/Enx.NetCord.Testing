@@ -132,7 +132,7 @@ valeur hors des options du menu, option en double, sous-commande incohérente. C
 erreur Discord, comme pour le seed de l'[ADR 0004](0004-fake-discord-public-api.md).
 
 > **Amendement 04B de l'[ADR 0004](0004-fake-discord-public-api.md#amendement-04b--adhésion-du-bot-aux-guildes-seedées), § 4
-> (proposé, 2026-11-28).** Un contrôle d'état s'ajoute : un salon d'une guilde dont le bot n'est
+> (accepté, 2026-11-28).** Un contrôle d'état s'ajoute : un salon d'une guilde dont le bot n'est
 > pas membre lève `InvalidOperationException`. Les interactions d'une application installée par
 > l'utilisateur, ou sans utilisateur bot, relèvent d'une tâche dédiée (`M2-13`, proposée).
 
