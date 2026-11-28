@@ -156,12 +156,15 @@ assertions) sont celles fixées par les ADR — adapter l'exemple.
 
 ### Scénario de conformité (obligatoire, en plus des tests ci-dessus)
 
-Tout handler enregistré exige **au moins un** test non ignoré `[Parity("METHOD /path")]` (clé exacte) dans
-`tests/Enx.NetCord.Testing.Conformance/Rest/` (`Conformance/Interactions/` pour les routes d'interactions et de webhooks) :
-il appelle la route par le vrai `RestClient` et **se termine par `ContractAssert.Conforms(discord, "METHOD /path")`**. Sans lui,
-la garde `ConformanceTests_EveryImplementedOperation_HasAScenarioTaggedWithItsKey` fait échouer `dotnet test` ; pas de liste
-d'exemptions. L'extrait OpenAPI couvre toutes les opérations : ajouter un handler ne demande jamais de régénérer le contrat.
-Style de `Rest/ChannelsConformanceTests.cs` (classe `[Trait("Category", "Conformance")]`, `Ct => TestContext.Current.CancellationToken`) :
+Tout handler enregistré exige **au moins un** test non ignoré `[Parity("METHOD /path")]`
+(clé exacte) dans `tests/Enx.NetCord.Testing.Conformance/Rest/` (`Conformance/Interactions/`
+pour les routes d'interactions et de webhooks) : il appelle la route par le vrai `RestClient`
+et **se termine par `ContractAssert.Conforms(discord, "METHOD /path")`**. Sans lui, la garde
+`ConformanceTests_EveryImplementedOperation_HasAScenarioTaggedWithItsKey` fait échouer
+`dotnet test` ; pas de liste d'exemptions. L'extrait OpenAPI couvre toutes les opérations :
+ajouter un handler ne demande jamais de régénérer le contrat. Style de
+`Rest/ChannelsConformanceTests.cs` (classe `[Trait("Category", "Conformance")]`,
+`Ct => TestContext.Current.CancellationToken`) :
 
 ```csharp
 [Fact]
@@ -175,13 +178,16 @@ public async Task GetChannelAsync_SeededTextChannel_ReturnsItAndConformsToGuildC
     var channel = await rest.GetChannelAsync(general.Id, cancellationToken: Ct);
 
     Assert.Equal("general", Assert.IsType<TextGuildChannel>(channel).Name);
-    ContractAssert.Conforms(discord, "GET /channels/{channel_id}");   // + les routes de mise en place si besoin
+    // add the set-up routes the scenario reached, if any
+    ContractAssert.Conforms(discord, "GET /channels/{channel_id}");
 }
 ```
 
-`Conforms` valide **toutes** les tentatives du journal (erreurs comprises) et exige que la route ait été atteinte : un cas d'erreur
-principal (`Unknown *`, `[Parity("10003")]`) se termine aussi par `Conforms`. Un test de conformité n'appelle jamais `Assert.Skip()`.
-Un écart de schéma est un bug du fake. Détail et régénération du contrat : `dotnet-test-conventions` § Conformité.
+`Conforms` valide **toutes** les tentatives du journal (erreurs comprises) et exige que la
+route ait été atteinte : un cas d'erreur principal (`Unknown *`, `[Parity("10003")]`) se
+termine aussi par `Conforms`. Un test de conformité n'appelle jamais `Assert.Skip()`. Un écart
+de schéma est un bug du fake (corriger `src/` ; un test `Skip` ne compte pas pour la garde).
+Détail et régénération du contrat : `dotnet-test-conventions` § Conformité.
 
 ## 5. Parité
 
@@ -189,5 +195,5 @@ Dans `docs/parity/rest.md`, ligne `POST` `/channels/{channel_id}/messages` : `Fa
 (+ Note : ce qui manque, ex. « attachments multipart non gérés »), `Tests` ✅. Recalculer
 les compteurs d'en-tête.
 
-Check-list de fin : build sans warning, tests verts, **scénario de conformité `[Parity]` + `ContractAssert.Conforms` ajouté**
-(§4), parité à jour, skill mise à jour si convention nouvelle.
+Check-list de fin : build sans warning, tests verts, **scénario de conformité `[Parity]` +
+`ContractAssert.Conforms` ajouté** (§4), parité à jour, skill mise à jour si convention nouvelle.
