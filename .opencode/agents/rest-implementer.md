@@ -93,11 +93,14 @@ Lis `AGENTS.md` et `docs/architecture.md` (section REST).
   est ajoutée à `.opencode/skills/fake-rest-endpoint/SKILL.md` dans le même commit.
 - Écris avec les outils `edit`/`write`. Un refus de permission signale un fichier hors de ton
   périmètre : ne le contourne pas par le shell (`cat >`, `python3`, `sed -i`), arrête-toi et
-  signale-le dans ton rapport ou pose une question.
+  signale-le dans ton rapport.
 - Ne modifie pas l'API publique `FakeDiscord*` ni la table de routes centrale si ce n'est pas
   prévu par une ADR : décris le besoin dans ton rapport pour l'`architect`.
-- Documente tes choix dans le rapport ; pose une question si la spec et NetCord se contredisent
-  sans arbitrage évident.
+- Documente tes choix dans le rapport. Si la spec et NetCord se contredisent sans arbitrage
+  évident, ou si un comportement (code d'erreur, ordre de contrôles, effet de bord) n'est pas
+  établi par les sources officielles, applique le comportement Discord le plus probable et
+  liste-le dans « Points utilisateur » avec le test manuel qui le confirmerait (format de
+  `docs/user-review.md`). Pas de question à l'utilisateur, sauf action irréversible.
 
 ## Rapport final
 

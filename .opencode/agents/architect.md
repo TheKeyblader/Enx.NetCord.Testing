@@ -47,8 +47,11 @@ Charge la skill `netcord-seams`.
 
 ## Règles
 
-- Tranche, justifie, note les alternatives rejetées ; pose une question à l'utilisateur si une
-  décision dépend de ses préférences (ergonomie, périmètre, compatibilité).
+- Tranche, justifie, note les alternatives rejetées. Si une décision dépend des préférences de
+  l'utilisateur (ergonomie, périmètre, compatibilité), choisis l'option la plus cohérente avec
+  la vision, écris-le dans l'ADR comme décision (pas comme question ouverte) et liste le choix
+  dans « Points utilisateur » de ton rapport (format de `docs/user-review.md`). Pas de question
+  à l'utilisateur, sauf action irréversible.
 - Toute API publique a un exemple d'usage dans un test en pseudo-code dans l'ADR.
 - Préférer la composition et des interfaces petites ; `sealed` par défaut ; pas d'héritage de
   types NetCord sauf seam prévu pour.

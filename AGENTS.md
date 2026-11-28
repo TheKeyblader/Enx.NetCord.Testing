@@ -22,16 +22,33 @@ Inspirations (références opencode `fauxcord` et `shardix`) :
 - Code, identifiants, commentaires, XML docs, messages d'exception/log, noms de tests,
   messages de commit (Conventional Commits) : **anglais**.
 
-## Questions
+## Autonomie et points utilisateur
 
-Les agents peuvent poser des questions à l'utilisateur (outil `question`).
+Les agents travaillent en **grande autonomie** : ils tranchent, documentent et continuent, au
+lieu d'interrompre l'utilisateur. Ce qui mérite son regard est **consigné dans
+[`docs/user-review.md`](docs/user-review.md)**, qu'il traite à son rythme.
 
-- Poser une question quand le choix est structurant ou dépend de ses préférences (périmètre,
-  API publique, compromis coût/qualité), ou avant une action irréversible ou externe
-  (publication NuGet, `git push`, suppression de données hors du dépôt).
-- Pour les détails : choisir l'option la plus cohérente avec `docs/vision.md`, les ADR et le
-  comportement réel de Discord, **la documenter** (ADR courte ou section « Décisions » du
-  rapport) et continuer.
+- **Par défaut, décider** : choisir l'option la plus cohérente avec `docs/vision.md`, les ADR et
+  le comportement réel de Discord, la documenter (ADR ou section « Décisions » du rapport),
+  puis ajouter un point dans `docs/user-review.md` si l'utilisateur pourrait vouloir la
+  revoir (API publique, périmètre, compromis coût/qualité, contradiction spec ↔ NetCord). Une
+  décision révisable ne bloque jamais la tâche.
+- **Tests manuels à faire** : quand un comportement du fake repose sur une hypothèse non
+  vérifiable hors ligne (spec ou docs muettes ou contradictoires, comportement seulement
+  rapporté par des tiers, ordre d'events, code d'erreur exact), implémenter l'hypothèse la
+  plus probable, puis consigner dans `docs/user-review.md` le test manuel qui permettrait de
+  la confirmer contre le vrai Discord (procédure, résultat attendu, lignes de parité et tests
+  concernés). Le statut de parité reste 🟡 avec une note « à confirmer (UR-NNN) » tant que
+  le point n'est pas tranché, sauf si les sources officielles suffisent.
+- **Poser une question** (outil `question`) **seulement** avant une action irréversible ou
+  externe (publication NuGet, `git push`, suppression de données hors du dépôt,
+  `worktree_remove` forcé), ou si **aucune** option raisonnable ne permet de continuer sans
+  risque de travail jeté en masse. Dans le doute, consigner plutôt que demander.
+- **Qui écrit le fichier** : l'orchestrateur, sur `main`, comme la roadmap. Les sous-agents
+  listent leurs points dans la section « Points utilisateur » de leur rapport (format du
+  fichier) ; l'orchestrateur les reporte et attribue les IDs `UR-NNN`.
+- Quand l'utilisateur répond à un point (dans le fichier ou en session), l'orchestrateur le
+  passe en « Traité », crée les tâches qui en découlent et fait corriger parité et tests.
 
 ## Stack
 
@@ -159,13 +176,14 @@ Règles de coordination :
    le worktree. Voir « Worktrees » ci-dessous.
 4. Chaque sous-agent termine par un **rapport** : fichiers touchés, lignes de parité modifiées,
    commandes lancées + résultat (`dotnet build`/`dotnet test`/`dotnet format`), décisions prises,
-   skill mise à jour, tâches à créer.
+   skill mise à jour, tâches à créer, **points utilisateur** (décisions à revoir, tests
+   manuels à faire ; « aucun » sinon).
 5. « Fini » = build sans warning + tests verts + matrices à jour + XML docs + skill à jour si une
    convention nouvelle est apparue + `reviewer` `APPROVE` (un `BLOCKED` n'en est pas un).
 6. **Permissions** : chaque agent n'édite que son périmètre (`permissions` de son fichier). On
    écrit avec `edit`/`write` ; un refus signale un fichier hors périmètre : ne jamais le
-   contourner par le shell (`cat >`, `python3`, `sed -i`), mais s'arrêter et le signaler ou
-   poser une question. Le shell est en liste blanche (`opencode.jsonc`) : une commande par appel,
+   contourner par le shell (`cat >`, `python3`, `sed -i`), mais s'arrêter et le signaler dans
+   le rapport. Le shell est en liste blanche (`opencode.jsonc`) : une commande par appel,
    sans `;`/`&&`, chaque maillon d'un pipe autorisé.
 
 ### Worktrees (sous-agents)

@@ -97,12 +97,23 @@ principal (`main`) : tu y tiens la roadmap et tu y fusionnes.
 Les tâches parallèles ont chacune leur worktree ; les tâches séquentielles qui dépendent
 l'une de l'autre attendent la fusion de la précédente avant de créer le leur.
 
-## Questions
+## Autonomie et points utilisateur
 
-Pose une question à l'utilisateur quand un choix est structurant ou ambigu (périmètre, API
-publique, compromis coût/qualité) ou avant une action irréversible ou externe (push,
-publication). Pour les détails, arbitre toi-même selon la vision, les ADR et le comportement réel
-de Discord, et consigne l'arbitrage dans le rapport.
+Tu travailles en **grande autonomie** (section « Autonomie et points utilisateur »
+d'AGENTS.md) : enchaîne les tâches sans attendre l'utilisateur. Un choix structurant ou ambigu
+(périmètre, API publique, compromis coût/qualité) est arbitré selon la vision, les ADR et le
+comportement réel de Discord, documenté, puis consigné dans `docs/user-review.md` ; il ne
+bloque pas la suite. N'utilise l'outil `question` qu'avant une action irréversible ou externe
+(push, publication, suppression forcée) ou si aucune option raisonnable ne permet de continuer.
+
+- Tu es le seul à écrire `docs/user-review.md`, sur `main`, comme la roadmap : reporte les
+  « Points utilisateur » des rapports (et tes propres arbitrages), attribue l'ID `UR-NNN`
+  suivant, relie la tâche, l'ADR, les lignes de parité et les tests concernés.
+- Rappelle aux sous-agents dans chaque prompt de délégation qu'ils ne posent pas de question
+  sauf action irréversible : ils décident et listent leurs points dans le rapport.
+- Au début de chaque session, relis les points « Ouvert » : si l'utilisateur a répondu (champ
+  « Réponse » rempli), passe le point en « Traité » et crée les tâches qui en découlent
+  (correction du fake, statut de parité, test de non-régression reprenant le résultat observé).
 
 ## Tenue des registres
 
@@ -120,4 +131,5 @@ de Discord, et consigne l'arbitrage dans le rapport.
 ## Rapport à l'utilisateur
 
 En français, concis : ce qui a été fait (IDs), état build/tests (avec la sortie si échec),
-progression de parité (via `/parity/status`), décisions prises, prochaines tâches.
+progression de parité (via `/parity/status`), décisions prises, prochaines tâches, et le
+nombre de points ouverts dans `docs/user-review.md` (IDs des nouveaux).
