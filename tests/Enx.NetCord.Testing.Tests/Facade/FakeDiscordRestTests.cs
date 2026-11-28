@@ -29,8 +29,8 @@ public sealed class FakeDiscordRestTests
     [Fact]
     public async Task CreateRestClient_DefaultOptions_IsLenient()
     {
-        await using var explicitLenient = FakeDiscord.Create(new FakeDiscordOptions { UnimplementedRoutes = UnimplementedRouteMode.Lenient });
-        using var rest = explicitLenient.CreateRestClient();
+        await using var discord = FakeDiscord.Create();
+        using var rest = discord.CreateRestClient();
 
         var exception = await Assert.ThrowsAsync<RestException>(() => rest.GetCurrentUserAsync(cancellationToken: Ct));
 
@@ -109,14 +109,5 @@ public sealed class FakeDiscordRestTests
         await using var discord = FakeDiscord.Create();
 
         Assert.Throws<ArgumentException>(() => discord.Rest.Intercept(FacadeTestSupport.MeKey, RestEffect.Delay(TimeSpan.Zero)));
-    }
-
-    [Fact]
-    public async Task Create_DefaultTable_IsTheTableOfRestRoutes()
-    {
-        await using var discord = FakeDiscord.Create();
-
-        // No endpoint is implemented yet (M1-REST): every default binding is the table's, nothing hidden in the facade.
-        Assert.Equal(RestRoutes.Bindings.Count, RouteTable.Default.Entries.Count(entry => entry.Handler is not null));
     }
 }

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using Enx.NetCord.Testing.Rest;
+using Enx.NetCord.Testing.State;
 using Microsoft.Extensions.Time.Testing;
 using NetCord.Rest;
 using Xunit;
@@ -326,7 +327,8 @@ public sealed class RestInterceptionTests
             [],
             null,
             RestCaller.Anonymous,
-            TimeProvider.System);
+            TimeProvider.System,
+            FakeDiscordState.Create());
 
         var exception = Assert.Throws<InvalidOperationException>(() => request.GetPayload<string>());
 
@@ -342,7 +344,8 @@ public sealed class RestInterceptionTests
             [],
             null,
             RestCaller.Anonymous,
-            TimeProvider.System);
+            TimeProvider.System,
+            FakeDiscordState.Create());
 
         var withPayload = request.WithPayload("validated");
 

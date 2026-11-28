@@ -73,9 +73,7 @@ public sealed class FakeDiscord : IAsyncDisposable
         var token = options.BotToken is { } raw ? new BotToken(raw) : null;
         var explicitId = ResolveExplicitId(options, token);
 
-        var clock = options.TimeProvider ?? new VirtualTimeProvider();
-        var ids = options.SnowflakeGenerator ?? new DefaultSnowflakeGenerator();
-        var state = new FakeDiscordState(clock, ids);
+        var state = FakeDiscordState.Create(options);
 
         // One reservation for the pair: the user and the application share this ID (ADR 0004).
         var identity = state.CreateBotIdentity(new CreateBotIdentityInput(BotUsername, Id: explicitId));
@@ -86,7 +84,7 @@ public sealed class FakeDiscord : IAsyncDisposable
             routes,
             state,
             new BotIdentityResolver(token.RawToken, token.Id),
-            clock,
+            state.Clock,
             options.UnimplementedRoutes,
             journal);
         return new FakeDiscord(state, journal, context, token);
