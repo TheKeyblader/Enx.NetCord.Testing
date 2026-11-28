@@ -21,7 +21,9 @@ public sealed class RestIsolationTests
     /// explicitly: by design they take no <see cref="StateCaller"/> because the token resolves their scope and they do
     /// not check the bot's membership (ADR 0004, amendment 04B). The rule covers only the members of
     /// <see cref="FakeDiscordState"/> (a partial class: every state operation must remain a member of that type, whatever
-    /// the file). State exposed through another type is not seen by this test.
+    /// the file). State exposed through another type is not seen by this test. The scan is by member name, so an
+    /// indexer (<c>state[id]</c>, never spelled <c>.Item</c>) would escape it: <see cref="FakeDiscordState"/> must
+    /// have none, which <c>FakeDiscordState_Indexers_DoNotExist</c> asserts.
     /// </remarks>
     private static readonly string[] AllowedUnguardedMembers =
     [
@@ -113,6 +115,21 @@ public sealed class RestIsolationTests
             name => Assert.True(
                 typeof(FakeDiscordState).GetMember(name, InstanceMembers).Length > 0,
                 $"'{name}' is in the allowlist but is no longer a FakeDiscordState member: remove it."));
+    }
+
+    [Fact]
+    public void FakeDiscordState_Indexers_DoNotExist()
+    {
+        var indexers = typeof(FakeDiscordState).GetProperties(InstanceMembers)
+            .Where(property => property.GetIndexParameters().Length > 0)
+            .Where(property => property.GetMethod is { IsPrivate: false } || property.SetMethod is { IsPrivate: false })
+            .Select(property => property.Name)
+            .ToList();
+
+        Assert.True(
+            indexers.Count == 0,
+            "An indexer would escape the scanner (state[id] never spells the member name): pass through a method taking a StateCaller instead. Found: "
+            + string.Join(", ", indexers));
     }
 
     [Fact]
