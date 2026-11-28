@@ -268,11 +268,18 @@ la création, la limite de 500 salons passe avant.
 `StateFailure(Kind, ResourceId)` garde sa forme : la réunion de tous les refus dans un seul arbre
 `errors` dépend de la réponse au point 5 d'UR-004 et reste hors de cette ADR.
 
+> **Amendement (M1-REST-02B2, 2026-11-28).** `StateFailure` gagne un troisième champ facultatif,
+> `Limit` (`int`, `0` par défaut) : la borne dépassée, quand le message de la réponse la cite.
+> Seul `InvalidChannelUserLimit` le renseigne (99 en voix, 10000 en stage), ce qui évite un
+> `StateFailureKind` par type de salon. `Limit` ne sert qu'au message : ni le statut ni le code
+> n'en dépendent. Le refus reste unique ; la réunion de plusieurs refus dans un seul arbre
+> `errors` reste hors de cette ADR (UR-004, point 5).
+
 | Refus (`StateFailureKind`) | Réponse | Source |
 | --- | --- | --- |
 | `InvalidChannelTopic` (nouveau) : `topic` > 1024 hors forum | 400 `50035`, `topic` : `BASE_TYPE_BAD_LENGTH` « Must be between 0 and 1024 in length. » | borne documentée, forme hypothèse |
 | `ChannelBitrateTooHigh` (nouveau) | 400 `30052` | code documenté, statut hypothèse |
-| `InvalidChannelUserLimit` (nouveau) | 400 `50035`, `user_limit` : `NUMBER_TYPE_MAX` | borne documentée, forme hypothèse |
+| `InvalidChannelUserLimit` (nouveau), avec `Limit` | 400 `50035`, `user_limit` : `NUMBER_TYPE_MAX` « int value should be less than or equal to {Limit}. » | borne documentée, forme hypothèse |
 | `MaxGuildChannels` (nouveau) : 500 salons hors threads, à la création | 400 `30013` | code documenté (`channel.mdx:273` pour les threads), statut hypothèse |
 
 ### 2. `parent_id`
