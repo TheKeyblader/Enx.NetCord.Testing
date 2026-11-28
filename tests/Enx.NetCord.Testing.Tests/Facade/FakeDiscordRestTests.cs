@@ -12,9 +12,9 @@ public sealed class FakeDiscordRestTests
     [Fact]
     [Parity("http:404")]
     [Parity("0")]
-    public async Task CreateRestClient_UnimplementedRouteInLenientMode_ReturnsDiscord404WithCodeZero()
+    public async Task CreateRestClient_UnimplementedRouteInExplicitLenientMode_ReturnsDiscord404WithCodeZero()
     {
-        await using var discord = FakeDiscord.Create();
+        await using var discord = FakeDiscord.Create(new FakeDiscordOptions { UnimplementedRoutes = UnimplementedRouteMode.Lenient });
         using var rest = discord.CreateRestClient();
 
         var exception = await Assert.ThrowsAsync<RestException>(() => rest.GetCurrentUserAsync(cancellationToken: Ct));
@@ -34,7 +34,10 @@ public sealed class FakeDiscordRestTests
 
         var exception = await Assert.ThrowsAsync<RestException>(() => rest.GetCurrentUserAsync(cancellationToken: Ct));
 
+        // Options not set at all: the default must be Lenient (a 404 with code 0), not Strict (NotSupportedException).
+        Assert.Equal(UnimplementedRouteMode.Lenient, new FakeDiscordOptions().UnimplementedRoutes);
         Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
+        Assert.Equal(0, exception.Error!.Code);
     }
 
     [Fact]

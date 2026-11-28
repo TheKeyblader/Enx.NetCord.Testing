@@ -29,4 +29,15 @@ internal sealed class RestJournal : IRestAttemptSink
             return [.. _attempts];
         }
     }
+
+    /// <summary>Returns the attempts recorded from a position on, in recording order.</summary>
+    /// <param name="start">The number of attempts already seen.</param>
+    /// <returns>A copy of the tail of the list (empty when nothing is new).</returns>
+    public IReadOnlyList<RestAttempt> SnapshotFrom(int start)
+    {
+        lock (_gate)
+        {
+            return start >= _attempts.Count ? [] : [.. _attempts.Skip(start)];
+        }
+    }
 }

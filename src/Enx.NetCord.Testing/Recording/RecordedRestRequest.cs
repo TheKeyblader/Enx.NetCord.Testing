@@ -56,7 +56,8 @@ public sealed class RecordedRestRequest
     /// <summary>Gets the detached JSON request or multipart payload, if available.</summary>
     /// <remarks>
     /// For <c>multipart/form-data</c> this is the <c>payload_json</c> part; file bytes are not kept. It is <see langword="null"/>
-    /// when the request had no content, a non-JSON content, or content that was unreadable. The JSON literal <c>null</c>
+    /// when the request had no content, a non-JSON content, content that was unreadable, or when the request ended before its
+    /// content was read (unknown or unimplemented route, method not allowed, rejected authentication). The JSON literal <c>null</c>
     /// is a <see cref="JsonElement"/> whose kind is <see cref="JsonValueKind.Null"/>.
     /// </remarks>
     public JsonElement? RequestBody { get; }
@@ -163,7 +164,35 @@ public sealed class RecordedRestRequest
         return null;
     }
 
+    /// <summary>Returns whether the <c>name</c> parameter of the part's <c>Content-Disposition</c> is exactly <c>payload_json</c>.</summary>
     private static bool IsPayloadJsonPart(string headers)
-        => headers.Contains($"; name=\"{PayloadJsonName}\"", StringComparison.OrdinalIgnoreCase)
-            || headers.Contains($"; name={PayloadJsonName}", StringComparison.OrdinalIgnoreCase);
+    {
+        foreach (var line in headers.Split("\r\n"))
+        {
+            const string HeaderName = "Content-Disposition:";
+            if (!line.StartsWith(HeaderName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (var parameter in line[HeaderName.Length..].Split(';'))
+            {
+                var trimmed = parameter.Trim();
+                if (!trimmed.StartsWith("name=", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var value = trimmed["name=".Length..].Trim();
+                if (value.Length >= 2 && value[0] == '"' && value[^1] == '"')
+                {
+                    value = value[1..^1];
+                }
+
+                return string.Equals(value, PayloadJsonName, StringComparison.Ordinal);
+            }
+        }
+
+        return false;
+    }
 }

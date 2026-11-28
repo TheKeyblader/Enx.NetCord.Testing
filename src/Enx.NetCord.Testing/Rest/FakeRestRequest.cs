@@ -5,14 +5,12 @@ namespace Enx.NetCord.Testing.Rest;
 /// <summary>A resolved, authorized request handed to a route handler. Values are detached from the HTTP stack.</summary>
 internal sealed class FakeRestRequest
 {
-
     internal FakeRestRequest(
         RouteOperation operation,
         IReadOnlyDictionary<string, string> routeParameters,
         IReadOnlyList<KeyValuePair<string, string>> query,
         RestRequestBody? body,
         RestCaller caller,
-        TimeProvider timeProvider,
         FakeDiscordState state,
         object? payload = null)
     {
@@ -21,7 +19,6 @@ internal sealed class FakeRestRequest
         Query = query;
         Body = body;
         Caller = caller;
-        TimeProvider = timeProvider;
         State = state;
         Payload = payload;
     }
@@ -46,7 +43,7 @@ internal sealed class FakeRestRequest
     public object? Payload { get; }
 
     /// <summary>Gets the fake's clock.</summary>
-    public TimeProvider TimeProvider { get; }
+    public TimeProvider TimeProvider => State.Clock;
 
     /// <summary>
     /// Gets the fake's state. A handler asks it for one coherent operation (ADR 0005) and never keeps what it returns:
@@ -58,7 +55,7 @@ internal sealed class FakeRestRequest
     /// <param name="payload">The validated payload.</param>
     /// <returns>A new request; this instance is left unchanged.</returns>
     internal FakeRestRequest WithPayload(object? payload)
-        => new(Operation, RouteParameters, Query, Body, Caller, TimeProvider, State, payload);
+        => new(Operation, RouteParameters, Query, Body, Caller, State, payload);
 
     /// <summary>Returns the payload the validator parsed, so the handler never re-reads the body.</summary>
     /// <typeparam name="T">The payload type the operation's validator returns.</typeparam>

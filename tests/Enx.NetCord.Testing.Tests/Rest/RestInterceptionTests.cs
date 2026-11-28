@@ -327,7 +327,6 @@ public sealed class RestInterceptionTests
             [],
             null,
             RestCaller.Anonymous,
-            TimeProvider.System,
             FakeDiscordState.Create());
 
         var exception = Assert.Throws<InvalidOperationException>(() => request.GetPayload<string>());
@@ -344,7 +343,6 @@ public sealed class RestInterceptionTests
             [],
             null,
             RestCaller.Anonymous,
-            TimeProvider.System,
             FakeDiscordState.Create());
 
         var withPayload = request.WithPayload("validated");

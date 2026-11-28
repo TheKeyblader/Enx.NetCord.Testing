@@ -306,6 +306,130 @@ public sealed class RecordedRequestsTests
         Assert.Throws<ObjectDisposedException>(() => discord.Recorded.Requests);
     }
 
+    [Fact]
+    public async Task Requests_MethodNotAllowedWithABody_HasNoRequestBodyBecauseItWasNeverRead()
+    {
+        await using var discord = CreateFake();
+        using var rest = discord.CreateRestClient();
+
+        await Assert.ThrowsAsync<RestException>(
+            () => rest.SendRequestAsync(
+                HttpMethod.Put, new StringContent("{\"a\":1}", Encoding.UTF8, "application/json"), $"/users/@me", cancellationToken: Ct));
+
+        var request = Assert.Single(discord.Recorded.Requests);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, request.StatusCode);
+        Assert.Null(request.RequestBody);
+    }
+
+    [Fact]
+    public async Task Requests_UnimplementedRouteWithABody_HasNoRequestBodyBecauseItWasNeverRead()
+    {
+        await using var discord = FakeDiscord.Create();
+        using var rest = discord.CreateRestClient();
+
+        await Assert.ThrowsAsync<RestException>(
+            () => rest.SendRequestAsync(
+                HttpMethod.Post, new StringContent("{\"a\":1}", Encoding.UTF8, "application/json"), $"/channels/123/messages", cancellationToken: Ct));
+
+        var request = Assert.Single(discord.Recorded.Requests);
+        Assert.Equal(HttpStatusCode.NotFound, request.StatusCode);
+        Assert.Null(request.RequestBody);
+    }
+
+    [Fact]
+    public async Task Requests_UnknownPathWithABody_HasNoRequestBodyBecauseItWasNeverRead()
+    {
+        await using var discord = CreateFake();
+        using var rest = discord.CreateRestClient();
+
+        await Assert.ThrowsAsync<RestException>(
+            () => rest.SendRequestAsync(
+                HttpMethod.Post, new StringContent("{\"a\":1}", Encoding.UTF8, "application/json"), $"/not-a-route", cancellationToken: Ct));
+
+        var request = Assert.Single(discord.Recorded.Requests);
+        Assert.Null(request.RouteTemplate);
+        Assert.Null(request.RequestBody);
+    }
+
+    [Theory]
+    [InlineData("form-data;name=\"payload_json\"")]
+    [InlineData("form-data; name=payload_json")]
+    [InlineData("form-data; filename=\"x.json\"; NAME=\"payload_json\"")]
+    public async Task Requests_PayloadJsonDispositionVariants_AreRecognized(string disposition)
+    {
+        await using var discord = CreateFake();
+        using var rest = discord.CreateRestClient();
+
+        await rest.SendRequestAsync(HttpMethod.Post, Multipart(disposition), $"/channels/123/messages", cancellationToken: Ct);
+
+        Assert.Equal(1, Assert.Single(discord.Recorded.Requests).RequestBody!.Value.GetProperty("a").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("form-data; name=\"payload_json_x\"")]
+    [InlineData("form-data; name=\"files[0]\"; filename=\"payload_json\"")]
+    [InlineData("form-data; name=\"xpayload_json\"")]
+    public async Task Requests_PartWhoseNameIsNotExactlyPayloadJson_IsIgnored(string disposition)
+    {
+        await using var discord = CreateFake();
+        using var rest = discord.CreateRestClient();
+
+        await rest.SendRequestAsync(HttpMethod.Post, Multipart(disposition), $"/channels/123/messages", cancellationToken: Ct);
+
+        Assert.Null(Assert.Single(discord.Recorded.Requests).RequestBody);
+    }
+
+    [Fact]
+    public async Task Requests_CanceledAttempt_IsRecordedWithoutAStatus()
+    {
+        await using var discord = CreateFake();
+        using var rest = discord.CreateRestClient();
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => rest.GetCurrentUserAsync(cancellationToken: cancellation.Token));
+
+        var request = Assert.Single(discord.Recorded.Requests);
+        Assert.Equal("GET", request.Method);
+        Assert.Null(request.StatusCode);
+        Assert.Null(request.ResponseBody);
+    }
+
+    [Fact]
+    public async Task Requests_ExposedCollections_CannotBeModifiedThroughACast()
+    {
+        await using var discord = CreateFake();
+        using var rest = discord.CreateRestClient();
+        await rest.SendRequestAsync(HttpMethod.Get, $"/webhooks/55/tok", "?a=1", cancellationToken: Ct);
+        var request = Assert.Single(discord.Recorded.Requests);
+
+        Assert.Throws<NotSupportedException>(() => ((IDictionary<string, string>)request.RouteParameters)["webhook_id"] = "1");
+        Assert.Throws<NotSupportedException>(() => ((IList<KeyValuePair<string, string>>)request.Query).Add(new("b", "2")));
+        Assert.Throws<NotSupportedException>(() => ((IList<KeyValuePair<string, string>>)request.Query)[0] = new("b", "2"));
+        Assert.Equal("55", request.RouteParameters["webhook_id"]);
+        Assert.Equal([("a", "1")], request.Query.Select(pair => (pair.Key, pair.Value)));
+    }
+
+    [Fact]
+    public async Task Requests_ConsecutiveReads_ReturnNewListsOverTheSameImmutableRecords()
+    {
+        await using var discord = CreateFake();
+        using var rest = discord.CreateRestClient();
+        await rest.GetCurrentUserAsync(cancellationToken: Ct);
+
+        var first = discord.Recorded.Requests;
+        var second = discord.Recorded.Requests;
+
+        Assert.NotSame(first, second);
+        Assert.Same(first[0], second[0]);
+    }
+
+    private static StringContent Multipart(string disposition)
+        => new(
+            $"--xyz\r\nContent-Disposition: {disposition}\r\n\r\n{{\"a\":1}}\r\n--xyz--\r\n",
+            Encoding.UTF8,
+            "multipart/form-data");
+
     private static FakeDiscord CreateFake()
     {
         RouteBinding[] bindings =
