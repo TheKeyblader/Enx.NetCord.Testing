@@ -32,6 +32,16 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   (`POST /channels/{channel_id}/messages`). Routes littérales avant paramétrées.
 - Entrée : `FakeRestRequest` (méthode, template, paramètres, query, corps JSON ou multipart,
   `Authorization`, `X-Audit-Log-Reason`). Sortie : `FakeRestResponse` (statut, JSON, en-têtes).
+- Validation structurelle (étape 3 du pipeline, sans lire l'état) : un validateur par opération,
+  lié par `RouteBinding.Of(clé, handler, validateur)`. **Réutiliser** `Rest/FormValidation.cs`
+  (ne pas recopier dans la famille) : `ValidateRouteSnowflake(request, "channel_id")`,
+  `TryReadJsonObject(request, out doc, out error)` (`50109` / `50035` `MODEL_TYPE_CONVERT`),
+  `ReadOptionalString`, `CheckLength`, `TryReadSnowflake` (chaîne ou nombre), `AddBadType`,
+  `AddRequired`, `TryParseSnowflake` / `NotSnowflakeMessage`. Accumuler les erreurs dans un
+  `FormErrors` puis `DiscordError.InvalidFormBody(errors)`, ou rendre
+  `RestValidation.Valid(recordDétaché)`, lu par `request.GetPayload<T>()`. Ne garder dans
+  `Routes/<Domaine>/` que les règles propres au domaine ; une règle qui sert à deux familles
+  remonte dans `FormValidation`.
 - Pour une réponse JSON, projeter le résultat dans un DTO interne conforme à la spec Discord et le sérialiser avec `FakeDiscordJsonContext` (source-gen STJ). Le vrai client désérialise la réponse ; réserver les `NetCord.JsonModels` aux API NetCord qui les exigent, comme `Interaction.CreateFromJson`.
 - Erreurs : `DiscordError.*` (404 `10003 Unknown Channel`, 400 `50035 Invalid Form Body`
   avec arbre `errors`, 403 `50013 Missing Permissions`, 401 `0 401: Unauthorized`…). Ajouter
