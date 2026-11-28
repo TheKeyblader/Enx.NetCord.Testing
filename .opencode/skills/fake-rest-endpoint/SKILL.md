@@ -90,6 +90,13 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   `payload_json` absent = objet vide ; `RestMultipart.PayloadJsonName`). Le fake ne conserve que le nom, la taille et le type des fichiers ; l'`url` d'une pièce
   jointe est déterministe (`MessageWire.CdnHost`). NetCord numérote ses fichiers à partir de 0 et ne peut donc que **remplacer**
   les pièces jointes d'un message à l'édition ; tester la conservation par un `SendRequestAsync` JSON brut.
+- **Messages selon le type de salon** (M1-REST-03B) : l'état lit `ChannelTraits.Of(channel.Kind).IsMessageable` (jamais un `switch` sur le
+  type dans un handler) après `ResolveChannel` et avant tout commit, pour **tous** les appelants (le seed obtient une `InvalidOperationException`).
+  Création : catégorie ⇒ `CannotSendInNonTextChannel` (`50008`), forum/media ⇒ `CannotSendInForumChannel` (`40058`) ; liste et bulk-delete ⇒
+  `CannotExecuteOnChannelType` (`50024`, hypothèse UR-011) ; `GET`/`PATCH`/`DELETE` d'un message ⇒ `10008` (rien n'y existe, pas de contrôle de plus) ;
+  `crosspost` : `10008` → DM `50003` → type ≠ 5 `50024` → déjà `CROSSPOSTED` `40033` (sans `StateChange`). Un salon media n'est pas seedable :
+  `discord.State.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildMedia, "gallery"))` dans les tests.
+  Une fabrique `DiscordError` ajoute aussi sa paire `(status, code)` à `TryCreateSimple` et à `DiscordErrorTests`.
 - Ordre des contrôles d'un message : champs invalides (`50035`) puis message vide (`50006`) à l'étape structurelle ; salon
   (`10003`/`50001`) puis message (`10008`) puis règles d'auteur (`50005`) dans l'état. Un `50006` précède donc `10003` : les
   tests de `404`/`403` envoient un corps valide.

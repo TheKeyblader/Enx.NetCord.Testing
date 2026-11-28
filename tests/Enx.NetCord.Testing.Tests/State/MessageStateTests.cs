@@ -151,6 +151,26 @@ public sealed class MessageStateTests
         Assert.Equal("fixed", asFixture.Value.Content);
     }
 
+    [Theory]
+    [InlineData(4, false)]
+    [InlineData(15, true)]
+    [InlineData(16, true)]
+    public void CreateMessage_FixtureInACategoryForumOrMedia_IsRefusedWithoutAChange(int kind, bool forumLike)
+    {
+        var expected = forumLike ? StateFailureKind.CannotSendInForumChannel : StateFailureKind.CannotSendInNonTextChannel;
+        var state = NewState();
+        var (guild, _, user) = Seed(state);
+        var channel = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, (ChannelKind)kind, "subject")).Value;
+        using var subscription = state.SubscribeGateway();
+        Drain(subscription);
+
+        var asFixture = state.CreateMessage(StateCaller.Fixture, new CreateMessageInput(channel.Id, user.Id, "hello"));
+
+        Assert.Equal(expected, asFixture.Failure.Kind);
+        Assert.Empty(Drain(subscription));
+        Assert.Null(state.FindChannel(channel.Id)?.LastMessageId);
+    }
+
     private static List<ulong> Ids(StateResult<System.Collections.Immutable.ImmutableArray<MessageSnapshot>> result)
         => [.. result.Value.Select(m => m.Id)];
 }

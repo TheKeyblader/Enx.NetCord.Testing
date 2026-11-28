@@ -274,6 +274,70 @@ public sealed class MessagesConformanceTests
     }
 
     [Fact]
+    [Parity("POST /channels/{channel_id}/messages")]
+    [Parity("50008")]
+    public async Task SendMessageAsync_Category_Returns50008WithTheDiscordErrorEnvelope()
+    {
+        await using var discord = FakeDiscord.Create();
+        var lobby = discord.Seed.Guild("Test").Category("Lobby");
+        using var rest = discord.CreateRestClient();
+
+        var exception = await Assert.ThrowsAsync<RestException>(() => rest.SendMessageAsync(lobby.Id, "hello", cancellationToken: Ct));
+
+        Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
+        Assert.Equal(50008, exception.Error!.Code);
+        ContractAssert.Conforms(discord, "POST /channels/{channel_id}/messages");
+    }
+
+    [Fact]
+    [Parity("POST /channels/{channel_id}/messages")]
+    [Parity("40058")]
+    public async Task SendMessageAsync_Forum_Returns40058WithTheDiscordErrorEnvelope()
+    {
+        await using var discord = FakeDiscord.Create();
+        var ideas = discord.Seed.Guild("Test").ForumChannel("ideas");
+        using var rest = discord.CreateRestClient();
+
+        var exception = await Assert.ThrowsAsync<RestException>(() => rest.SendMessageAsync(ideas.Id, "hello", cancellationToken: Ct));
+
+        Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
+        Assert.Equal(40058, exception.Error!.Code);
+        ContractAssert.Conforms(discord, "POST /channels/{channel_id}/messages");
+    }
+
+    [Fact]
+    [Parity("POST /channels/{channel_id}/messages")]
+    public async Task SendMessageAsync_VoiceChannelChat_ReturnsTheMessageAndConformsToMessageResponse()
+    {
+        await using var discord = FakeDiscord.Create();
+        var lounge = discord.Seed.Guild("Test").VoiceChannel("lounge");
+        using var rest = discord.CreateRestClient();
+
+        var message = await rest.SendMessageAsync(lounge.Id, "hello", cancellationToken: Ct);
+
+        Assert.Equal(lounge.Id, message.ChannelId);
+        ContractAssert.Conforms(discord, "POST /channels/{channel_id}/messages");
+    }
+
+    [Fact]
+    [Parity("POST /channels/{channel_id}/messages/{message_id}/crosspost")]
+    [Parity("40033")]
+    public async Task CrosspostMessageAsync_SecondCrosspost_Returns40033WithTheDiscordErrorEnvelope()
+    {
+        await using var discord = FakeDiscord.Create();
+        var news = discord.Seed.Guild("Test").AnnouncementChannel("news");
+        using var rest = discord.CreateRestClient();
+        var sent = await rest.SendMessageAsync(news.Id, "breaking", cancellationToken: Ct);
+        await rest.CrosspostMessageAsync(news.Id, sent.Id, cancellationToken: Ct);
+
+        var exception = await Assert.ThrowsAsync<RestException>(() => rest.CrosspostMessageAsync(news.Id, sent.Id, cancellationToken: Ct));
+
+        Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
+        Assert.Equal(40033, exception.Error!.Code);
+        ContractAssert.Conforms(discord, "POST /channels/{channel_id}/messages/{message_id}/crosspost");
+    }
+
+    [Fact]
     [Parity("POST /channels/{channel_id}/messages/{message_id}/crosspost")]
     public async Task CrosspostMessageAsync_AnnouncementChannel_ReturnsTheMessageAndConformsToMessageResponse()
     {
