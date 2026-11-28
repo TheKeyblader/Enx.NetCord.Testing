@@ -219,6 +219,98 @@ public sealed class FormValidationTests
         Assert.Equal(message, tree.GetProperty("id").GetProperty("_errors")[0].GetProperty("message").GetString());
     }
 
+    [Theory]
+    [InlineData("{\"t\":\"x\"}", true, "x")]
+    [InlineData("{\"t\":null}", true, null)]
+    [InlineData("{}", false, null)]
+    public void ReadNullableString_StringNullOrAbsent_DistinguishesClearedFromNotSent(string body, bool expectedPresent, string? expected)
+    {
+        using var document = JsonDocument.Parse(body);
+        var errors = new FormErrors();
+
+        Assert.Equal(expected, FormValidation.ReadNullableString(document.RootElement, "t", errors, out var present));
+
+        Assert.Equal(expectedPresent, present);
+        Assert.True(errors.IsEmpty);
+    }
+
+    [Fact]
+    public void ReadNullableString_WrongType_AddsBaseTypeBadType()
+    {
+        using var document = JsonDocument.Parse("{\"t\":3}");
+        var errors = new FormErrors();
+
+        Assert.Null(FormValidation.ReadNullableString(document.RootElement, "t", errors, out var present));
+
+        Assert.False(present);
+        Assert.Equal("BASE_TYPE_BAD_TYPE", FirstCode(ErrorTree(DiscordError.InvalidFormBody(errors)), "t"));
+    }
+
+    [Theory]
+    [InlineData("{\"n\":5}", 5)]
+    [InlineData("{\"n\":\"7\"}", 7)]
+    [InlineData("{\"n\":0}", 0)]
+    [InlineData("{\"n\":10}", 10)]
+    [InlineData("{\"n\":null}", null)]
+    [InlineData("{}", null)]
+    public void ReadOptionalInteger_ValidOrAbsent_ReturnsTheValue(string body, int? expected)
+    {
+        using var document = JsonDocument.Parse(body);
+        var errors = new FormErrors();
+
+        Assert.Equal(expected, FormValidation.ReadOptionalInteger(document.RootElement, "n", 0, 10, errors));
+        Assert.True(errors.IsEmpty);
+    }
+
+    [Theory]
+    [InlineData("{\"n\":-1}", "NUMBER_TYPE_MIN", "int value should be greater than or equal to 0.")]
+    [InlineData("{\"n\":11}", "NUMBER_TYPE_MAX", "int value should be less than or equal to 10.")]
+    [InlineData("{\"n\":99999999999}", "NUMBER_TYPE_MAX", "int value should be less than or equal to 10.")]
+    [InlineData("{\"n\":1.5}", "NUMBER_TYPE_COERCE", "Value \"1.5\" is not int.")]
+    [InlineData("{\"n\":\"abc\"}", "NUMBER_TYPE_COERCE", "Value \"abc\" is not int.")]
+    [InlineData("{\"n\":true}", "NUMBER_TYPE_COERCE", "Value \"true\" is not int.")]
+    [InlineData("{\"n\":[]}", "NUMBER_TYPE_COERCE", "Value \"[]\" is not int.")]
+    public void ReadOptionalInteger_InvalidValue_AddsTheNumberError(string body, string code, string message)
+    {
+        using var document = JsonDocument.Parse(body);
+        var errors = new FormErrors();
+
+        Assert.Null(FormValidation.ReadOptionalInteger(document.RootElement, "n", 0, 10, errors));
+
+        var tree = ErrorTree(DiscordError.InvalidFormBody(errors));
+        Assert.Equal(code, FirstCode(tree, "n"));
+        Assert.Equal(message, tree.GetProperty("n").GetProperty("_errors")[0].GetProperty("message").GetString());
+    }
+
+    [Theory]
+    [InlineData("{\"b\":true}", true)]
+    [InlineData("{\"b\":false}", false)]
+    [InlineData("{\"b\":null}", null)]
+    [InlineData("{}", null)]
+    public void ReadOptionalBoolean_ValidOrAbsent_ReturnsTheValue(string body, bool? expected)
+    {
+        using var document = JsonDocument.Parse(body);
+        var errors = new FormErrors();
+
+        Assert.Equal(expected, FormValidation.ReadOptionalBoolean(document.RootElement, "b", errors));
+        Assert.True(errors.IsEmpty);
+    }
+
+    [Theory]
+    [InlineData("{\"b\":\"yes\"}", "Value \"yes\" is not boolean.")]
+    [InlineData("{\"b\":1}", "Value \"1\" is not boolean.")]
+    public void ReadOptionalBoolean_WrongType_AddsBooleanTypeCoerce(string body, string message)
+    {
+        using var document = JsonDocument.Parse(body);
+        var errors = new FormErrors();
+
+        Assert.Null(FormValidation.ReadOptionalBoolean(document.RootElement, "b", errors));
+
+        var tree = ErrorTree(DiscordError.InvalidFormBody(errors));
+        Assert.Equal("BOOLEAN_TYPE_COERCE", FirstCode(tree, "b"));
+        Assert.Equal(message, tree.GetProperty("b").GetProperty("_errors")[0].GetProperty("message").GetString());
+    }
+
     [Fact]
     public void AddBadType_NestedPath_AddsBaseTypeBadType()
     {

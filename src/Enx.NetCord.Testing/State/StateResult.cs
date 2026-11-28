@@ -15,6 +15,15 @@ internal enum StateFailureKind
 
     /// <summary>The resource exists but the bot cannot see it: it is not a member of the guild (403 <c>50001</c>).</summary>
     MissingAccess,
+
+    /// <summary>A guild channel cannot become the requested type (the fake models only guild text channels): 400 <c>50035</c> on <c>type</c>.</summary>
+    InvalidChannelType,
+
+    /// <summary>The requested parent category does not exist (the fake models no category): 400 <c>50035</c> on <c>parent_id</c>.</summary>
+    InvalidChannelParent,
+
+    /// <summary>A guild channel name must not be empty: 400 <c>50035</c> on <c>name</c> (a DM accepts an empty one).</summary>
+    InvalidChannelName,
 }
 
 /// <summary>A refused operation: the reason and the ID of the resource it concerns. No HTTP here.</summary>

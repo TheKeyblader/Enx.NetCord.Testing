@@ -36,8 +36,12 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   lié par `RouteBinding.Of(clé, handler, validateur)`. **Réutiliser** `Rest/FormValidation.cs`
   (ne pas recopier dans la famille) : `ValidateRouteSnowflake(request, "channel_id")`,
   `TryReadJsonObject(request, out doc, out error)` (`50109` / `50035` `MODEL_TYPE_CONVERT`),
-  `ReadOptionalString`, `CheckLength`, `TryReadSnowflake` (chaîne ou nombre), `AddBadType`,
-  `AddRequired`, `TryParseSnowflake` / `NotSnowflakeMessage`. Accumuler les erreurs dans un
+  `ReadOptionalString`, `ReadNullableString` (distingue « absent » de `null` = effacer, via `out present`),
+  `ReadOptionalInteger(root, name, min, max, errors)` (entier ou chaîne numérique ; `NUMBER_TYPE_COERCE`/`MIN`/`MAX` ;
+  absent ou `null` ⇒ `null` = inchangé), `ReadOptionalBoolean` (`BOOLEAN_TYPE_COERCE`), `CheckLength`,
+  `TryReadSnowflake` (chaîne ou nombre), `AddBadType`, `AddRequired`, `TryParseSnowflake` / `NotSnowflakeMessage`.
+  Un validateur de `PATCH` valide aussi le `channel_id`/`…_id` de la route en premier (`ValidateRouteSnowflake`) et
+  met l'ID dans son payload ; l'état détermine ensuite ce qui s'applique au type de ressource (ex. DM : renvoyé inchangé). Accumuler les erreurs dans un
   `FormErrors` puis `DiscordError.InvalidFormBody(errors)`, ou rendre
   `RestValidation.Valid(recordDétaché)`, lu par `request.GetPayload<T>()`. Ne garder dans
   `Routes/<Domaine>/` que les règles propres au domaine ; une règle qui sert à deux familles
@@ -54,7 +58,18 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   `DiscordError.FromStateFailure(failure)`. Ne jamais appeler `FindGuild`, `FindChannel`,
   `FindMember` ni `FindMessage` depuis `Rest/` (lectures non contrôlées). Tester « guilde
   inconnue » **et** « bot non membre ». Les routes à jeton (interaction, webhook) ne passent pas
-  par ce contrôle.
+  par ce contrôle. Toute nouvelle opération (get/update/delete…) est un **membre de
+  `FakeDiscordState`** (fichier partiel `FakeDiscordState.<Domaine>.cs`) qui prend un `StateCaller`
+  et résout par `GuildAccess` : aucun helper d'état hors de `FakeDiscordState` n'est appelé depuis
+  `Rest/`. Cette règle est vérifiée par `tests/Enx.NetCord.Testing.Tests/Architecture/RestIsolationTests.cs`
+  (M1-T-02) : sous `Rest/**`, seul `StateCaller.Bot` est référencé et seuls les membres d'instance de
+  `FakeDiscordState` qui prennent un `StateCaller` sont appelés. Toute opération d'état **sans**
+  `StateCaller` appelée depuis `Rest/` (ex. futures opérations à jeton de M2) doit être ajoutée
+  explicitement à la liste blanche `AllowedUnguardedMembers` de ce test (par le test-engineer), avec
+  justification ADR.
+- Une opération qui supprime ou ferme une ressource suit Discord, pas le nom de la route : fermer un
+  DM (`DELETE /channels/{dm}`) ne détruit rien et ne committe aucun `StateChange` ; une mise à jour
+  (`PATCH`) ne committe un `StateChange` que si une valeur change (comme `UpdateUser`).
 - En-têtes rate limit (`X-RateLimit-Limit/Remaining/Reset/Reset-After/Bucket`) via le
   middleware commun ; ne pas les écrire dans le handler.
 - `204 No Content` quand Discord le fait (DELETE, PUT réaction…).

@@ -24,6 +24,12 @@ internal sealed record GuildCreated(long Number, GuildSnapshot Guild, RoleSnapsh
 
 internal sealed record ChannelCreated(long Number, ChannelSnapshot Channel) : StateChange(Number);
 
+/// <summary>A guild channel changed; the snapshot is the channel after the change (the Gateway turns it into <c>CHANNEL_UPDATE</c>).</summary>
+internal sealed record ChannelUpdated(long Number, ChannelSnapshot Channel) : StateChange(Number);
+
+/// <summary>A guild channel was deleted; the snapshot is the channel as it was (the Gateway turns it into <c>CHANNEL_DELETE</c>).</summary>
+internal sealed record ChannelDeleted(long Number, ChannelSnapshot Channel) : StateChange(Number);
+
 internal sealed record RoleCreated(long Number, RoleSnapshot Role) : StateChange(Number);
 
 internal sealed record MemberAdded(long Number, MemberSnapshot Member, UserSnapshot User) : StateChange(Number);

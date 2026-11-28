@@ -117,6 +117,11 @@ internal sealed class DiscordError
             StateFailureKind.UnknownMessage => UnknownMessage(),
             StateFailureKind.UnknownUser => UnknownUser(),
             StateFailureKind.MissingAccess => MissingAccess(),
+
+            // Hypotheses, see docs/parity/errors.md: the codes of these two field errors are not documented by Discord.
+            StateFailureKind.InvalidChannelType => InvalidFormBody(new FormErrors().Add("type", "CHANNEL_TYPE_INVALID", "Invalid channel type.")),
+            StateFailureKind.InvalidChannelParent => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID", "Invalid parent channel.")),
+            StateFailureKind.InvalidChannelName => InvalidFormBody(new FormErrors().Add("name", "BASE_TYPE_BAD_LENGTH", "Must be between 1 and 100 in length.")),
             _ => throw new NotSupportedException($"The state failure {failure.Kind} has no catalog error yet."),
         };
 

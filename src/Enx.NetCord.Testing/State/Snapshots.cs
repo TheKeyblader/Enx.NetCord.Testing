@@ -53,6 +53,7 @@ internal sealed record ChannelSnapshot(
     string? Topic,
     int Position,
     bool Nsfw,
+    int RateLimitPerUser,
     ulong? LastMessageId,
     ImmutableArray<ulong> RecipientIds,
     DateTimeOffset CreatedAt,
