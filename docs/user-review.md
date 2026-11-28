@@ -209,8 +209,14 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   3. Salon vocal : `{"user_limit":100}`, `{"bitrate":500000}` ; créer un salon vocal sans `bitrate` et lire sa valeur.
   4. `POST` d'un message dans un salon media.
   5. `GET` d'un salon d'annonces : `default_thread_rate_limit_per_user` présent ? puis `PATCH` de ce champ.
+  6. (ajout M1-REST-02B1) Champs sans objet pour le type : `PATCH` d'un salon d'annonces
+     `{"rate_limit_per_user":5}`, d'un salon vocal `{"topic":"x"}`, d'une catégorie
+     `{"nsfw":true}` ; noter statut, JSON et dispatchs.
 - **Résultat attendu** : 1 ⇒ `type: 5`, slowmode 0 ou absent (noter le refus en guilde non
-  Community) ; 2 ⇒ `50035` puis 200 ; 3 ⇒ `50035`, 400 `30052`, 64000 ; 4 ⇒ `40058` ; 5 ⇒ présent, 200.
+  Community) ; 2 ⇒ `50035` puis 200 ; 3 ⇒ `50035`, 400 `30052`, 64000 ; 4 ⇒ `40058` ; 5 ⇒ présent, 200 ;
+  6 ⇒ 200, salon inchangé, aucun `CHANNEL_UPDATE` (tests
+  `ModifyGuildChannelAsync_TopicAndNsfwOnACategoryOrAVoiceChannel_AreIgnoredWithoutAChange`,
+  `UpdateChannel_FieldsTheTypeHasNoUseFor_AreIgnoredWithoutAChange`).
 - **Si différent** : corriger `ChannelTraits`, les refus d'état, `errors.md` ; le résultat de 1
   en guilde non Community fixe le contenu de M4-REST-10.
 - **Réponse** : _(à remplir)_
