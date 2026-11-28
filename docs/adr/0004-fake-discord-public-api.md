@@ -455,25 +455,54 @@ de la route et non par le handler :
 - **Profil « masquée »** (la guilde elle-même) : le bot ne peut pas distinguer une guilde où il
   n'est pas d'une guilde qui n'existe pas. **Profil « refusée »** (tout le reste) : la ressource
   existe, l'accès manque.
-- **Helper central** (nom indicatif `GuildAccess`, dans `State/`). Toute opération d'état à
-  portée de guilde ou de salon commence par lui **sous le verrou** : il résout la guilde, ou le
-  salon puis sa guilde, applique le profil et rend l'entité ou un échec `UnknownGuild`,
-  `UnknownChannel` ou `MissingAccess` (nouveau `StateFailureKind`). La traduction en
-  `DiscordError` est faite une fois pour toutes les routes : fabriques
+- **Helper central** (nom indicatif `GuildAccess`, dans `State/`). Toute opération d'état **qui
+  reçoit de son appelant un ID de guilde ou de salon** commence par lui **sous le verrou** : il
+  résout la guilde, ou le salon puis sa guilde, applique le profil et rend l'entité ou un échec
+  `UnknownGuild`, `UnknownChannel` ou `MissingAccess` (nouveau `StateFailureKind`). La
+  traduction en `DiscordError` est faite une fois pour toutes les routes : fabriques
   `DiscordError.UnknownGuild()` (404, `10004`) et `DiscordError.MissingAccess()` (403, `50001`),
   à ajouter au catalogue avec leurs lignes de `errors.md`. Un handler ne teste jamais l'adhésion
   du bot lui-même.
-- **Seed ou REST : un argument d'appelant, obligatoire.** Les opérations d'état restent
-  **communes** au seed et au REST ; chacune reçoit un appelant interne (nom indicatif
-  `StateCaller`) qu'elle transmet au helper. Deux valeurs : `Seed`, sans contrôle d'accès, pour
-  le seed et la création d'une interaction (geste d'un utilisateur, contrôlé par le § 4) ; `Bot`,
-  qui applique le tableau, pour tout handler REST authentifié par le jeton du bot. Le paramètre
-  n'a **pas de valeur par défaut** : un handler qui l'oublie ne compile pas, au lieu de
-  contourner le contrôle en silence. Aucun fichier de `Rest/` ne passe `Seed`. Une identité
-  `Bearer` (ADR 0005) ajoutera une valeur sans changer les signatures.
+- **Test ou bot : un argument d'appelant, obligatoire.** Ces opérations restent **communes** au
+  seed et au REST ; chacune reçoit un appelant interne (nom indicatif `StateCaller`) qu'elle
+  transmet au helper. Deux valeurs :
+  - `Fixture` : ce que le test met en scène, sans contrôle d'accès. C'est le seed aujourd'hui,
+    et demain les commandes de test de la Gateway (M3-ADR-09). Le nom reprend le vocabulaire du
+    seed (« fixtures ») ; `Seed` désignerait une seule de ces entrées.
+  - `Bot` : applique le tableau. C'est la seule valeur que passe un handler de `Rest/` ; aucun
+    fichier de `Rest/` ne passe `Fixture`, sans exception.
+
+  Le paramètre n'a **pas de valeur par défaut** : un handler qui l'oublie ne compile pas, au
+  lieu de contourner le contrôle en silence. Une identité `Bearer` (ADR 0005) ajoutera une
+  valeur sans changer les signatures.
   *Rejeté :* des opérations d'état propres au REST. Elles doubleraient chaque mutation, avec
   deux chemins à garder alignés pour un même fait (ADR 0003) ; et un appelant facultatif, que
   le seed ne passerait pas, car l'oubli et l'intention s'y écrivent de la même façon.
+- **Routes à jeton : hors du helper, sans appelant.** Les opérations des routes à jeton sont à
+  portée d'**interaction** (ou de webhook, M4-REST-02), pas de salon : elles reçoivent l'ID et
+  le jeton, retrouvent l'interaction par son index (ADR 0007, § 2), puis agissent sur **son**
+  salon et **ses** messages, lus dans l'entité et non fournis par l'appelant. Elles ne passent
+  donc pas par `GuildAccess` et n'ont pas de paramètre `StateCaller` : le jeton est l'autorité,
+  que la requête porte ou non le jeton du bot (`security: [{}, {BotToken}]`). L'entrée inline de
+  l'ADR 0007 arrive à la même mutation sans aucun appelant.
+  - Sont concernées : le callback, la réponse originale, les followups, et l'exécution d'un
+    webhook par son jeton. Une route de webhook **sans** jeton (`/webhooks/{webhook_id}`,
+    `/channels/{channel_id}/webhooks`) est une route de bot : appelant `Bot`, helper appliqué.
+  - Conséquence : une réponse ou un followup reste accepté **après le départ du bot** de la
+    guilde, tant que le jeton vit (15 minutes, ADR 0007). Le message est créé dans l'état ; la
+    Gateway ne le dispatche pas (§ 3). C'est une **hypothèse** (`PAR-ERR-02`), appuyée sur un
+    seul indice documenté : Discord accepte des followups quand l'application « isn't
+    installed in the server » (`receiving-and-responding.mdx:474`).
+
+  *Rejeté :* une valeur `StateCaller.Token` sans contrôle, admise dans `Rest/`. Elle rendrait
+  légal, pour n'importe quel handler, de contourner le tableau sur une opération de salon ; la
+  règle « `Rest/` ne passe que `Bot` » aurait une exception à relire à chaque route, et l'entrée
+  inline, qui n'est pas du REST, devrait quand même en choisir une.
+- **Création d'une interaction : hors du helper aussi.** L'opération qui crée l'interaction
+  (voie directe, Gateway ou HTTP) n'a qu'un appelant, le test, et ne reçoit pas de `StateCaller`.
+  L'adhésion du bot à la guilde du salon y est vérifiée par cette opération elle-même, sous le
+  même verrou, avec les autres contrôles de l'ADR 0007 (§ 1, Validation) ; l'échec est traduit
+  en `InvalidOperationException` (§ 4), jamais en `50001`.
 - **Ordre**, dans l'étape 4 de l'[ADR 0005](0005-rest-routing-and-pipeline.md) : accès à la
   guilde ou au salon (cette règle), puis existence de la ressource visée (`10007`, `10011`,
   `10008`), puis permissions (`50013`, M4-REST-05), puis règles métier. Un message inexistant
@@ -530,7 +559,8 @@ toucher aux handlers.
 - Le harnais de l'ADR 0008 n'a rien à ajouter : `RegisterCommandsInGuild(guildId)` sur une guilde
   sans le bot fait échouer `BuildAsync` par la `RestException` 403 `50001` du § 2.
 - Les routes à jeton ne contrôlent pas l'adhésion (§ 2) : rien ne change pour les réponses et
-  les followups.
+  les followups, y compris si le bot quitte la guilde entre la création de l'interaction et sa
+  réponse.
 
 ### API publique proposée
 
@@ -673,8 +703,9 @@ async Task SlashCommand_GuildWithoutBot_IsRejectedLocally()
   `StateFailureKind.MissingAccess`, `DiscordError.UnknownGuild()` et `MissingAccess()` avec
   leurs lignes de `errors.md`, couples acceptés par `RestEffect.Error` — rest-implementer —
   M1-ADR-04B, M1-02, M1-04 (`FakeDiscord.cs`, fusionné). Porte aussi `CreateGuildInput.WithBot`,
-  l'appelant `StateCaller` et l'ajustement des trois tests cités. À placer avant M1-REST-02,
-  M1-REST-06 et M2-07, et avant **M2-01** et **M2-11**, qui en ont besoin pour le contrôle du § 4.
+  l'appelant `StateCaller` (`Fixture`, `Bot`) et l'ajustement des trois tests cités. À placer
+  avant M1-REST-02, M1-REST-06 et M2-07, et avant **M2-01** et **M2-11**, qui en ont besoin pour
+  le contrôle du § 4.
 - `M1-REST-10` — `GET /users/@me/guilds` et `DELETE /users/@me/guilds/{guild_id}`, absentes de
   M1-REST-01 ; le départ produit le fait que M3-03 traduira en `GUILD_DELETE` —
   rest-implementer — M1-05, M1-REST-06.
@@ -685,8 +716,10 @@ async Task SlashCommand_GuildWithoutBot_IsRejectedLocally()
 - `PAR-ERR-02` — Confirmer contre Discord les lignes du tableau du § 2 marquées « hypothèse » ou
   « observé » : sous-ressources de guilde et salons (`50001` ou `10004`), `PATCH` et `preview`
   de la guilde, commandes d'une guilde inexistante (`10004` ici, peut-être `50001`), départ
-  d'une guilde dont le bot n'est pas membre ; et l'ordre des refus, `50035` avant `50001` ou
-  `10004` pour un corps mal formé hors de la guilde — parity-auditor — M1-REST-06.
+  d'une guilde dont le bot n'est pas membre ; l'ordre des refus, `50035` avant `50001` ou
+  `10004` pour un corps mal formé hors de la guilde ; et la question « le jeton d'interaction
+  ou de webhook reste-t-il valable après le départ du bot de la guilde ? » (oui ici, § 2) —
+  parity-auditor — M1-REST-06.
 - `PAR-GW-01` — Confirmer contre Discord les deux hypothèses du § 3 : pas de `GUILD_MEMBER_ADD`
   pour le bot quand il rejoint une guilde, et absence du champ `unavailable` dans le
   `GUILD_DELETE` d'un départ — parity-auditor — M3-02.

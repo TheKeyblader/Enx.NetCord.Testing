@@ -91,9 +91,13 @@
   `Strict` (journalise puis lève `NotSupportedException`). Ce choix ne modifie aucune réponse
   d'un handler : un salon inconnu reste un 404, code `10003`.
 - Visibilité (amendement 04B de l'ADR 0004, **proposé**) : un helper d'état unique (`GuildAccess`,
-  nom indicatif) résout guilde et salon sous le verrou pour tout appelant REST. Hors d'une
-  guilde du bot : 404 `10004` pour la guilde elle-même, 403 `50001` pour ses sous-ressources,
-  ses salons et ses commandes ; les routes à jeton ne contrôlent pas l'adhésion.
+  nom indicatif) résout guilde et salon sous le verrou, pour toute opération qui reçoit un ID de
+  guilde ou de salon. Appelant interne obligatoire (`StateCaller`) : `Bot`, seule valeur passée
+  par `Rest/`, applique le tableau ; `Fixture` (seed, commandes de test) n'est pas contrôlé.
+  Hors d'une guilde du bot : 404 `10004` pour la guilde elle-même, 403 `50001` pour ses
+  sous-ressources, ses salons et ses commandes. Les routes à jeton agissent à portée
+  d'interaction ou de webhook, résolue par le jeton : elles ne passent ni par le helper ni par
+  `StateCaller`, et ne contrôlent pas l'adhésion.
 - `discord.Rest.Intercept(route, effect)` applique un `RestEffect` à la prochaine tentative
   éligible, avant toute mutation : erreur du catalogue, délai virtuel via `TimeProvider` avant
   le traitement normal, ou 429 par utilisateur.
