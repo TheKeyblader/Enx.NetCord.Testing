@@ -12,8 +12,9 @@ internal sealed partial class FakeDiscordState
     /// Creates a guild channel of any modeled type (ADR 0013). Seed and <c>POST /guilds/{guild_id}/channels</c> both come here, so the
     /// invariants hold for every caller. Checks, in order, before anything is allocated or written: the guild (and, for the bot,
     /// membership), the 500-channel limit, the type, then the parent (it exists in the same guild, is a category, the channel is not
-    /// itself a category, the category holds fewer than 50 channels). Settings that do not apply to the type are not stored. The
-    /// position defaults to one more than the highest of the sorting group, or 0.
+    /// itself a category, the category holds fewer than 50 channels), the name (1-100 code points), the topic and the voice bounds of
+    /// the type (M1-REST-06). Settings that do not apply to the type are not stored. The position defaults to one more than the
+    /// highest of the sorting group, or 0.
     /// </summary>
     /// <param name="caller">The caller.</param>
     /// <param name="input">The channel to create.</param>
@@ -21,7 +22,9 @@ internal sealed partial class FakeDiscordState
     /// The channel, <see cref="StateFailureKind.UnknownGuild"/>, <see cref="StateFailureKind.MissingAccess"/>,
     /// <see cref="StateFailureKind.MaxGuildChannels"/>, <see cref="StateFailureKind.InvalidChannelType"/> (a DM, or a value that is
     /// not a channel type), <see cref="StateFailureKind.InvalidChannelParent"/>, <see cref="StateFailureKind.ChannelParentNotCategory"/>,
-    /// <see cref="StateFailureKind.ChannelCannotHaveParent"/> or <see cref="StateFailureKind.ChannelParentFull"/>.
+    /// <see cref="StateFailureKind.ChannelCannotHaveParent"/>, <see cref="StateFailureKind.ChannelParentFull"/>,
+    /// <see cref="StateFailureKind.InvalidChannelName"/>, <see cref="StateFailureKind.InvalidChannelTopic"/>,
+    /// <see cref="StateFailureKind.ChannelBitrateTooHigh"/> or <see cref="StateFailureKind.InvalidChannelUserLimit"/>.
     /// </returns>
     internal StateResult<ChannelSnapshot> CreateGuildChannel(StateCaller caller, CreateGuildChannelInput input)
     {
@@ -57,6 +60,31 @@ internal sealed partial class FakeDiscordState
                 }
             }
 
+            // The bounds of the type, in the order of ADR 0013, § 1 (type, parent, name, topic, bitrate, user limit): the structural
+            // validator of the route only knows the widest bounds of the spec. A refusal happens before an ID is allocated.
+            if (!IsValidChannelName(input.Name))
+            {
+                return new StateFailure(StateFailureKind.InvalidChannelName, guild.Id);
+            }
+
+            if (traits.TopicMaxLength > 0 && input.Topic is { } newTopic && newTopic.EnumerateRunes().Count() > traits.TopicMaxLength)
+            {
+                return new StateFailure(StateFailureKind.InvalidChannelTopic, guild.Id);
+            }
+
+            if (traits.Family == ChannelFamily.Voice && input.Voice is { } newVoice)
+            {
+                if (newVoice.Bitrate > traits.BitrateMax)
+                {
+                    return new StateFailure(StateFailureKind.ChannelBitrateTooHigh, guild.Id);
+                }
+
+                if (newVoice.UserLimit > traits.UserLimitMax)
+                {
+                    return new StateFailure(StateFailureKind.InvalidChannelUserLimit, guild.Id, traits.UserLimitMax);
+                }
+            }
+
             var now = ReadClock();
             var id = ResolveNewId(input.Id, now);
             _assigned.Add(id);
@@ -70,6 +98,8 @@ internal sealed partial class FakeDiscordState
                 Topic = traits.TopicMaxLength > 0 ? input.Topic : null,
                 Nsfw = traits.HasNsfw && input.Nsfw,
                 RateLimitPerUser = traits.HasSlowmode ? input.RateLimitPerUser : 0,
+                DefaultAutoArchiveDuration = traits.HasThreadDefaults ? input.DefaultAutoArchiveDuration : null,
+                DefaultThreadRateLimitPerUser = traits.HasThreadDefaults ? input.DefaultThreadRateLimitPerUser : 0,
             };
             channel.Voice = traits.Family == ChannelFamily.Voice ? input.Voice ?? VoiceSettings.Default : null;
             channel.Forum = traits.Family == ChannelFamily.Forum ? input.Forum ?? ForumSettings.Default : null;
@@ -80,6 +110,16 @@ internal sealed partial class FakeDiscordState
             Publish(new ChannelCreated(NextChangeNumber(), snapshot));
             return snapshot;
         }
+    }
+
+    /// <summary>The longest name of a guild channel (code points).</summary>
+    internal const int MaxChannelNameLength = 100;
+
+    /// <summary>Gets whether a guild channel name has the 1-100 code points Discord requires (M1-DEBT-06).</summary>
+    private static bool IsValidChannelName(string name)
+    {
+        var length = name.EnumerateRunes().Count();
+        return length is >= 1 and <= MaxChannelNameLength;
     }
 
     /// <summary>Checks the parent invariants of ADR 0013, § 2, in their order. Call only under the lock.</summary>
@@ -168,7 +208,7 @@ internal sealed partial class FakeDiscordState
                     return parentFailure;
                 }
 
-                if (input.Name is { Length: 0 })
+                if (input.Name is { } newName && !IsValidChannelName(newName))
                 {
                     return new StateFailure(StateFailureKind.InvalidChannelName, channel.Id);
                 }
@@ -363,6 +403,15 @@ internal sealed partial class FakeDiscordState
             _channels.Remove(channelId);
             guild.ChannelIds.Remove(channelId);
             Publish(new ChannelDeleted(NextChangeNumber(), snapshot));
+
+            // A guild setting never points to a channel that is gone (hypothesis, M1-REST-06): the reference is cleared in the same
+            // commit and the guild is published as updated, after the channel's own fact.
+            if (ClearChannelReferences(guild.Settings, channelId) is { } cleared)
+            {
+                guild.Settings = cleared;
+                Publish(new GuildUpdated(NextChangeNumber(), SnapshotOf(guild)));
+            }
+
             return snapshot;
         }
     }

@@ -106,7 +106,7 @@ internal sealed partial class FakeDiscordState
         _lastChangeNumber,
         _botId is { } botId ? new BotIdentitySnapshot(_users[botId].ToSnapshot(), _applications[botId].ToSnapshot()) : null,
         [.. _users.Values.OrderBy(x => x.Ordinal).Select(x => x.ToSnapshot())],
-        [.. _guilds.Values.OrderBy(x => x.Ordinal).Select(x => x.ToSnapshot())],
+        [.. _guilds.Values.OrderBy(x => x.Ordinal).Select(SnapshotOf)],
         [.. _channels.Values.OrderBy(x => x.Ordinal).Select(x => x.ToSnapshot())],
         [.. _roles.Values.OrderBy(x => x.Ordinal).Select(x => x.ToSnapshot())],
         [.. _members.Values.OrderBy(x => x.Ordinal).Select(x => x.ToSnapshot())]);
@@ -364,7 +364,7 @@ internal sealed partial class FakeDiscordState
                 botMember = membership.ToSnapshot();
             }
 
-            var creation = new GuildCreation(guild.ToSnapshot(), everyone.ToSnapshot(), botMember);
+            var creation = new GuildCreation(SnapshotOf(guild), everyone.ToSnapshot(), botMember);
             Publish(new GuildCreated(NextChangeNumber(), creation.Guild, creation.Everyone, creation.BotMember));
             return creation;
         }
@@ -375,7 +375,7 @@ internal sealed partial class FakeDiscordState
     {
         lock (_gate)
         {
-            return _guilds.TryGetValue(guildId, out var guild) ? guild.ToSnapshot() : null;
+            return _guilds.TryGetValue(guildId, out var guild) ? SnapshotOf(guild) : null;
         }
     }
 
@@ -388,7 +388,7 @@ internal sealed partial class FakeDiscordState
         lock (_gate)
         {
             var access = _access.ResolveGuild(caller, guildId, GuildAccessProfile.Hidden);
-            return access.TryGetValue(out var guild) ? guild.ToSnapshot() : access.Failure;
+            return access.TryGetValue(out var guild) ? SnapshotOf(guild) : access.Failure;
         }
     }
 

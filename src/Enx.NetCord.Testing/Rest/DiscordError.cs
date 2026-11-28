@@ -134,30 +134,61 @@ internal sealed class DiscordError
     /// <returns>The error.</returns>
     public static DiscordError BitrateTooHigh() => new(HttpStatusCode.BadRequest, 30052, "Bitrate is too high for channel of this type");
 
+    /// <summary>
+    /// 400 with code 30013: the guild already has 500 channels. The code and message are documented
+    /// (<c>opcodes-and-status-codes.mdx</c>); the HTTP status is not (hypothesis, see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError MaxGuildChannels() => new(HttpStatusCode.BadRequest, 30013, "Maximum number of guild channels reached (500)");
+
+    /// <summary>
+    /// 400 with code 40009: more than one channel of a <c>PATCH /guilds/{guild_id}/channels</c> changes its parent. The code, the message
+    /// and the status are documented (<c>guild.mdx</c>: "fails with a <c>400</c> response and error code <c>40009</c>"); only what counts as
+    /// "changing" the parent is a hypothesis (see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError OnlyOneParentChange() => new(HttpStatusCode.BadRequest, 40009, "Only one channel can have a parent_id modified at a time");
+
+    /// <summary>400 <c>50035</c> on a guild setting that names a channel: it is not a channel of the guild, or of the wrong type. The field code and message are hypotheses.</summary>
+    /// <param name="field">The wire field, such as <c>afk_channel_id</c>.</param>
+    /// <returns>The error.</returns>
+    public static DiscordError InvalidGuildChannelReference(string field)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(field);
+        return InvalidFormBody(new FormErrors().Add(field, "GUILD_CHANNEL_INVALID", "Invalid channel for this setting."));
+    }
+
     /// <summary>400 <c>50035</c> on <c>type</c>: a guild channel cannot become the requested type (only text and announcement convert). The field code is a hypothesis.</summary>
     /// <returns>The error.</returns>
     public static DiscordError InvalidChannelType()
         => InvalidFormBody(new FormErrors().Add("type", "CHANNEL_TYPE_INVALID", "Invalid channel type."));
 
     /// <summary>400 <c>50035</c> on <c>parent_id</c>: the parent does not exist in the guild. The field code and message are hypotheses (the message is reported by a third party).</summary>
+    /// <param name="index">The index of the offending entry of a batch (<c>PATCH /guilds/{guild_id}/channels</c>), or <see langword="null"/> for a single channel.</param>
     /// <returns>The error.</returns>
-    public static DiscordError InvalidChannelParent()
-        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID", "Category does not exist"));
+    public static DiscordError InvalidChannelParent(int? index = null)
+        => InvalidFormBody(new FormErrors().Add(ParentPath(index), "CHANNEL_PARENT_INVALID", "Category does not exist"));
 
     /// <summary>400 <c>50035</c> on <c>parent_id</c>: the parent exists but is not a category. The field code and message are hypotheses.</summary>
+    /// <param name="index">The index of the offending entry of a batch, or <see langword="null"/> for a single channel.</param>
     /// <returns>The error.</returns>
-    public static DiscordError ChannelParentNotCategory()
-        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID_TYPE", "Not a category"));
+    public static DiscordError ChannelParentNotCategory(int? index = null)
+        => InvalidFormBody(new FormErrors().Add(ParentPath(index), "CHANNEL_PARENT_INVALID_TYPE", "Not a category"));
 
     /// <summary>400 <c>50035</c> on <c>parent_id</c>: the channel is a category, which cannot have a parent. The field code and message are hypotheses.</summary>
+    /// <param name="index">The index of the offending entry of a batch, or <see langword="null"/> for a single channel.</param>
     /// <returns>The error.</returns>
-    public static DiscordError ChannelCannotHaveParent()
-        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID", "Categories cannot have subcategories"));
+    public static DiscordError ChannelCannotHaveParent(int? index = null)
+        => InvalidFormBody(new FormErrors().Add(ParentPath(index), "CHANNEL_PARENT_INVALID", "Categories cannot have subcategories"));
 
     /// <summary>400 <c>50035</c> on <c>parent_id</c>: the category already holds 50 channels (documented limit; field code and message are hypotheses).</summary>
+    /// <param name="index">The index of the offending entry of a batch, or <see langword="null"/> for a single channel.</param>
     /// <returns>The error.</returns>
-    public static DiscordError ChannelParentFull()
-        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_MAX_CHANNELS", "Maximum number of channels in category reached (50)"));
+    public static DiscordError ChannelParentFull(int? index = null)
+        => InvalidFormBody(new FormErrors().Add(ParentPath(index), "CHANNEL_PARENT_MAX_CHANNELS", "Maximum number of channels in category reached (50)"));
+
+    // `parent_id`, or `N.parent_id` for entry N of a batch body (the path the structural validator uses for `N.id`).
+    private static string ParentPath(int? index) => index is { } entry ? $"{entry.ToString(CultureInfo.InvariantCulture)}.parent_id" : "parent_id";
 
     /// <summary>400 <c>50035</c> on <c>topic</c>: longer than the 1024 characters of a channel that is not a forum or media channel. The form is a hypothesis.</summary>
     /// <returns>The error.</returns>
@@ -229,14 +260,18 @@ internal sealed class DiscordError
 
             // Hypotheses, see docs/parity/errors.md: the codes of these field errors are not documented by Discord.
             StateFailureKind.InvalidChannelType => InvalidChannelType(),
-            StateFailureKind.InvalidChannelParent => InvalidChannelParent(),
-            StateFailureKind.ChannelParentNotCategory => ChannelParentNotCategory(),
-            StateFailureKind.ChannelCannotHaveParent => ChannelCannotHaveParent(),
-            StateFailureKind.ChannelParentFull => ChannelParentFull(),
+            StateFailureKind.InvalidChannelParent => InvalidChannelParent(failure.Index),
+            StateFailureKind.ChannelParentNotCategory => ChannelParentNotCategory(failure.Index),
+            StateFailureKind.ChannelCannotHaveParent => ChannelCannotHaveParent(failure.Index),
+            StateFailureKind.ChannelParentFull => ChannelParentFull(failure.Index),
             StateFailureKind.InvalidChannelName => InvalidFormBody(new FormErrors().Add("name", "BASE_TYPE_BAD_LENGTH", "Must be between 1 and 100 in length.")),
             StateFailureKind.InvalidChannelTopic => InvalidChannelTopic(),
             StateFailureKind.InvalidChannelUserLimit => InvalidChannelUserLimit(failure.Limit),
             StateFailureKind.ChannelBitrateTooHigh => BitrateTooHigh(),
+            StateFailureKind.MaxGuildChannels => MaxGuildChannels(),
+            StateFailureKind.TooManyParentChanges => OnlyOneParentChange(),
+            StateFailureKind.InvalidGuildChannelReference => InvalidGuildChannelReference(
+                failure.Field ?? throw new InvalidOperationException("An InvalidGuildChannelReference failure carries its field.")),
 
             // Hypothesis (docs/parity/errors.md): the code of the field error of a reply to a message that does not exist.
             StateFailureKind.UnknownMessageReference => InvalidFormBody(new FormErrors().Add("message_reference", "MESSAGE_REFERENCE_UNKNOWN_MESSAGE", "Unknown message")),
@@ -268,6 +303,8 @@ internal sealed class DiscordError
             (HttpStatusCode.BadRequest, 40058) => CannotSendInForumChannel(),
             (HttpStatusCode.BadRequest, 40033) => MessageAlreadyCrossposted(),
             (HttpStatusCode.BadRequest, 30052) => BitrateTooHigh(),
+            (HttpStatusCode.BadRequest, 30013) => MaxGuildChannels(),
+            (HttpStatusCode.BadRequest, 40009) => OnlyOneParentChange(),
             (HttpStatusCode.NotFound, 10014) => UnknownEmoji(),
             (HttpStatusCode.BadRequest, 30010) => MaxReactionsReached(),
             (HttpStatusCode.NotFound, 10013) => UnknownUser(),

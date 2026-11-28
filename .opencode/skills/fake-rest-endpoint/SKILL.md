@@ -48,6 +48,34 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   porte pas. Entier d'une énumération de la spec : `BASE_TYPE_CHOICES` « Value must be one of (a, b). » (`ChannelValidators.ReadChoice`).
 - Tests d'état qui comptent les salons d'une guilde : `FakeDiscordState.MaxChannelsPerGuild` / `MaxChannelsPerCategory`.
   Un `[Theory]` public ne peut pas prendre un type `internal` (`ChannelKind`…) en paramètre : passer des `int`/`string`.
+- **Famille Guilds** (M1-REST-06) : conventions qui se réutilisent pour les autres routes de guilde (rôles, membres…).
+  - **Réglages d'une ressource en un bloc immuable** : les champs qu'un `PATCH` change et que l'objet porte vivent dans un `record` (`GuildSettings`)
+    tenu par l'entité et rendu par le snapshot (propriété `init`, valeur par défaut : aucun constructeur existant ne change) ; la mise à jour
+    construit le nouveau bloc par `with`, compare à l'ancien (`!=`) et ne publie (`GuildUpdated`) que si quelque chose a changé.
+  - **Champ à trois états dans une entrée d'état** : `Change<T>` (`IsSet`, `Value`) : `default` = non envoyé, `Change<T>.To(null)` = effacer. Pour un `ulong?`
+    écrire `Change<ulong?>` (un `T?` non contraint ne devient pas `Nullable<T>`).
+  - **Réglage qui désigne un autre objet** (un salon d'une guilde) : l'état vérifie l'appartenance et le type **avant toute écriture**
+    (`InvalidGuildChannelReference`, le champ fautif voyage dans `StateFailure.Field`), et la suppression de l'objet visé efface le réglage dans le même commit.
+  - **Lot validé en entier puis appliqué** (`PATCH /guilds/{id}/channels`) : contrôler tous les éléments (existence), puis la règle de lot (`40009`),
+    puis les invariants par élément, **puis** écrire dans l'ordre du tableau ; publier un fait par objet **réellement** différent après le lot
+    (comparer l'état avant/après, premier passage dans l'ordre du tableau), pas un fait par entrée.
+  - **Refus d'un lot indexé** : un refus d'état qui vise l'entrée N d'un corps tableau porte l'indice (`StateFailure.Index`, posé par l'état : `failure with { Index = i }`) et la
+    fabrique `DiscordError` correspondante prend `int? index` pour écrire `N.parent_id` (même chemin que les erreurs structurelles `N.id`).
+  - **Valeur que tout lecteur doit rendre pareil** (REST, futur `GUILD_CREATE`) : la résoudre **dans l'état**, pas dans le `*Wire` (ex. `GuildSnapshot.EffectiveOwnerId` =
+    propriétaire stocké, sinon le bot) ; toute projection d'une guilde passe par `SnapshotOf(guild)` sous le verrou, jamais `guild.ToSnapshot()` directement.
+  - **Corps racine tableau** : `request.Body.TryParseJson` (`50109`), racine non tableau ⇒ `BASE_TYPE_BAD_TYPE` à la racine (`AddBadType(errors, "", "array")`),
+    puis une `errors.Scope("<indice>")` par élément pour que les chemins soient `0.id`, `1.position`.
+  - **Liste de DTO de familles différentes** : une classe-union (`GuildChannelUnion`, une propriété par variante, exactement une renseignée) avec
+    `[JsonConverter]` fermé qui écrit la variante avec `FakeDiscordJsonContext.Default.<Variante>` ; ne pas passer par `object`.
+  - **Réponse 201** : `RestResult.Json(HttpStatusCode.Created, dto, typeInfo)` (`RestResult.Ok` est 200) ; `ChannelWire.ToText/ToVoice/ToCategory/ToForum` sont publics, réutilisables.
+  - **Pièges NetCord** : `GetGuildAsync` écrit la query `?with_counts=True`/`False` (texte de `bool`), pas `true` : lire sans tenir compte de la casse ; un JPEG part en
+    `data:image/jpg;base64,` (pas `jpeg`) : `ImageData.TryGetHash` accepte les deux, ne rien normaliser dans un validateur ; `GuildOptions`/`GuildChannelProperties` n'envoient jamais `null` (tester les
+    `null` par `SendRequestAsync` + corps à la main) ; `ForumLayoutType` NetCord : `NotSet`=0, `ListView`=1, `GalleryView`=2.
+  - **Conformité stricte** : une propriété requise nullable de la spec (`icon`, `description`, `incidents_data`…) s'écrit `null` (pas `WhenWritingNull`) ; seules les propriétés
+    facultatives (`approximate_member_count`) s'omettent. Le type de salon 16 (media) n'est pas dans l'énumération de la spec : un scénario de conformité ne peut pas le
+    créer, le couvrir dans les tests de route.
+  - **Un test qui veut une route non implémentée** ne doit plus prendre une route de la famille Guilds (`GET /guilds/{guild_id}` est implémentée) :
+    `RestTestHarness` a son propre jeu de bindings, mais choisir une route lointaine (`/guilds/{guild_id}/vanity-url`…) pour un test sur `RestRoutes.Bindings`.
 
 ## 3. Handler (`src/Enx.NetCord.Testing/Rest/Routes/<Domaine>/`)
 
@@ -108,7 +136,7 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   `Serialization/`, tous inscrits dans `FakeDiscordJsonContext`, et une méthode de rendu unique (`ChannelWire.RenderGuildChannel`)
   qui choisit le DTO d'après les traits du type ; un champ « présent si défini » est un nullable
   `[JsonIgnore(Condition = WhenWritingNull)]` **sur ce champ seulement** (ADR 0006, règle 4). Les rendus de liste d'une route
-  (M1-REST-06) auront besoin d'un `JsonConverter` fermé (règle 5), pas d'un repli sur `object`.
+  (M1-REST-06) passent par un `JsonConverter` fermé (règle 5, `GuildChannelUnion`), pas par un repli sur `object` : voir « Famille Guilds » plus bas.
 - Erreurs : `DiscordError.*` (404 `10003 Unknown Channel`, 400 `50035 Invalid Form Body`
   avec arbre `errors`, 403 `50013 Missing Permissions`, 401 `0 401: Unauthorized`…). Ajouter
   le code à `docs/parity/errors.md` s'il est nouveau.

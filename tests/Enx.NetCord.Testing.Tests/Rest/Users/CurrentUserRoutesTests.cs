@@ -172,6 +172,20 @@ public sealed class CurrentUserRoutesTests
 
     [Fact]
     [Parity("PATCH /users/@me")]
+    public async Task ModifyCurrentUserAsync_JpegAvatarFromNetCord_IsAccepted()
+    {
+        // NetCord writes a JPEG as `data:image/jpg;base64,` (not `jpeg`): the fake must accept what the real client sends.
+        await using var discord = FakeDiscord.Create();
+        using var rest = discord.CreateRestClient();
+
+        var updated = await rest.ModifyCurrentUserAsync(o => o.Avatar = Image(ImageFormat.Jpeg, 7, 8, 9), cancellationToken: Ct);
+
+        Assert.Matches("^[0-9a-f]{32}$", updated.AvatarHash!);
+        Assert.StartsWith("data:image/jpg;base64,", discord.Recorded.Requests[^1].RequestBody!.Value.GetProperty("avatar").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    [Parity("PATCH /users/@me")]
     public async Task ModifyCurrentUserAsync_NoChange_ReturnsTheUserAndCommitsNothing()
     {
         await using var discord = FakeDiscord.Create();

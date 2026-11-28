@@ -135,7 +135,18 @@ internal sealed record GuildSnapshot(
     string? IconHash,
     string? Description,
     DateTimeOffset CreatedAt,
-    long Ordinal);
+    long Ordinal)
+{
+    /// <summary>Gets the settings a guild update changes (verification level, channels it points to, images…).</summary>
+    internal GuildSettings Settings { get; init; } = GuildSettings.Default;
+
+    /// <summary>
+    /// Gets the owner every reader reports (<c>owner_id</c> of the guild object, REST and Gateway alike): <see cref="OwnerId"/>, else the
+    /// bot (a guild always has an owner, and the fake's guilds are the bot's), else <c>0</c> when the state has no bot identity yet.
+    /// <see cref="OwnerId"/> stays what was stored: <see langword="null"/> when no owner was given.
+    /// </summary>
+    internal ulong EffectiveOwnerId { get; init; }
+}
 
 internal sealed record ChannelSnapshot(
     ulong Id,

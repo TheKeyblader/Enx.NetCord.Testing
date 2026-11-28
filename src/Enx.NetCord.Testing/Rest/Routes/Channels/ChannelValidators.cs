@@ -65,15 +65,15 @@ internal static class ChannelValidators
 
     // The spec's `ChannelTypes` accepted for a guild channel update (UpdateGuildChannelRequestPartial.type).
     // The message of BASE_TYPE_CHOICES lists this enumeration as the spec gives it.
-    private static readonly int[] GuildChannelTypes = [0, 2, 4, 5, 13, 14, 15];
+    internal static readonly int[] GuildChannelTypes = [0, 2, 4, 5, 13, 14, 15];
 
     // Type 16 (media) is described by the docs and typed by NetCord but absent from the spec's enumeration: accepted too (ADR 0013, § 1).
-    private const int MediaChannelType = 16;
+    internal const int MediaChannelType = 16;
 
-    private static readonly int[] VideoQualityModes = [1, 2];
-    private static readonly int[] AutoArchiveDurations = [60, 1440, 4320, 10080];
-    private static readonly int[] SortOrders = [0, 1];
-    private static readonly int[] ForumLayouts = [0, 1, 2];
+    internal static readonly int[] VideoQualityModes = [1, 2];
+    internal static readonly int[] AutoArchiveDurations = [60, 1440, 4320, 10080];
+    internal static readonly int[] SortOrders = [0, 1];
+    internal static readonly int[] ForumLayouts = [0, 1, 2];
     private static readonly string[] TagSettings = ["match_all", "match_some"];
 
     /// <summary>Validates <c>GET</c> and <c>DELETE /channels/{channel_id}</c>: the route parameter must be a snowflake.</summary>
@@ -196,7 +196,7 @@ internal static class ChannelValidators
     }
 
     // An integer enumeration of the spec: a value outside it is BASE_TYPE_CHOICES; absent and null give null.
-    private static int? ReadChoice(JsonElement root, string name, int[] choices, FormErrors errors)
+    internal static int? ReadChoice(JsonElement root, string name, int[] choices, FormErrors errors)
     {
         var value = FormValidation.ReadOptionalInteger(root, name, int.MinValue, int.MaxValue, errors);
         if (value is { } chosen && !choices.Contains(chosen))
@@ -208,13 +208,13 @@ internal static class ChannelValidators
         return value;
     }
 
-    private static void AddChoices(FormErrors errors, string path, int[] choices)
+    internal static void AddChoices(FormErrors errors, string path, int[] choices)
         => errors.Add(
             path,
             "BASE_TYPE_CHOICES",
             $"Value must be one of ({string.Join(", ", choices.Select(choice => choice.ToString(CultureInfo.InvariantCulture)))}).");
 
-    private static void ValidateTagSetting(JsonElement root, FormErrors errors)
+    internal static void ValidateTagSetting(JsonElement root, FormErrors errors)
     {
         var setting = FormValidation.ReadNullableString(root, "default_tag_setting", errors, out _);
         if (setting is not null && !TagSettings.Contains(setting, StringComparer.Ordinal))
@@ -223,7 +223,7 @@ internal static class ChannelValidators
         }
     }
 
-    private static void ValidateDefaultReactionEmoji(JsonElement root, FormErrors errors)
+    internal static void ValidateDefaultReactionEmoji(JsonElement root, FormErrors errors)
     {
         if (FormValidation.TryReadObject(root, "default_reaction_emoji", errors, out var emoji))
         {
@@ -231,7 +231,7 @@ internal static class ChannelValidators
         }
     }
 
-    private static void ValidateAvailableTags(JsonElement root, FormErrors errors)
+    internal static void ValidateAvailableTags(JsonElement root, FormErrors errors)
     {
         if (!FormValidation.TryReadArray(root, "available_tags", errors, out var tags))
         {
