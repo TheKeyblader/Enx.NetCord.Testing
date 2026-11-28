@@ -142,7 +142,7 @@ endroit que l'état, le fil et le seed consultent.
 | 15 | `GUILD_FORUM` | M1, sans tags | forum | textuel | oui | non (`40058`) |
 | 16 | `GUILD_MEDIA` | M1, sans tags | forum | textuel | oui | non (`40058`, hypothèse) |
 | 10, 11, 12 | threads | M4-REST-01 | — | — | salon d'origine | oui |
-| 3 | `GROUP_DM` | M1-REST-02C | — | — | — | oui |
+| 3 | `GROUP_DM` | [ADR 0014](0014-private-channels-dm-and-group-dm.md) (proposée) | privée, comme le DM | — | — | oui |
 | 14 | `GUILD_DIRECTORY` | non modélisé | — | — | — | — |
 
 - **Type 16 retenu** malgré son absence de la spec : les docs le décrivent, NetCord le type, et
