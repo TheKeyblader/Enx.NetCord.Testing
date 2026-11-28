@@ -9,7 +9,7 @@ namespace Enx.NetCord.Testing.Conformance.Rest;
 
 /// <summary>
 /// Channel routes driven through the real NetCord <see cref="RestClient"/>, with every response checked against the OpenAPI contract.
-/// Only the channel kinds the seed offers today (guild text, DM) are covered; extend with the other kinds as the seed grows (M1-REST-02B1).
+/// Guild channels are covered per seedable family on <c>GET</c> (category, text, announcement, voice, stage, forum), the other verbs on text channels and DMs.
 /// </summary>
 [Trait("Category", "Conformance")]
 public sealed class ChannelsConformanceTests
@@ -31,6 +31,32 @@ public sealed class ChannelsConformanceTests
         Assert.Equal(general.Id, text.Id);
         Assert.Equal(guild.Id, text.GuildId);
         Assert.Equal("general", text.Name);
+        ContractAssert.Conforms(discord, "GET /channels/{channel_id}");
+    }
+
+    [Fact]
+    [Parity("GET /channels/{channel_id}")]
+    public async Task GetChannelAsync_EachSeedableGuildChannelFamily_ConformsToGuildChannelResponse()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        var lobby = guild.Category("Lobby");
+        var text = lobby.TextChannel("general", options: new SeededChannelOptions { Topic = "Hello", Slowmode = 5 });
+        var news = lobby.AnnouncementChannel("news");
+        var voice = lobby.VoiceChannel("voice");
+        var stage = lobby.StageChannel("stage");
+        var forum = lobby.ForumChannel("forum");
+        using var rest = discord.CreateRestClient();
+
+        Assert.IsType<CategoryGuildChannel>(await rest.GetChannelAsync(lobby.Id, cancellationToken: Ct));
+        Assert.IsType<TextGuildChannel>(await rest.GetChannelAsync(text.Id, cancellationToken: Ct));
+        Assert.IsType<AnnouncementGuildChannel>(await rest.GetChannelAsync(news.Id, cancellationToken: Ct));
+        Assert.IsType<VoiceGuildChannel>(await rest.GetChannelAsync(voice.Id, cancellationToken: Ct));
+        Assert.IsType<StageGuildChannel>(await rest.GetChannelAsync(stage.Id, cancellationToken: Ct));
+        Assert.IsType<ForumGuildChannel>(await rest.GetChannelAsync(forum.Id, cancellationToken: Ct));
+
+        // One journal entry per family: each response must match exactly one branch of the spec's oneOf.
+        Assert.Equal(6, discord.Recorded.Requests.Count(r => r.Method == "GET" && r.RouteTemplate == "/channels/{channel_id}"));
         ContractAssert.Conforms(discord, "GET /channels/{channel_id}");
     }
 
