@@ -14,9 +14,6 @@ internal sealed partial class FakeDiscordState
 
     private const int ReplyMessageType = 19;
 
-    // ChannelKind has no announcement value until the channel types of ADR 0013; crosspost only works on type 5.
-    private const int AnnouncementChannelType = 5;
-
     private static readonly TimeSpan NonceWindow = TimeSpan.FromMinutes(5);
 
     // enforce_nonce: the message created by an author with a nonce, for the "past few minutes" window.
@@ -415,7 +412,7 @@ internal sealed partial class FakeDiscordState
                 return new StateFailure(StateFailureKind.CannotExecuteInDm, channel.Id);
             }
 
-            if ((int)channel.Kind != AnnouncementChannelType)
+            if (channel.Kind != ChannelKind.GuildAnnouncement)
             {
                 return new StateFailure(StateFailureKind.CannotExecuteOnChannelType, channel.Id);
             }

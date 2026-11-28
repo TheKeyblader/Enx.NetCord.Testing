@@ -4,11 +4,10 @@ namespace Enx.NetCord.Testing;
 /// <remarks>Forum posts arrive with M4-REST-01.</remarks>
 public sealed class SeededForumChannel
 {
-    private readonly FakeDiscord _fake;
-
+    // The fake comes back with the post fixtures (M4-REST-01); the constructor already takes it so the callers do not change then.
     internal SeededForumChannel(FakeDiscord fake, ulong id)
     {
-        _fake = fake;
+        ArgumentNullException.ThrowIfNull(fake);
         Id = id;
     }
 

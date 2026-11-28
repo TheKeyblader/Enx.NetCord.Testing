@@ -4,11 +4,10 @@ namespace Enx.NetCord.Testing;
 /// <remarks>Creating messages in its chat arrives with M1-REST-03B.</remarks>
 public sealed class SeededVoiceChannel
 {
-    private readonly FakeDiscord _fake;
-
+    // The fake comes back with Message (M1-REST-03B); the constructor already takes it so the callers do not change then.
     internal SeededVoiceChannel(FakeDiscord fake, ulong id)
     {
-        _fake = fake;
+        ArgumentNullException.ThrowIfNull(fake);
         Id = id;
     }
 

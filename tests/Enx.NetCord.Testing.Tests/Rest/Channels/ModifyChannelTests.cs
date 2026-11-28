@@ -436,6 +436,26 @@ public sealed class ModifyChannelTests
 
     [Fact]
     [Parity("PATCH /channels/{channel_id}")]
+    public async Task SendRequest_PatchWithType16OnAMediaChannel_IsAcceptedAndLeavesItUnchanged()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        var media = discord.State.CreateGuildChannel(
+            StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildMedia, "gallery")).Value;
+        using var rest = discord.CreateRestClient();
+        using var subscription = discord.State.SubscribeGateway();
+
+        using var json = await ReadJsonAsync(
+            rest.SendRequestAsync(HttpMethod.Patch, Json("""{"type":16}"""), $"/channels/{media.Id}", cancellationToken: Ct),
+            Ct);
+
+        Assert.Equal(16, json.RootElement.GetProperty("type").GetInt32());
+        Assert.Equal("gallery", json.RootElement.GetProperty("name").GetString());
+        Assert.Empty(Drain(subscription));
+    }
+
+    [Fact]
+    [Parity("PATCH /channels/{channel_id}")]
     public async Task ModifyGuildChannelAsync_TopicAndNsfwOnACategoryOrAVoiceChannel_AreIgnoredWithoutAChange()
     {
         await using var discord = FakeDiscord.Create();

@@ -36,7 +36,11 @@ internal static class ChannelValidators
     internal const int MaxRateLimitPerUser = 21600;
 
     // The spec's `ChannelTypes` accepted for a guild channel update (UpdateGuildChannelRequestPartial.type).
+    // The message of BASE_TYPE_CHOICES lists this enumeration as the spec gives it.
     private static readonly int[] GuildChannelTypes = [0, 2, 4, 5, 13, 14, 15];
+
+    // Type 16 (media) is described by the docs and typed by NetCord but absent from the spec's enumeration: accepted too (ADR 0013, § 1).
+    private const int MediaChannelType = 16;
 
     /// <summary>Validates <c>GET</c> and <c>DELETE /channels/{channel_id}</c>: the route parameter must be a snowflake.</summary>
     /// <param name="request">The request.</param>
@@ -90,7 +94,7 @@ internal static class ChannelValidators
             var position = FormValidation.ReadOptionalInteger(root, "position", 0, int.MaxValue, errors);
 
             var type = FormValidation.ReadOptionalInteger(root, "type", int.MinValue, int.MaxValue, errors);
-            if (type is { } typeValue && !GuildChannelTypes.Contains(typeValue))
+            if (type is { } typeValue && typeValue != MediaChannelType && !GuildChannelTypes.Contains(typeValue))
             {
                 errors.Add(
                     "type",

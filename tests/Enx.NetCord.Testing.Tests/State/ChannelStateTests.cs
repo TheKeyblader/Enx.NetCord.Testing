@@ -237,6 +237,28 @@ public sealed class ChannelStateTests
     }
 
     [Fact]
+    public void DeleteChannel_Category_UpdatesChildrenByAscendingIdEvenWhenCreatedInAnotherOrder()
+    {
+        var (state, guild) = NewGuild();
+        var lobby = Create(state, guild.Id, ChannelKind.GuildCategory, "lobby");
+        var created1st = state.CreateGuildChannel(
+            StateCaller.Fixture,
+            new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "late-id", Id: IdAt(Start.AddDays(2)), ParentId: lobby.Id)).Value;
+        var created2nd = state.CreateGuildChannel(
+            StateCaller.Fixture,
+            new CreateGuildChannelInput(guild.Id, ChannelKind.GuildVoice, "early-id", Id: IdAt(Start.AddDays(1)), ParentId: lobby.Id)).Value;
+        using var subscription = state.SubscribeGateway();
+
+        state.DeleteChannel(StateCaller.Fixture, lobby.Id);
+
+        Assert.Collection(
+            Drain(subscription),
+            c => AssertUpdated(c, created2nd.Id),
+            c => AssertUpdated(c, created1st.Id),
+            c => Assert.IsType<ChannelDeleted>(c));
+    }
+
+    [Fact]
     public void DeleteChannel_Category_ChildrenKeepTheirPositionAndMessages()
     {
         var (state, guild) = NewGuild();

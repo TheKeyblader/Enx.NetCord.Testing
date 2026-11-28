@@ -44,7 +44,7 @@ internal sealed partial class FakeDiscordState
 
             if (!Enum.IsDefined(input.Kind) || input.Kind == ChannelKind.Dm)
             {
-                return new StateFailure(StateFailureKind.InvalidChannelType, (ulong)(int)input.Kind);
+                return new StateFailure(StateFailureKind.InvalidChannelType, guild.Id);
             }
 
             var traits = ChannelTraits.Of(input.Kind);
