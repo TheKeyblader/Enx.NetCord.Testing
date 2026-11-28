@@ -15,7 +15,10 @@ internal sealed record CurrentUserPatch(string? Username, bool ChangeAvatar, str
 /// <param name="RecipientId">The recipient of a 1:1 DM, or <see langword="null"/> for a group DM request.</param>
 internal sealed record CreateDmRequest(ulong? RecipientId);
 
-/// <summary>Structural validators of the users routes (ADR 0005, step 3): no state is read.</summary>
+/// <summary>
+/// Structural validators of the users routes (ADR 0005, step 3): no state is read. The generic parts (snowflakes,
+/// JSON object body, typed fields) live in <see cref="FormValidation"/>; only what is specific to users stays here.
+/// </summary>
 internal static class UserValidators
 {
     internal const int UsernameMinLength = 2;
@@ -25,56 +28,27 @@ internal static class UserValidators
     /// <param name="request">The request.</param>
     /// <returns>The parsed user ID as payload, or <c>50035</c>.</returns>
     public static RestValidation ValidateUserId(FakeRestRequest request)
-    {
-        var raw = request.RouteParameters["user_id"];
-        return TryParseSnowflake(raw, out var id)
-            ? RestValidation.Valid(id)
-            : DiscordError.InvalidFormBody(new FormErrors().Add("user_id", "NUMBER_TYPE_COERCE", NotSnowflakeMessage(raw)));
-    }
+        => FormValidation.ValidateRouteSnowflake(request, "user_id");
 
     /// <summary>Validates <c>PATCH /users/@me</c>. All fields are optional, as in Discord's documentation.</summary>
     /// <param name="request">The request.</param>
     /// <returns>A <see cref="CurrentUserPatch"/> payload, or <c>50109</c>/<c>50035</c>.</returns>
     public static RestValidation ValidateCurrentUserPatch(FakeRestRequest request)
     {
-        if (request.Body is null)
+        if (!FormValidation.TryReadJsonObject(request, out var document, out var error))
         {
-            return DiscordError.InvalidJson();
-        }
-
-        if (!request.Body.TryParseJson(out var document, out var parseError))
-        {
-            return parseError;
+            return error;
         }
 
         using (document)
         {
             var root = document.RootElement;
             var errors = new FormErrors();
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return DiscordError.InvalidFormBody(errors.Add(string.Empty, "MODEL_TYPE_CONVERT", "Only dictionaries may be used in a ModelType"));
-            }
 
-            string? username = null;
-            if (root.TryGetProperty("username", out var usernameElement))
+            var username = FormValidation.ReadOptionalString(root, "username", errors);
+            if (username is not null)
             {
-                if (usernameElement.ValueKind != JsonValueKind.String)
-                {
-                    errors.Add("username", "BASE_TYPE_BAD_TYPE", "Value must be of type string.");
-                }
-                else
-                {
-                    username = usernameElement.GetString()!;
-                    var length = username.EnumerateRunes().Count();
-                    if (length is < UsernameMinLength or > UsernameMaxLength)
-                    {
-                        errors.Add(
-                            "username",
-                            "BASE_TYPE_BAD_LENGTH",
-                            $"Must be between {UsernameMinLength} and {UsernameMaxLength} in length.");
-                    }
-                }
+                FormValidation.CheckLength(username, "username", UsernameMinLength, UsernameMaxLength, errors);
             }
 
             var (changeAvatar, avatarHash) = ReadImage(root, "avatar", errors);
@@ -94,31 +68,22 @@ internal static class UserValidators
     /// <returns>A <see cref="CreateDmRequest"/> payload, or <c>50109</c>/<c>50035</c>.</returns>
     public static RestValidation ValidateCreateDm(FakeRestRequest request)
     {
-        if (request.Body is null)
+        if (!FormValidation.TryReadJsonObject(request, out var document, out var error))
         {
-            return DiscordError.InvalidJson();
-        }
-
-        if (!request.Body.TryParseJson(out var document, out var parseError))
-        {
-            return parseError;
+            return error;
         }
 
         using (document)
         {
             var root = document.RootElement;
             var errors = new FormErrors();
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return DiscordError.InvalidFormBody(errors.Add(string.Empty, "MODEL_TYPE_CONVERT", "Only dictionaries may be used in a ModelType"));
-            }
 
             var isGroup = false;
             if (root.TryGetProperty("access_tokens", out var tokens) && tokens.ValueKind != JsonValueKind.Null)
             {
                 if (tokens.ValueKind != JsonValueKind.Array)
                 {
-                    errors.Add("access_tokens", "BASE_TYPE_BAD_TYPE", "Value must be of type array.");
+                    FormValidation.AddBadType(errors, "access_tokens", "array");
                 }
                 else
                 {
@@ -127,7 +92,7 @@ internal static class UserValidators
                     {
                         if (token.ValueKind != JsonValueKind.String)
                         {
-                            errors.Add($"access_tokens.{index.ToString(CultureInfo.InvariantCulture)}", "BASE_TYPE_BAD_TYPE", "Value must be of type string.");
+                            FormValidation.AddBadType(errors, $"access_tokens.{index.ToString(CultureInfo.InvariantCulture)}", "string");
                         }
 
                         index++;
@@ -140,7 +105,7 @@ internal static class UserValidators
 
             if (root.TryGetProperty("nicks", out var nicks) && nicks.ValueKind is not (JsonValueKind.Null or JsonValueKind.Object))
             {
-                errors.Add("nicks", "BASE_TYPE_BAD_TYPE", "Value must be of type object.");
+                FormValidation.AddBadType(errors, "nicks", "object");
             }
 
             ulong? recipientId = null;
@@ -148,24 +113,11 @@ internal static class UserValidators
             {
                 if (!root.TryGetProperty("recipient_id", out var recipient) || recipient.ValueKind == JsonValueKind.Null)
                 {
-                    errors.Add("recipient_id", "BASE_TYPE_REQUIRED", "This field is required");
+                    FormValidation.AddRequired(errors, "recipient_id");
                 }
-                else
+                else if (FormValidation.TryReadSnowflake(recipient, "recipient_id", errors, out var id))
                 {
-                    var raw = recipient.ValueKind switch
-                    {
-                        JsonValueKind.String => recipient.GetString()!,
-                        JsonValueKind.Number => recipient.GetRawText(),
-                        _ => null,
-                    };
-                    if (raw is not null && TryParseSnowflake(raw, out var id))
-                    {
-                        recipientId = id;
-                    }
-                    else
-                    {
-                        errors.Add("recipient_id", "NUMBER_TYPE_COERCE", NotSnowflakeMessage(raw ?? recipient.GetRawText()));
-                    }
+                    recipientId = id;
                 }
             }
 
@@ -197,13 +149,8 @@ internal static class UserValidators
                 return (false, null);
 
             default:
-                errors.Add(name, "BASE_TYPE_BAD_TYPE", "Value must be of type string.");
+                FormValidation.AddBadType(errors, name, "string");
                 return (false, null);
         }
     }
-
-    private static bool TryParseSnowflake(string raw, out ulong id)
-        => ulong.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out id);
-
-    private static string NotSnowflakeMessage(string raw) => $"Value \"{raw}\" is not snowflake.";
 }
