@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace Enx.NetCord.Testing.State;
 
 /// <summary>
@@ -47,4 +49,8 @@ internal sealed record MessageEdited(
     MemberSnapshot? AuthorMember) : StateChange(Number);
 
 internal sealed record MessageDeleted(long Number, ulong? GuildId, ulong ChannelId, ulong MessageId)
+    : StateChange(Number);
+
+/// <summary>Several messages of one channel were deleted at once (the Gateway turns it into <c>MESSAGE_DELETE_BULK</c>).</summary>
+internal sealed record MessagesBulkDeleted(long Number, ulong? GuildId, ulong ChannelId, ImmutableArray<ulong> MessageIds)
     : StateChange(Number);

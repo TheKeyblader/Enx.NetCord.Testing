@@ -71,6 +71,26 @@ internal sealed class DiscordError
     /// <returns>The error.</returns>
     public static DiscordError InvalidOAuth2AccessToken() => new(HttpStatusCode.Forbidden, 50025, "Invalid OAuth2 access token provided");
 
+    /// <summary>403 with code 50003: the action is not available in a DM channel.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError CannotExecuteOnDm() => new(HttpStatusCode.Forbidden, 50003, "Cannot execute action on a DM channel");
+
+    /// <summary>403 with code 50005: the bot edits the content of a message another user wrote.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError CannotEditOtherAuthor() => new(HttpStatusCode.Forbidden, 50005, "Cannot edit a message authored by another user");
+
+    /// <summary>400 with code 50006: the message would have neither content, embed nor attachment.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError EmptyMessage() => new(HttpStatusCode.BadRequest, 50006, "Cannot send an empty message");
+
+    /// <summary>400 with code 50024: the action does not apply to this type of channel.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError CannotExecuteOnChannelType() => new(HttpStatusCode.BadRequest, 50024, "Cannot execute action on this channel type");
+
+    /// <summary>400 with code 50034: a message named by a bulk delete is older than two weeks.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError MessageTooOldToBulkDelete() => new(HttpStatusCode.BadRequest, 50034, "You can only bulk delete messages that are under 14 days old.");
+
     /// <summary>403 with code 50013.</summary>
     /// <returns>The error.</returns>
     public static DiscordError MissingPermissions() => new(HttpStatusCode.Forbidden, 50013, "Missing Permissions");
@@ -117,11 +137,19 @@ internal sealed class DiscordError
             StateFailureKind.UnknownMessage => UnknownMessage(),
             StateFailureKind.UnknownUser => UnknownUser(),
             StateFailureKind.MissingAccess => MissingAccess(),
+            StateFailureKind.CannotEditOtherAuthor => CannotEditOtherAuthor(),
+            StateFailureKind.EmptyMessage => EmptyMessage(),
+            StateFailureKind.MessageTooOldForBulkDelete => MessageTooOldToBulkDelete(),
+            StateFailureKind.CannotExecuteInDm => CannotExecuteOnDm(),
+            StateFailureKind.CannotExecuteOnChannelType => CannotExecuteOnChannelType(),
 
             // Hypotheses, see docs/parity/errors.md: the codes of these two field errors are not documented by Discord.
             StateFailureKind.InvalidChannelType => InvalidFormBody(new FormErrors().Add("type", "CHANNEL_TYPE_INVALID", "Invalid channel type.")),
             StateFailureKind.InvalidChannelParent => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID", "Invalid parent channel.")),
             StateFailureKind.InvalidChannelName => InvalidFormBody(new FormErrors().Add("name", "BASE_TYPE_BAD_LENGTH", "Must be between 1 and 100 in length.")),
+
+            // Hypothesis (docs/parity/errors.md): the code of the field error of a reply to a message that does not exist.
+            StateFailureKind.UnknownMessageReference => InvalidFormBody(new FormErrors().Add("message_reference", "MESSAGE_REFERENCE_UNKNOWN_MESSAGE", "Unknown message")),
             _ => throw new NotSupportedException($"The state failure {failure.Kind} has no catalog error yet."),
         };
 
@@ -141,6 +169,11 @@ internal sealed class DiscordError
             (HttpStatusCode.NotFound, 10004) => UnknownGuild(),
             (HttpStatusCode.Forbidden, 50001) => MissingAccess(),
             (HttpStatusCode.NotFound, 10008) => UnknownMessage(),
+            (HttpStatusCode.Forbidden, 50003) => CannotExecuteOnDm(),
+            (HttpStatusCode.Forbidden, 50005) => CannotEditOtherAuthor(),
+            (HttpStatusCode.BadRequest, 50006) => EmptyMessage(),
+            (HttpStatusCode.BadRequest, 50024) => CannotExecuteOnChannelType(),
+            (HttpStatusCode.BadRequest, 50034) => MessageTooOldToBulkDelete(),
             (HttpStatusCode.NotFound, 10013) => UnknownUser(),
             (HttpStatusCode.Forbidden, 50025) => InvalidOAuth2AccessToken(),
             (HttpStatusCode.InternalServerError, 0) => InternalServerError(),

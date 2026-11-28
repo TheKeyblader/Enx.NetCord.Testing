@@ -78,4 +78,26 @@ internal sealed record CreateMessageInput(
     bool Tts = false,
     bool Pinned = false,
     int Type = 0,
-    int Flags = 0);
+    int Flags = 0,
+    IReadOnlyList<EmbedValue>? Embeds = null,
+    IReadOnlyList<NewAttachment>? Attachments = null,
+    AllowedMentionsValue? AllowedMentions = null,
+    MessageReferenceInput? Reference = null,
+    string? Nonce = null,
+    bool EnforceNonce = false);
+
+// A partial message edit: null means "unchanged", except for the content, where ChangeContent distinguishes an absent
+// content from a null one (which clears it). Embeds is the complete new list when set (empty clears). RetainedAttachmentIds
+// lists the existing attachments to keep (null keeps all); NewAttachments are appended, as Discord appends uploaded files.
+// Flags is the requested bitfield: only the bits a user may change are applied. AllowedMentions drives the rebuild of the
+// mentions when the content changes.
+internal sealed record EditMessageInput(
+    ulong ChannelId,
+    ulong MessageId,
+    bool ChangeContent = false,
+    string? Content = null,
+    IReadOnlyList<EmbedValue>? Embeds = null,
+    int? Flags = null,
+    AllowedMentionsValue? AllowedMentions = null,
+    IReadOnlyList<ulong>? RetainedAttachmentIds = null,
+    IReadOnlyList<NewAttachment>? NewAttachments = null);
