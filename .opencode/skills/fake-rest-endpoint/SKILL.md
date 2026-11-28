@@ -78,7 +78,7 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
     `RestTestHarness` a son propre jeu de bindings, mais choisir une route lointaine (`/guilds/{guild_id}/vanity-url`…) pour un test sur `RestRoutes.Bindings`.
 - **Famille Members** (M1-REST-07) : conventions pour une sous-ressource de guilde indexée par utilisateur (rôles, bans, futurs `members/@me`).
   - **Une seule résolution** : `ResolveMember(caller, guildId, userId)` (`FakeDiscordState.Members.cs`) enchaîne `GuildAccess` (profil `Denied`) puis le membre
-    (`UnknownMember` `10007`, que l'utilisateur existe ou non) ; toutes les opérations de la famille l'appellent sous le verrou, jamais `_members` directement.
+    (`UnknownUser` `10013` si le fake ne connaît pas l'utilisateur, puis `UnknownMember` `10007` s'il existe sans être membre ; ordre à confirmer UR-019) ; toutes les opérations de la famille l'appellent sous le verrou, jamais `_members` directement.
     Un handler reçoit des `MemberDetails` (membre **et** utilisateur, détachés) car le JSON d'un membre porte `user`.
   - **Faits** : `MemberUpdated` (nick, rôles, timeout, profil) et `MemberRemoved` (le membre tel qu'il était + l'utilisateur) à côté de `MemberAdded` ; comme pour une guilde,
     un `PATCH` ne publie que si une valeur **change** (comparer avant d'écrire ; liste de rôles comparée comme **ensemble**) ; un `PUT`/`DELETE` de rôle déjà dans l'état voulu
@@ -88,6 +88,8 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
     (`@me`, `search`) sont inventoriées à côté de `{user_id}` : le littéral prime, rien à faire. Une réponse commune à deux schémas de la spec (`GuildMemberResponse`,
     `PrivateGuildMemberResponse`) = un DTO sans les propriétés facultatives en trop (le mode strict ne les exige pas).
   - **Défaut de pagination documenté mais que NetCord n'utilise pas** : la doc donne `limit` = 1 par défaut (`list`, `search`) alors que NetCord envoie toujours `limit` ; implémenter le défaut de la doc et le tester par `SendRequestAsync` brut.
+  - **Date-time ISO 8601** (corps ou query) : `FormValidation.TryReadDateTime(raw, path, errors, out value)` (formats ISO stricts, sans offset = UTC, `DATE_TYPE_PARSE` sinon ; refuse `12/25/2026`), jamais `DateTimeOffset.Parse`.
+  - **Route dont le seul succès possible est « déjà fait »** (`PUT …/members/{user_id}` sans OAuth2) : répondre le 204 documenté pour l'état déjà atteint, puis l'erreur du catalogue ; le dire dans la ligne de parité.
   - **Image de guilde** (`avatar`/`banner` d'un membre) : réutiliser `GuildValidators.ReadImage` (interne, `Change<string>` avec hash dérivé) plutôt que d'en écrire un second.
   - **Protéger le bot et le propriétaire** (`DELETE …/members/{user_id}`, timeout) : `StateFailureKind.MissingPermissions` (`50013`) **sans calcul de permissions** ; le test d'état attendu « un kind sans entrée du catalogue
     lève `NotSupportedException` » (`DiscordErrorTests`) prend un kind qui n'a toujours pas d'entrée (`MemberAlreadyExists`) : le changer quand on le catalogue.
@@ -195,6 +197,19 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   (`10014`) à l'étape structurelle ; une table d'emojis unicode n'existe pas, la règle est « un caractère non ASCII, pas de lettre ASCII ni
   de blanc ». Un test qui envoie un segment brut par `SendRequestAsync` passe un littéral interpolé (NetCord l'encode ; `%` et `:` sont
   encodés, donc on ne peut pas simuler un pourcentage mal formé par ce chemin).
+- **Pins et typing** (M1-REST-05) : conventions qui se réutilisent pour une sous-ressource à horodatage ou un fait sans état.
+  - **Horodatage que NetCord repagine** : `GET …/messages/pins` est paginé par NetCord avec `before` écrit à la **seconde** (`ToString("s")`, sans offset ⇒
+    lu en UTC par `DateTimeStyles.AssumeUniversal`). `pinned_at` est donc coupé à la seconde et strictement croissant par salon (`NextPinTime` : une seconde de plus
+    que `ChannelEntity.LastPinTimestamp` si l'horloge n'a pas avancé) ; sinon deux pins de la même seconde (toujours le cas avec l'horloge virtuelle figée) seraient perdus à la
+    page suivante. Tout autre curseur horodaté NetCord doit être vérifié dans `RestClient.*.cs` (format de `AppendQueryParameter`) avant de choisir la précision.
+  - **Message système créé par une opération** (pin ⇒ type 6, `message_reference` vers le message épinglé, contenu vide, auteur = l'appelant) : construit **dans** l'opération d'état, sous le
+    même verrou, sans passer par `CreateMessage` (qui ajouterait mentions et type 19 de réponse) ; il compte dans `last_message_id`. Faits dans l'ordre : `MessageEdited`, `ChannelPinsUpdated`, `MessageCreated`.
+  - **Opération sans mutation qui publie un fait** (`TriggerTyping` ⇒ `TypingStarted`) : permise sans changement structurel de l'état (`NextChangeNumber()` + `Publish`) ; ne rien stocker si Discord n'expose rien à relire.
+  - **Idempotence** : `PUT` d'un fait déjà vrai et `DELETE` d'un fait déjà faux rendent `204` sans fait publié (`StateResult<bool>` `false`) ; la limite (`30003`) se contrôle **après** l'idempotence.
+  - Un salon sans chat (catégorie, forum, media) : les routes qui **listent** ou **déclenchent** (`GET …/pins`, `POST …/typing`) rendent `50024` ; celles qui visent **un message** (`PUT`/`DELETE …/pins/{message_id}`) rendent `10008`.
+  - **Nom NetCord** : `RestMessage.IsPinned` (pas `Pinned`) ; `GetChannelPinsAsync` prend `paginationProperties` (`BatchSize`) et, comme les autres lecteurs paginés, `cancellationToken: Ct` doit être nommé (xUnit1051). Pour semer un message déjà épinglé :
+    `discord.State.CreateMessage(StateCaller.Fixture, new CreateMessageInput(channel, author, "x", Pinned: true))` (aucune API de seed publique, UR-015) ; un DM : `discord.State.GetOrCreateDmChannel(new CreateDmChannelInput(userId))`.
+  - **Un champ de salon alimenté par une autre famille** (`last_pin_timestamp`) : `ChannelEntity` → `ChannelSnapshot` (propriété `init`) → `ChannelWire.ToText/ToVoice` et `UserWire.ToDmChannel` ; NetCord ne l'expose pas sur ses types de salon REST, le lire par `GetRawAsync`.
 - En-têtes rate limit (`X-RateLimit-Limit/Remaining/Reset/Reset-After/Bucket`) via le
   middleware commun ; ne pas les écrire dans le handler.
 - `204 No Content` quand Discord le fait (DELETE, PUT réaction…).

@@ -71,18 +71,19 @@ internal sealed partial class FakeDiscordState
     }
 
     /// <summary>
-    /// Checks that a caller may reach the members of a guild, for an operation that refuses before it needs a member
-    /// (<c>PUT /guilds/{guild_id}/members/{user_id}</c>, which cannot validate an OAuth2 token yet).
+    /// Checks the guild and whether a user is already in it, for <c>PUT /guilds/{guild_id}/members/{user_id}</c>, which cannot
+    /// validate an OAuth2 token yet and so can only answer for a user who is already a member.
     /// </summary>
     /// <param name="caller">The caller.</param>
     /// <param name="guildId">The guild ID.</param>
-    /// <returns>Success, <see cref="StateFailureKind.UnknownGuild"/> or <see cref="StateFailureKind.MissingAccess"/>.</returns>
-    internal StateResult<bool> CheckGuildMemberAccess(StateCaller caller, ulong guildId)
+    /// <param name="userId">The user ID.</param>
+    /// <returns>Whether the user is already a member, <see cref="StateFailureKind.UnknownGuild"/> or <see cref="StateFailureKind.MissingAccess"/>.</returns>
+    internal StateResult<bool> IsGuildMember(StateCaller caller, ulong guildId, ulong userId)
     {
         lock (_gate)
         {
             var access = _access.ResolveGuild(caller, guildId, GuildAccessProfile.Denied);
-            return access.IsSuccess ? true : access.Failure;
+            return access.IsSuccess ? _members.ContainsKey((guildId, userId)) : access.Failure;
         }
     }
 
@@ -318,7 +319,10 @@ internal sealed partial class FakeDiscordState
         }
     }
 
-    /// <summary>Resolves the guild for a caller (the bot must be in it) then one of its members. Call only under the lock.</summary>
+    /// <summary>
+    /// Resolves the guild for a caller (the bot must be in it) then one of its members: <see cref="StateFailureKind.UnknownUser"/> when the
+    /// user does not exist, <see cref="StateFailureKind.UnknownMember"/> when they exist without being a member. Call only under the lock.
+    /// </summary>
     private StateResult<MemberEntity> ResolveMember(StateCaller caller, ulong guildId, ulong userId)
     {
         var access = _access.ResolveGuild(caller, guildId, GuildAccessProfile.Denied);
@@ -327,9 +331,14 @@ internal sealed partial class FakeDiscordState
             return access.Failure;
         }
 
-        return _members.TryGetValue((guild.Id, userId), out var member)
-            ? member
-            : new StateFailure(StateFailureKind.UnknownMember, userId);
+        if (_members.TryGetValue((guild.Id, userId), out var member))
+        {
+            return member;
+        }
+
+        // A user the fake has never heard of is `10013`, as for GET /users/{user_id}; a known user who is not in the guild is `10007`
+        // (the order is a hypothesis, see docs/parity/errors.md).
+        return new StateFailure(_users.ContainsKey(userId) ? StateFailureKind.UnknownMember : StateFailureKind.UnknownUser, userId);
     }
 
     private MemberDetails DetailsOf(MemberEntity member) => new(member.ToSnapshot(), _users[member.UserId].ToSnapshot());

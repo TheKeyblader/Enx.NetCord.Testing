@@ -40,11 +40,27 @@ public sealed class MembersConformanceTests
     {
         await using var discord = FakeDiscord.Create();
         var guild = discord.Seed.Guild("Test");
+        var stranger = discord.Seed.User("stranger");
+        using var rest = discord.CreateRestClient();
+
+        var exception = await Assert.ThrowsAsync<RestException>(() => rest.GetGuildUserAsync(guild.Id, stranger, cancellationToken: Ct));
+
+        Assert.Equal((HttpStatusCode.NotFound, 10007), (exception.StatusCode, exception.Error!.Code));
+        ContractAssert.Conforms(discord, "GET /guilds/{guild_id}/members/{user_id}");
+    }
+
+    [Fact]
+    [Parity("GET /guilds/{guild_id}/members/{user_id}")]
+    [Parity("10013")]
+    public async Task GetGuildUserAsync_UserThatDoesNotExist_Returns10013WithTheDiscordErrorEnvelope()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
         using var rest = discord.CreateRestClient();
 
         var exception = await Assert.ThrowsAsync<RestException>(() => rest.GetGuildUserAsync(guild.Id, 424242, cancellationToken: Ct));
 
-        Assert.Equal((HttpStatusCode.NotFound, 10007), (exception.StatusCode, exception.Error!.Code));
+        Assert.Equal((HttpStatusCode.NotFound, 10013), (exception.StatusCode, exception.Error!.Code));
         ContractAssert.Conforms(discord, "GET /guilds/{guild_id}/members/{user_id}");
     }
 

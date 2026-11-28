@@ -58,11 +58,17 @@ internal static class MemberRoutes
 
     private static RestResult AddMember(FakeRestRequest request)
     {
-        // Discord adds the user named by an OAuth2 access token granted with `guilds.join`. The fake has no OAuth2 grants, so no
-        // token it could be given is valid; the guild is still checked first, as for any other member route.
+        // Discord adds the user named by an OAuth2 access token granted with `guilds.join`, or answers 204 when they are already a
+        // member (guild.mdx). The fake has no OAuth2 grants, so no token it could be given is valid: after the guild check, only the
+        // already-a-member case can succeed, and it does not look at the token.
         var route = request.GetPayload<MemberRoute>();
-        var access = request.State.CheckGuildMemberAccess(StateCaller.Bot, route.GuildId);
-        return access.IsSuccess ? DiscordError.InvalidOAuth2AccessToken() : DiscordError.FromStateFailure(access.Failure);
+        var membership = request.State.IsGuildMember(StateCaller.Bot, route.GuildId, route.UserId);
+        if (!membership.TryGetValue(out var alreadyMember))
+        {
+            return DiscordError.FromStateFailure(membership.Failure);
+        }
+
+        return alreadyMember ? RestResult.NoContent() : DiscordError.InvalidOAuth2AccessToken();
     }
 
     private static RestResult RemoveMember(FakeRestRequest request)

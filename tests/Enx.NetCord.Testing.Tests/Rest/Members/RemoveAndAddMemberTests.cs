@@ -137,6 +137,44 @@ public sealed class RemoveAndAddMemberTests
 
     [Fact]
     [Parity("PUT /guilds/{guild_id}/members/{user_id}")]
+    public async Task AddGuildUserAsync_UserAlreadyAMember_Returns204WithoutLookingAtTheTokenOrChangingAnything()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        var alice = guild.Member("alice");
+        using var rest = discord.CreateRestClient();
+        using var subscription = discord.State.SubscribeGateway();
+
+        var added = await rest.AddGuildUserAsync(guild.Id, alice, new GuildUserProperties("bogus") { Nickname = "Other" }, cancellationToken: Ct);
+
+        Assert.Null(added); // NetCord reads the empty 204 body as "was already a member"
+        Assert.Equal(HttpStatusCode.NoContent, discord.Recorded.Requests[0].StatusCode);
+        Assert.Null(discord.State.FindMember(guild.Id, alice)!.Nick);
+        Assert.Empty(Drain(subscription));
+    }
+
+    [Fact]
+    [Parity("GET /guilds/{guild_id}/members/{user_id}")]
+    [Parity("PATCH /guilds/{guild_id}/members/{user_id}")]
+    [Parity("DELETE /guilds/{guild_id}/members/{user_id}")]
+    [Parity("10013")]
+    public async Task MemberRoutes_UserThatDoesNotExist_Return10013()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        using var rest = discord.CreateRestClient();
+
+        var patch = await Assert.ThrowsAsync<RestException>(() => rest.ModifyGuildUserAsync(guild.Id, 424242, o => o.Nickname = "x", cancellationToken: Ct));
+        var kick = await Assert.ThrowsAsync<RestException>(() => rest.KickGuildUserAsync(guild.Id, 424242, cancellationToken: Ct));
+        var role = await Assert.ThrowsAsync<RestException>(() => rest.AddGuildUserRoleAsync(guild.Id, 424242, guild.Role("R"), cancellationToken: Ct));
+
+        AssertError(patch, HttpStatusCode.NotFound, 10013);
+        AssertError(kick, HttpStatusCode.NotFound, 10013);
+        AssertError(role, HttpStatusCode.NotFound, 10013);
+    }
+
+    [Fact]
+    [Parity("PUT /guilds/{guild_id}/members/{user_id}")]
     [Parity("10004")]
     [Parity("50001")]
     public async Task AddGuildUserAsync_UnknownGuildAndGuildWithoutTheBot_Return10004And50001()

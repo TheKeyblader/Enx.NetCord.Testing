@@ -69,7 +69,8 @@ public sealed class ReadMembersTests
     [Fact]
     [Parity("GET /guilds/{guild_id}/members/{user_id}")]
     [Parity("10007")]
-    public async Task GetGuildUserAsync_UserThatIsNotAMember_Returns10007()
+    [Parity("10013")]
+    public async Task GetGuildUserAsync_UserThatIsNotAMemberOrDoesNotExist_Returns10007Or10013()
     {
         await using var discord = FakeDiscord.Create();
         var guild = discord.Seed.Guild("Test");
@@ -80,7 +81,7 @@ public sealed class ReadMembersTests
         var unknownUser = await Assert.ThrowsAsync<RestException>(() => rest.GetGuildUserAsync(guild.Id, 424242, cancellationToken: Ct));
 
         AssertError(notMember, HttpStatusCode.NotFound, 10007);
-        AssertError(unknownUser, HttpStatusCode.NotFound, 10007);
+        AssertError(unknownUser, HttpStatusCode.NotFound, 10013);
         Assert.Equal("Unknown Member", notMember.Error!.Message);
     }
 

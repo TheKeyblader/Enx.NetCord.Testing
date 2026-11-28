@@ -89,6 +89,12 @@ internal sealed partial class FakeDiscordState
                 }
             }
 
+            if (input.Pinned && CountPins(channel.Id) >= MaxPinsPerChannel)
+            {
+                // A seeded message cannot exceed the limit either, whoever asks.
+                return new StateFailure(StateFailureKind.MaxPins, channel.Id);
+            }
+
             var id = ResolveNewId(input.Id, now);
             _assigned.Add(id);
             var attachments = AllocateAttachments(input.Attachments, now);
@@ -97,7 +103,7 @@ internal sealed partial class FakeDiscordState
             {
                 Content = input.Content,
                 Tts = input.Tts,
-                Pinned = input.Pinned,
+                PinnedAt = input.Pinned ? NextPinTime(channel, now) : null,
                 Type = reference is not null && input.Type == 0 ? ReplyMessageType : input.Type,
                 Flags = input.Flags,
                 Reference = reference,
@@ -110,6 +116,10 @@ internal sealed partial class FakeDiscordState
 
             message.Attachments.AddRange(attachments);
             ApplyMentions(message, input.Content, channel.GuildId, input.AllowedMentions, referenced?.AuthorId);
+            if (message.PinnedAt is { } pinnedAt)
+            {
+                channel.LastPinTimestamp = pinnedAt;
+            }
 
             _messages.Add(id, message);
             channel.MessageIds.Add(id);

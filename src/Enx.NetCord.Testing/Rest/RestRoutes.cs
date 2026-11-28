@@ -2,7 +2,9 @@ using Enx.NetCord.Testing.Rest.Routes.Channels;
 using Enx.NetCord.Testing.Rest.Routes.Guilds;
 using Enx.NetCord.Testing.Rest.Routes.Members;
 using Enx.NetCord.Testing.Rest.Routes.Messages;
+using Enx.NetCord.Testing.Rest.Routes.Pins;
 using Enx.NetCord.Testing.Rest.Routes.Reactions;
+using Enx.NetCord.Testing.Rest.Routes.Typing;
 using Enx.NetCord.Testing.Rest.Routes.Users;
 
 namespace Enx.NetCord.Testing.Rest;
@@ -22,5 +24,7 @@ internal static class RestRoutes
         .. MessageRoutes.Bindings,
         .. ReactionRoutes.Bindings,
         .. MemberRoutes.Bindings,
+        .. PinRoutes.Bindings,
+        .. TypingRoutes.Bindings,
     ];
 }

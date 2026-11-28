@@ -249,14 +249,9 @@ internal static class MemberValidators
                 return Change<DateTimeOffset?>.To(null);
 
             case JsonValueKind.String:
-                var raw = element.GetString()!;
-                if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
-                {
-                    return Change<DateTimeOffset?>.To(parsed.ToUniversalTime());
-                }
-
-                errors.Add("communication_disabled_until", "DATE_TIME_TYPE_PARSE", $"Could not parse {raw}. Should be ISO8601.");
-                return default;
+                return FormValidation.TryReadDateTime(element.GetString()!, "communication_disabled_until", errors, out var parsed)
+                    ? Change<DateTimeOffset?>.To(parsed)
+                    : default;
 
             default:
                 FormValidation.AddBadType(errors, "communication_disabled_until", "string");

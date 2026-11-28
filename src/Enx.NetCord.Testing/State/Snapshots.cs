@@ -168,6 +168,9 @@ internal sealed record ChannelSnapshot(
     DateTimeOffset CreatedAt,
     long Ordinal)
 {
+    /// <summary>Gets when the most recent message was pinned in the channel, or <see langword="null"/> when none was.</summary>
+    internal DateTimeOffset? LastPinTimestamp { get; init; }
+
     /// <summary>Gets what applies to this channel's kind.</summary>
     internal ChannelTraits Traits => ChannelTraits.Of(Kind);
 }
