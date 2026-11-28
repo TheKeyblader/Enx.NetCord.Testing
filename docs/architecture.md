@@ -138,9 +138,30 @@
 
 ### Services (package dédié)
 
-- `FakeDiscordServicesBuilder` : ajoute modules / délégués minimal API, enregistre les commandes
-  (`ApplicationCommandService.CreateCommandsAsync` contre le fake), exécute avec le bon contexte
-  NetCord (Gateway ou Http), retourne `IExecutionResult` + `InteractionResult`.
+- [ADR 0008 — Harnais NetCord.Services](adr/0008-services-harness.md) (Proposée) :
+  `discord.Services()` rend un `FakeDiscordServicesBuilder`. Le test construit ses services
+  NetCord comme son bot (`AddModule<T>`, builders de délégués, configuration) et passe les
+  **instances** : `AddApplicationCommands(service)`, `AddComponentInteractions(service)`. Le
+  harnais compose les requêtes de l'ADR 0007 par l'API publique du cœur ; il n'a ni second
+  modèle d'interaction, ni accès interne, ni réflexion.
+- Le type de contexte fixe le transport du harnais : contexte à `GatewayClient` ⇒ transport
+  `Gateway`, contexte `Http…` ⇒ transport `Http`, un seul par harnais. Les contextes de NetCord
+  sont reconnus par une table statique ; un contexte propre passe par une fabrique
+  `(interaction, client, services)`.
+- Le harnais crée et possède son client : `discord.CreateGatewayClient()` (ajout au cœur
+  demandé par l'ADR 0008 : REST branché sur le fake, client non démarrable avant M3) ou
+  `discord.CreateRestClient()`. Le provider vient du test (`UseServices`), qui en reste
+  propriétaire ; un scope est créé par exécution si le provider en fournit.
+- `BuildAsync()` enregistre les commandes avec le vrai NetCord : un
+  `ApplicationCommandServiceManager` et un seul `RegisterCommandsAsync`, global par défaut ou
+  dans une guilde (`RegisterCommandsInGuild`), donc un `PUT` sur le registre de M2-07.
+- `bot.ExecuteAsync(request)` route l'interaction vers le service inscrit pour son type, puis
+  rend un `ServiceExecutionResult` : `Execution` (l'`IExecutionResult` de NetCord) et
+  `Interaction` (l'`InteractionResult`). Un `IFailResult` est rendu sans que le harnais réponde
+  à l'utilisateur ; une exception du module est relancée telle quelle.
+- Hors périmètre du harnais : le pipeline de `NetCord.Hosting.Services` (pré-exécution, *result
+  handler*, `host.AddSlashCommand`), testé avec le vrai host en M5, et les commandes texte, qui
+  passent par un `MESSAGE_CREATE` de la Gateway (M3).
 
 ### Hosting (package dédié)
 
