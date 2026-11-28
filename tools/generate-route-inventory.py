@@ -6,8 +6,8 @@ Usage:
         [src/Enx.NetCord.Testing/Rest/RouteInventory.g.cs]
 
 The tool runs offline, outside the build, and its output is checked in. Only
-(method, template, operationId, security alternatives) are kept: the fake never reads the
-spec at runtime (ADR 0005). OAuth2 scopes are deliberately dropped because the fake does not
+(method, template, operationId, security alternatives) and the names of the path parameters
+typed SnowflakeType (ADR 0012) are kept: the fake never reads the spec at runtime (ADR 0005). OAuth2 scopes are deliberately dropped because the fake does not
 model Bearer identities yet. Re-run it during /parity/sync and diff the result.
 """
 
@@ -35,6 +35,38 @@ def security_flags(operation, key):
                 raise SystemExit(f"{key}: unknown security scheme {scheme}")
     ordered = [name for name in ("Bot", "OAuth2", "Anonymous") if name in flags]
     return " | ".join(f"RouteSecurity.{name}" for name in ordered)
+
+
+SNOWFLAKE_REF = "#/components/schemas/SnowflakeType"
+
+
+def snowflake_path_parameters(spec):
+    """Returns the sorted names of the path parameters the spec types as SnowflakeType.
+
+    Parameters may be declared on the path item or on an operation. The assertions of the
+    fake validate the shape of a concrete value by parameter name (ADR 0012), so a name that
+    is a Snowflake on one path and something else on another cannot be classified and aborts
+    the generation.
+    """
+    kinds = {}
+    for template, item in spec["paths"].items():
+        declared = list(item.get("parameters", []))
+        for method in METHODS:
+            operation = item.get(method)
+            if operation is not None:
+                declared += operation.get("parameters", [])
+        for parameter in declared:
+            if "$ref" in parameter:
+                raise SystemExit(f"{template}: parameter references are not supported")
+            if parameter["in"] != "path":
+                continue
+            is_snowflake = parameter["schema"].get("$ref") == SNOWFLAKE_REF
+            name = parameter["name"]
+            if kinds.setdefault(name, is_snowflake) != is_snowflake:
+                raise SystemExit(
+                    f"{template}: path parameter '{name}' is a Snowflake on some paths and not on others"
+                )
+    return sorted(name for name, is_snowflake in kinds.items() if is_snowflake)
 
 
 def main():
@@ -88,6 +120,14 @@ def main():
         lines.append(
             f'        new("{method}", "{template}", "{operation_id}", {security}),'
         )
+    lines += ["    ];", ""]
+    lines += [
+        "    /// <summary>Path parameter names the specification types as <c>SnowflakeType</c>.</summary>",
+        "    internal static readonly string[] SnowflakeParameters =",
+        "    [",
+    ]
+    for name in snowflake_path_parameters(spec):
+        lines.append(f'        "{name}",')
     lines += ["    ];", "}", ""]
 
     with open(output, "w", encoding="utf-8", newline="\n") as handle:
