@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -15,10 +16,21 @@ namespace Enx.NetCord.Testing.Conformance.Contract;
 /// <remarks>
 /// A keyword outside this subset throws instead of being ignored, so a spec sync that introduces a new keyword cannot
 /// silently weaken the contract. Unknown formats and annotations (<c>description</c>, <c>title</c>, <c>default</c>…)
-/// are accepted. Undeclared properties are not rejected unless <c>additionalProperties</c> says so, as in the spec.
+/// are accepted.
+/// <para>
+/// The validation is <b>strict</b>: a property the schema does not declare is rejected, like <c>unevaluatedProperties: false</c> would.
+/// A property is declared by <c>properties</c> of the schema, of a <c>$ref</c> target, of any <c>allOf</c> branch (union), or of a
+/// <c>oneOf</c>/<c>anyOf</c> branch <i>that validates</i>; <c>additionalProperties</c> (<see langword="true"/> or a schema) declares all the others.
+/// The only way to accept a property the spec does not declare is a justified entry of <see cref="ContractException"/>.
+/// </para>
 /// </remarks>
-internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElement> schemas)
+internal sealed class JsonSchemaValidator(
+    IReadOnlyDictionary<string, JsonElement> schemas,
+    IReadOnlyList<ContractException>? exceptions = null)
 {
+    private readonly IReadOnlyList<ContractException> _exceptions = exceptions ?? [];
+    private readonly ConcurrentDictionary<ContractException, int> _hits = new();
+
     private const string SchemaPrefix = "#/components/schemas/";
 
     private static readonly HashSet<string> Annotations =
@@ -56,9 +68,57 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
     /// <returns>The violations; empty when the instance conforms.</returns>
     public IReadOnlyList<string> ValidateNamed(JsonElement instance, string schemaName)
     {
-        var errors = new List<string>();
-        Check(instance, Resolve(SchemaPrefix + schemaName), "$", errors);
-        return errors;
+        Resolve(SchemaPrefix + schemaName); // Fails early on an unknown name.
+        using var reference = JsonDocument.Parse($$"""{"$ref":"{{SchemaPrefix}}{{schemaName}}"}""");
+        return Validate(instance, reference.RootElement); // Through the $ref, so the schema name is part of the messages and of the exception scope.
+    }
+
+    /// <summary>Gets the exceptions that accepted at least one undeclared property since this validator was created.</summary>
+    public IReadOnlyCollection<ContractException> UsedExceptions => [.. _hits.Keys];
+
+    /// <summary>Returns whether the extract has a component schema.</summary>
+    /// <param name="schemaName">The component schema name.</param>
+    /// <returns><see langword="true"/> when the schema exists.</returns>
+    public bool HasSchema(string schemaName) => schemas.ContainsKey(schemaName);
+
+    /// <summary>Returns whether the spec itself declares a property on a component schema, directly or through <c>$ref</c>, <c>allOf</c>, <c>oneOf</c> or <c>anyOf</c>.</summary>
+    /// <param name="schemaName">The component schema name.</param>
+    /// <param name="property">The JSON property name.</param>
+    /// <returns><see langword="true"/> when some branch of the schema lists the property.</returns>
+    public bool Declares(string schemaName, string property)
+        => DeclaresProperty(Resolve(SchemaPrefix + schemaName), property, [schemaName]);
+
+    private bool DeclaresProperty(JsonElement schema, string property, HashSet<string> visited)
+    {
+        if (schema.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        if (schema.TryGetProperty("properties", out var properties) && properties.TryGetProperty(property, out _))
+        {
+            return true;
+        }
+
+        if (schema.TryGetProperty("$ref", out var reference))
+        {
+            var target = reference.GetString()!;
+            if (visited.Add(target) && DeclaresProperty(Resolve(target), property, visited))
+            {
+                return true;
+            }
+        }
+
+        foreach (var combinator in new[] { "allOf", "oneOf", "anyOf" })
+        {
+            if (schema.TryGetProperty(combinator, out var branches)
+                && branches.EnumerateArray().Any(branch => DeclaresProperty(branch, property, visited)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -190,10 +250,61 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
             : throw new InvalidOperationException($"The contract extract has no schema '{name}'; re-run the extraction script.");
     }
 
+    /// <summary>What a schema (with its <c>$ref</c>s and combinator branches) declared about the properties of one object instance.</summary>
+    private sealed class Evaluation
+    {
+        public HashSet<string> Names { get; } = new(StringComparer.Ordinal);
+
+        public List<string> Schemas { get; } = [];
+
+        public bool Open { get; set; }
+
+        public void Merge(Evaluation other)
+        {
+            Names.UnionWith(other.Names);
+            Schemas.AddRange(other.Schemas);
+            Open |= other.Open;
+        }
+    }
+
+    /// <summary>Checks an instance against the schema of one JSON node, then rejects the properties nothing declared.</summary>
     private void Check(JsonElement instance, JsonElement schema, string path, List<string> errors)
+    {
+        var evaluation = new Evaluation();
+        Evaluate(instance, schema, path, errors, evaluation);
+        if (instance.ValueKind == JsonValueKind.Object && !evaluation.Open)
+        {
+            ReportUndeclared(instance, path, errors, evaluation);
+        }
+    }
+
+    private void ReportUndeclared(JsonElement instance, string path, List<string> errors, Evaluation evaluation)
+    {
+        foreach (var property in instance.EnumerateObject())
+        {
+            if (evaluation.Names.Contains(property.Name))
+            {
+                continue;
+            }
+
+            var exception = _exceptions.FirstOrDefault(e => e.Property == property.Name && evaluation.Schemas.Contains(e.Schema, StringComparer.Ordinal));
+            if (exception is not null)
+            {
+                _hits.AddOrUpdate(exception, 1, static (_, n) => n + 1);
+                continue;
+            }
+
+            var schemaNames = evaluation.Schemas.Count == 0 ? "an inline schema" : string.Join(", ", evaluation.Schemas.Distinct(StringComparer.Ordinal));
+            errors.Add($"{path}: undeclared property '{property.Name}' (the spec schema {schemaNames} does not declare it; "
+                + "fix the fake, or register a justified entry in ContractExceptions)");
+        }
+    }
+
+    private void Evaluate(JsonElement instance, JsonElement schema, string path, List<string> errors, Evaluation evaluation)
     {
         if (schema.ValueKind == JsonValueKind.True)
         {
+            evaluation.Open = true;
             return;
         }
 
@@ -213,7 +324,9 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
 
         if (schema.TryGetProperty("$ref", out var reference))
         {
-            Check(instance, Resolve(reference.GetString()!), path, errors);
+            var target = reference.GetString()!;
+            evaluation.Schemas.Add(target[SchemaPrefix.Length..]);
+            Evaluate(instance, Resolve(target), path, errors, evaluation);
         }
 
         if (schema.TryGetProperty("type", out var type) && !CheckType(instance, type, path, errors))
@@ -222,12 +335,12 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
         }
 
         CheckValue(instance, schema, path, errors);
-        CheckCombinators(instance, schema, path, errors);
+        CheckCombinators(instance, schema, path, errors, evaluation);
 
         switch (instance.ValueKind)
         {
             case JsonValueKind.Object:
-                CheckObject(instance, schema, path, errors);
+                CheckObject(instance, schema, path, errors, evaluation);
                 break;
             case JsonValueKind.Array:
                 CheckArray(instance, schema, path, errors);
@@ -269,13 +382,13 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
         }
     }
 
-    private void CheckCombinators(JsonElement instance, JsonElement schema, string path, List<string> errors)
+    private void CheckCombinators(JsonElement instance, JsonElement schema, string path, List<string> errors, Evaluation evaluation)
     {
         if (schema.TryGetProperty("allOf", out var allOf))
         {
             foreach (var branch in allOf.EnumerateArray())
             {
-                Check(instance, branch, path, errors);
+                Evaluate(instance, branch, path, errors, evaluation); // every branch must hold; what they declare is the union
             }
         }
 
@@ -286,10 +399,12 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
             foreach (var branch in oneOf.EnumerateArray())
             {
                 var branchErrors = new List<string>();
-                Check(instance, branch, path, branchErrors);
+                var branchEvaluation = new Evaluation();
+                Evaluate(instance, branch, path, branchErrors, branchEvaluation);
                 if (branchErrors.Count == 0)
                 {
                     passed++;
+                    evaluation.Merge(branchEvaluation);
                 }
                 else
                 {
@@ -314,14 +429,17 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
             foreach (var branch in anyOf.EnumerateArray())
             {
                 var branchErrors = new List<string>();
-                Check(instance, branch, path, branchErrors);
+                var branchEvaluation = new Evaluation();
+                Evaluate(instance, branch, path, branchErrors, branchEvaluation);
                 if (branchErrors.Count == 0)
                 {
                     passed = true;
-                    break;
+                    evaluation.Merge(branchEvaluation); // every valid branch declares, not only the first
                 }
-
-                failures.Add(branchErrors);
+                else
+                {
+                    failures.Add(branchErrors);
+                }
             }
 
             if (!passed)
@@ -334,7 +452,7 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
     private static string Summarize(List<List<string>> failures)
         => string.Join(" | ", failures.Select(static f => f[0]));
 
-    private void CheckObject(JsonElement instance, JsonElement schema, string path, List<string> errors)
+    private void CheckObject(JsonElement instance, JsonElement schema, string path, List<string> errors, Evaluation evaluation)
     {
         JsonElement properties = default;
         var hasProperties = schema.TryGetProperty("properties", out properties);
@@ -354,17 +472,24 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
         {
             if (hasProperties && properties.TryGetProperty(property.Name, out var propertySchema))
             {
+                evaluation.Names.Add(property.Name);
                 Check(property.Value, propertySchema, $"{path}.{property.Name}", errors);
             }
             else if (schema.TryGetProperty("additionalProperties", out var additional))
             {
                 if (additional.ValueKind == JsonValueKind.False)
                 {
+                    evaluation.Names.Add(property.Name); // reported here, not a second time as undeclared
                     errors.Add($"{path}: unexpected property '{property.Name}'");
                 }
                 else if (additional.ValueKind == JsonValueKind.Object)
                 {
+                    evaluation.Names.Add(property.Name);
                     Check(property.Value, additional, $"{path}.{property.Name}", errors);
+                }
+                else
+                {
+                    evaluation.Names.Add(property.Name); // true: the spec accepts any value
                 }
             }
         }

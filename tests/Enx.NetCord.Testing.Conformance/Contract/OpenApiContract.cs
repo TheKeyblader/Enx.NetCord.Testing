@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using Enx.NetCord.Testing.Rest;
@@ -12,22 +13,33 @@ internal sealed class OpenApiContract
 {
     private const string ResourceName = "Enx.NetCord.Testing.Conformance.openapi-contract.json";
 
-    private static readonly Lazy<OpenApiContract> Instance = new(Load);
+    private static readonly Lazy<OpenApiContract> Instance = new(static () => Load(ContractExceptions.Default));
 
     private readonly JsonDocument _document;
     private readonly JsonSchemaValidator _validator;
 
-    private OpenApiContract(JsonDocument document)
+    private readonly ConcurrentDictionary<string, byte> _validatedOperations = new(StringComparer.Ordinal);
+
+    private OpenApiContract(JsonDocument document, IReadOnlyList<ContractException> exceptions)
     {
         _document = document;
         var schemas = document.RootElement.GetProperty("schemas")
             .EnumerateObject()
             .ToDictionary(static p => p.Name, static p => p.Value, StringComparer.Ordinal);
-        _validator = new JsonSchemaValidator(schemas);
+        _validator = new JsonSchemaValidator(schemas, exceptions);
     }
 
-    /// <summary>Gets the contract embedded in the test assembly.</summary>
+    /// <summary>Gets the contract embedded in the test assembly, with <see cref="ContractExceptions.Default"/>.</summary>
     public static OpenApiContract Current => Instance.Value;
+
+    /// <summary>Loads the embedded contract with another list of exceptions (to test the exception mechanism itself).</summary>
+    /// <param name="exceptions">The exceptions to apply.</param>
+    /// <returns>A new, independent contract: its usage tracking does not touch <see cref="Current"/>.</returns>
+    public static OpenApiContract Create(IReadOnlyList<ContractException> exceptions)
+    {
+        ArgumentNullException.ThrowIfNull(exceptions);
+        return Load(exceptions);
+    }
 
     /// <summary>Gets the <c>discord-api-spec</c> commit the extract was produced from.</summary>
     public string Commit => _document.RootElement.GetProperty("source").GetProperty("commit").GetString()!;
@@ -53,6 +65,22 @@ internal sealed class OpenApiContract
         }
 
         return problems;
+    }
+
+    /// <summary>Gets the exceptions that accepted at least one undeclared property so far.</summary>
+    public IReadOnlyCollection<ContractException> UsedExceptions => _validator.UsedExceptions;
+
+    /// <summary>
+    /// Lists the exceptions whose <see cref="ContractException.Operation"/> had a success response validated in this run although no response
+    /// needed them: the fake no longer sends the property, so the entry is dead and must be removed.
+    /// </summary>
+    /// <param name="exceptions">The registered exceptions.</param>
+    /// <returns>The dead exceptions; entries whose operation no scenario reached (a filtered run) are not judged.</returns>
+    public IReadOnlyList<ContractException> FindDeadExceptions(IReadOnlyList<ContractException> exceptions)
+    {
+        ArgumentNullException.ThrowIfNull(exceptions);
+        var used = _validator.UsedExceptions;
+        return [.. exceptions.Where(e => _validatedOperations.ContainsKey(e.Operation) && !used.Contains(e))];
     }
 
     /// <summary>Returns whether the extract describes an operation.</summary>
@@ -86,6 +114,7 @@ internal sealed class OpenApiContract
                 : [$"{key}: {code} response has no JSON error body"];
         }
 
+        _validatedOperations[key] = 0; // A success response was checked: it is where a registered exception would have been needed.
         if (!_document.RootElement.GetProperty("operations").TryGetProperty(key, out var operation))
         {
             // A route NetCord calls but the spec does not document has no contract to check.
@@ -120,10 +149,10 @@ internal sealed class OpenApiContract
     private static List<string> Prefix(string key, IReadOnlyList<string> violations)
         => [.. violations.Select(v => $"{key} {v}")];
 
-    private static OpenApiContract Load()
+    private static OpenApiContract Load(IReadOnlyList<ContractException> exceptions)
     {
         using var stream = typeof(OpenApiContract).Assembly.GetManifestResourceStream(ResourceName)
             ?? throw new InvalidOperationException($"Embedded resource '{ResourceName}' is missing.");
-        return new OpenApiContract(JsonDocument.Parse(stream));
+        return new OpenApiContract(JsonDocument.Parse(stream), exceptions);
     }
 }

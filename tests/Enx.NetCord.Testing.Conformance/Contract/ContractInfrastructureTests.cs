@@ -167,7 +167,6 @@ public sealed class ContractInfrastructureTests
     [InlineData("""{"type":"integer","format":"int32"}""", "2147483647")]
     [InlineData("""{"type":"integer","format":"int64"}""", "9223372036854775807")]
     [InlineData("""{"type":"object","properties":{"a":{"type":"integer"}},"additionalProperties":false}""", """{"a":1}""")]
-    [InlineData("""{"type":"object","properties":{"a":{"type":"integer"}}}""", """{"a":1,"undeclared":true}""")]
     [InlineData("""{"type":"array","uniqueItems":true}""", "[1,2,3]")]
     [InlineData("""{"type":"string","maxLength":2}""", "\"\ud83d\ude00\ud83d\ude00\"")]
     [InlineData("""{"type":["string","null"],"enum":["a",null]}""", "null")]
