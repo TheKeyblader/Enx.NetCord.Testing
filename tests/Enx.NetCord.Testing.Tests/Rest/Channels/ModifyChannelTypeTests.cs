@@ -238,7 +238,7 @@ public sealed class ModifyChannelTypeTests
 
     [Fact]
     [Parity("PATCH /channels/{channel_id}")]
-    public async Task ModifyGuildChannelAsync_AnnouncementConvertedToTextWithALongTopic_IsRefusedByTheTypeBound()
+    public async Task SendRequest_PatchConvertingAnAnnouncementToTextWithALongTopic_IsRefusedByTheTypeBound()
     {
         await using var discord = FakeDiscord.Create();
         var news = discord.Seed.Guild("Test").AnnouncementChannel("news");

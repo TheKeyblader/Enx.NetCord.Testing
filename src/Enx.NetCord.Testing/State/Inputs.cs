@@ -44,7 +44,7 @@ internal sealed record CreateGuildChannelInput(
 internal sealed record CreateDmChannelInput(ulong RecipientId, ulong? Id = null);
 
 // A partial channel update: null means "unchanged", except for the three-state fields, where the wire distinguishes an
-// absent key from a null one: Topic, ParentId (null leaves the category) and RtcRegion (null is automatic) and
+// absent key from a null one: Topic, ParentId (null leaves the category), RtcRegion (null is automatic) and
 // DefaultSortOrder (null clears it) are applied only when their Change* flag is set. Type and ParentId are requests the state
 // checks under its lock (ADR 0013, § 2 and § 5): the type converts only between text and announcement, the parent must pass the
 // four invariants. Fields the channel's type has no use for are ignored. Name through DefaultForumLayout are validated against

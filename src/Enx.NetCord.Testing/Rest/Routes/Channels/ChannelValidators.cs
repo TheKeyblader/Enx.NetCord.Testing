@@ -87,8 +87,8 @@ internal static class ChannelValidators
     /// except for <c>name</c> (see below); every field is optional. The bounds that depend on the type of the channel (a topic of
     /// 1024 outside forum and media, a bitrate or user limit above the type's maximum) are not known here and are checked by the
     /// state. Fields that do not apply to the channel's type are validated like any other and ignored by the state;
-    /// <c>available_tags</c>, <c>default_reaction_emoji</c>, <c>default_tag_setting</c>, <c>flags</c> and <c>permission_overwrites</c> are
-    /// validated (the last one not at all yet) and ignored for every type (ADR 0013, § 1). The other fields of a DM, which has only
+    /// <c>available_tags</c>, <c>default_reaction_emoji</c>, <c>default_tag_setting</c> and <c>flags</c> are validated and ignored for every
+    /// type (ADR 0013, § 1); <c>permission_overwrites</c> is neither validated nor applied yet (M4-REST-05). The other fields of a DM, which has only
     /// <c>name</c> (<c>UpdateDMRequestPartial</c>), are validated like a guild channel's: a known gap, since the kind is not known here.
     /// </summary>
     /// <param name="request">The request.</param>

@@ -37,7 +37,7 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   d'abord et les autres champs sont jugés contre le **nouveau** type (`ChannelTraits.Of(kind)`). Le validateur structurel, qui ignore le type,
   prend la borne la plus large de la spec (topic 4096, bitrate ≥ 8000, user_limit ≥ 0) ; la borne propre au type (topic 1024, plafonds
   vocaux) est un `StateFailureKind` décidé sous le verrou, avec sa fabrique `DiscordError`. Un refus qui a besoin d'un nombre dans son message
-  le porte dans `StateFailure.Limit` (`InvalidChannelUserLimit` : 99 voix, 10000 stage), sans multiplier les `StateFailureKind`.
+  le porte dans `StateFailure.Limit` (amendement ADR 0013 ; `InvalidChannelUserLimit` : 99 voix, 10000 stage), sans multiplier les `StateFailureKind`.
 - **Champ à trois états** (absent / `null` / valeur) : le validateur lit la clé avec `root.TryGetProperty` et rend un drapeau `ChangeX`
   à côté de la valeur (`ChangeTopic`, `ChangeParent`, `ChangeRtcRegion`, `ChangeDefaultSortOrder`) ; l'état n'applique la valeur nulle
   que si le drapeau est levé. Un champ où `null` veut dire « inchangé » (NetCord n'envoie jamais `null`) reste un `int?` lu par

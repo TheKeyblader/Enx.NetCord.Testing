@@ -105,7 +105,7 @@ public sealed class ModifyChannelParentTests
 
     [Fact]
     [Parity("PATCH /channels/{channel_id}")]
-    public async Task SendRequest_PatchWithAKeyAbsent_LeavesTheParent()
+    public async Task ModifyGuildChannelAsync_ParentKeyAbsent_LeavesTheParent()
     {
         await using var discord = FakeDiscord.Create();
         var lobby = discord.Seed.Guild("Test").Category("Lobby");
