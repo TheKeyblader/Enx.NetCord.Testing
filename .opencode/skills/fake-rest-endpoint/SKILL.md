@@ -36,6 +36,15 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
 - Erreurs : `DiscordError.*` (404 `10003 Unknown Channel`, 400 `50035 Invalid Form Body`
   avec arbre `errors`, 403 `50013 Missing Permissions`, 401 `0 401: Unauthorized`…). Ajouter
   le code à `docs/parity/errors.md` s'il est nouveau.
+- Visibilité (amendement 04B de l'ADR 0004) : toute opération d'état qui reçoit un ID de guilde
+  ou de salon prend `StateCaller.Bot` depuis `Rest/` (jamais `StateCaller.Fixture`, réservé au
+  seed et aux commandes de test). Résoudre la guilde ou le salon par `GetGuild(caller, id)` /
+  `GetChannel(caller, id)` (contrôle `GuildAccess` : `10004` masquée pour `/guilds/{id}` et
+  `preview`, `50001` refusée ailleurs) et traduire tout échec par
+  `DiscordError.FromStateFailure(failure)`. Ne jamais appeler `FindGuild`, `FindChannel`,
+  `FindMember` ni `FindMessage` depuis `Rest/` (lectures non contrôlées). Tester « guilde
+  inconnue » **et** « bot non membre ». Les routes à jeton (interaction, webhook) ne passent pas
+  par ce contrôle.
 - En-têtes rate limit (`X-RateLimit-Limit/Remaining/Reset/Reset-After/Bucket`) via le
   middleware commun ; ne pas les écrire dans le handler.
 - `204 No Content` quand Discord le fait (DELETE, PUT réaction…).
