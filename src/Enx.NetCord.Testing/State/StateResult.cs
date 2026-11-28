@@ -12,6 +12,9 @@ internal enum StateFailureKind
     UnknownMember,
     UnknownMessage,
     MemberAlreadyExists,
+
+    /// <summary>The resource exists but the bot cannot see it: it is not a member of the guild (403 <c>50001</c>).</summary>
+    MissingAccess,
 }
 
 /// <summary>A refused operation: the reason and the ID of the resource it concerns. No HTTP here.</summary>

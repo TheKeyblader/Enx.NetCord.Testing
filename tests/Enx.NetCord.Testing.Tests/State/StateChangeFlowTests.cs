@@ -14,10 +14,10 @@ public sealed class StateChangeFlowTests
 
         var bot = state.CreateBotIdentity(new CreateBotIdentityInput("bot"));
         var (guild, channel, user) = Seed(state);
-        var role = state.CreateRole(new CreateRoleInput(guild.Id, "r")).Value;
-        var message = state.CreateMessage(new CreateMessageInput(channel.Id, user.Id, "v1")).Value;
-        state.EditMessageContent(channel.Id, message.Id, "v2");
-        state.DeleteMessage(channel.Id, message.Id);
+        var role = state.CreateRole(StateCaller.Fixture, new CreateRoleInput(guild.Id, "r")).Value;
+        var message = state.CreateMessage(StateCaller.Fixture, new CreateMessageInput(channel.Id, user.Id, "v1")).Value;
+        state.EditMessageContent(StateCaller.Fixture, channel.Id, message.Id, "v2");
+        state.DeleteMessage(StateCaller.Fixture, channel.Id, message.Id);
 
         var changes = Drain(subscription);
 
@@ -46,8 +46,8 @@ public sealed class StateChangeFlowTests
         var (_, channel, user) = Seed(state);
         using var subscription = state.SubscribeGateway();
 
-        state.CreateMessage(new CreateMessageInput(channel.Id, user.Id, "hi"));
-        state.EditMessageContent(channel.Id, state.ListMessages(channel.Id, 1).Value[0].Id, "edited");
+        state.CreateMessage(StateCaller.Fixture, new CreateMessageInput(channel.Id, user.Id, "hi"));
+        state.EditMessageContent(StateCaller.Fixture, channel.Id, state.ListMessages(StateCaller.Fixture, channel.Id, 1).Value[0].Id, "edited");
 
         var changes = Drain(subscription);
         var created = Assert.IsType<MessageCreated>(changes[0]);
@@ -67,10 +67,10 @@ public sealed class StateChangeFlowTests
         var state = NewState();
         var user = state.CreateUser(new CreateUserInput("u"));
         var dm = state.GetOrCreateDmChannel(new CreateDmChannelInput(user.Id)).Value.Channel;
-        var message = state.CreateMessage(new CreateMessageInput(dm.Id, user.Id, "a")).Value;
+        var message = state.CreateMessage(StateCaller.Fixture, new CreateMessageInput(dm.Id, user.Id, "a")).Value;
         using var subscription = state.SubscribeGateway();
 
-        state.EditMessageContent(dm.Id, message.Id, "b");
+        state.EditMessageContent(StateCaller.Fixture, dm.Id, message.Id, "b");
 
         var edited = Assert.IsType<MessageEdited>(Assert.Single(Drain(subscription)));
         Assert.Null(edited.AuthorMember);
@@ -81,15 +81,15 @@ public sealed class StateChangeFlowTests
     {
         var state = NewState();
         var (guild, channel, user) = Seed(state);
-        var message = state.CreateMessage(new CreateMessageInput(channel.Id, user.Id, "x")).Value;
+        var message = state.CreateMessage(StateCaller.Fixture, new CreateMessageInput(channel.Id, user.Id, "x")).Value;
         using var subscription = state.SubscribeGateway();
         var bound = subscription.Initial.LastChangeNumber;
 
         state.FindUser(user.Id);
         state.FindGuild(guild.Id);
         state.FindMessage(channel.Id, message.Id);
-        state.ListMessages(channel.Id, 10);
-        state.ListGuildRoles(guild.Id);
+        state.ListMessages(StateCaller.Fixture, channel.Id, 10);
+        state.ListGuildRoles(StateCaller.Fixture, guild.Id);
         state.TakeProjection();
 
         Assert.Empty(Drain(subscription));
@@ -102,7 +102,7 @@ public sealed class StateChangeFlowTests
         var state = NewState();
         using var subscription = state.SubscribeGateway();
 
-        state.CreateMessage(new CreateMessageInput(1, 2, "x"));
+        state.CreateMessage(StateCaller.Fixture, new CreateMessageInput(1, 2, "x"));
         Assert.Throws<ArgumentOutOfRangeException>(() => state.CreateUser(new CreateUserInput("a", Id: 0)));
         var user = state.CreateUser(new CreateUserInput("ok"));
 

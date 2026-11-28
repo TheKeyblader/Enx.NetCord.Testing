@@ -18,6 +18,8 @@ public sealed class RestInterceptionTests
 
     [Theory]
     [InlineData(HttpStatusCode.Forbidden, 50013)]
+    [InlineData(HttpStatusCode.Forbidden, 50001)]
+    [InlineData(HttpStatusCode.NotFound, 10004)]
     [InlineData(HttpStatusCode.InternalServerError, 0)]
     [InlineData(HttpStatusCode.BadGateway, 0)]
     public void Error_SupportedPair_IsCreated(HttpStatusCode status, int code)

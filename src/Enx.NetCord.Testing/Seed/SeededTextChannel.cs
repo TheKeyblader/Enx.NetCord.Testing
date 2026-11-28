@@ -35,6 +35,6 @@ public sealed class SeededTextChannel
         SeedGuard.ValidateId(id);
         _fake.ThrowIfDisposed();
 
-        return SeedGuard.Unwrap(_fake.State.CreateMessage(new CreateMessageInput(Id, authorId, content, id))).Id;
+        return SeedGuard.Unwrap(_fake.State.CreateMessage(StateCaller.Fixture, new CreateMessageInput(Id, authorId, content, id))).Id;
     }
 }

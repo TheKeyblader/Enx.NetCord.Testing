@@ -20,9 +20,10 @@ public sealed class FakeDiscord : IAsyncDisposable
     private readonly RestPipelineContext _context;
     private int _disposed;
 
-    private FakeDiscord(FakeDiscordState state, RestJournal journal, RestPipelineContext context, BotToken token)
+    private FakeDiscord(FakeDiscordState state, RestJournal journal, RestPipelineContext context, BotToken token, ulong applicationId)
     {
         State = state;
+        ApplicationId = applicationId;
         Journal = journal;
         _context = context;
         Token = token;
@@ -30,6 +31,10 @@ public sealed class FakeDiscord : IAsyncDisposable
         Rest = new FakeDiscordRest(context.Interceptions);
         Recorded = new DiscordRecording(this, journal);
     }
+
+    /// <summary>Gets the ID shared by the bot user and its application.</summary>
+    /// <remarks>Remains readable after the fake has been disposed.</remarks>
+    public ulong ApplicationId { get; }
 
     /// <summary>Gets the fixture builder bound to this fake.</summary>
     public DiscordSeed Seed { get; }
@@ -90,7 +95,7 @@ public sealed class FakeDiscord : IAsyncDisposable
             new BotIdentityResolver(token.RawToken, token.Id),
             options.UnimplementedRoutes,
             journal);
-        return new FakeDiscord(state, journal, context, token);
+        return new FakeDiscord(state, journal, context, token, identity.User.Id);
     }
 
     /// <summary>Creates a caller-owned NetCord client authenticated against this fake.</summary>

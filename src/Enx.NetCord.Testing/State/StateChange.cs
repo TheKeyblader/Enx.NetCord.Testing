@@ -15,7 +15,11 @@ internal sealed record UserCreated(long Number, UserSnapshot User) : StateChange
 /// <summary>A user changed; the snapshot is the user after the change (the Gateway turns it into <c>USER_UPDATE</c>).</summary>
 internal sealed record UserUpdated(long Number, UserSnapshot User) : StateChange(Number);
 
-internal sealed record GuildCreated(long Number, GuildSnapshot Guild, RoleSnapshot Everyone)
+/// <summary>
+/// A guild was created with its <c>@everyone</c> role and, when the bot joined in the same commit, the bot's membership
+/// (<see cref="BotMember"/>, <see langword="null"/> for a guild the bot cannot see).
+/// </summary>
+internal sealed record GuildCreated(long Number, GuildSnapshot Guild, RoleSnapshot Everyone, MemberSnapshot? BotMember = null)
     : StateChange(Number);
 
 internal sealed record ChannelCreated(long Number, ChannelSnapshot Channel) : StateChange(Number);

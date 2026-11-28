@@ -68,6 +68,98 @@ public sealed class DiscordSeedTests
     }
 
     [Fact]
+    public async Task Guild_Default_TheBotIsAnOrdinaryMemberFromTheSameCommit()
+    {
+        await using var discord = FakeDiscord.Create();
+        using var subscription = discord.State.SubscribeGateway();
+
+        var guild = discord.Seed.Guild("Test");
+
+        var created = Assert.IsType<GuildCreated>(Assert.Single(StateTestSupport.Drain(subscription)));
+        var membership = discord.State.FindMember(guild.Id, discord.ApplicationId)!;
+        Assert.Equal(membership, created.BotMember);
+        Assert.Empty(membership.RoleIds);
+        Assert.Equal(created.Guild.CreatedAt, membership.JoinedAt); // virtual clock: creation and join share the instant
+        Assert.Equal(
+            discord.ApplicationId,
+            Assert.Single(discord.State.ListGuildMembers(StateCaller.Fixture, guild.Id).Value).UserId);
+        Assert.NotNull(discord.State.GetGuild(StateCaller.Bot, guild.Id).Value);
+    }
+
+    [Fact]
+    public async Task Guild_WithBotFalse_TheBotCannotSeeItButTheSeedStillFillsIt()
+    {
+        await using var discord = FakeDiscord.Create();
+        using var subscription = discord.State.SubscribeGateway();
+
+        var elsewhere = discord.Seed.Guild("Elsewhere", withBot: false);
+        var channel = elsewhere.TextChannel("general");
+        var carol = elsewhere.Member("carol");
+        channel.Message("hi", carol);
+
+        Assert.Null(Assert.IsType<GuildCreated>(StateTestSupport.Drain(subscription)[0]).BotMember);
+        Assert.Null(discord.State.FindMember(elsewhere.Id, discord.ApplicationId));
+        Assert.Equal(StateFailureKind.UnknownGuild, discord.State.GetGuild(StateCaller.Bot, elsewhere.Id).Failure.Kind);
+        Assert.Equal(StateFailureKind.MissingAccess, discord.State.GetChannel(StateCaller.Bot, channel.Id).Failure.Kind);
+        Assert.Equal([carol], discord.State.ListGuildMembers(StateCaller.Fixture, elsewhere.Id).Value.Select(m => m.UserId));
+    }
+
+    [Fact]
+    public async Task Guild_WithOrWithoutBot_AllocatesTheSameIds()
+    {
+        await using var with = FakeDiscord.Create();
+        await using var without = FakeDiscord.Create();
+
+        var a = with.Seed.Guild("g");
+        var b = without.Seed.Guild("g", withBot: false);
+
+        Assert.Equal(b.Id, a.Id);
+        Assert.Equal(without.Seed.User("u"), with.Seed.User("u"));
+    }
+
+    [Fact]
+    public async Task MemberById_BotJoinsAGuildCreatedWithoutIt_BecomesVisibleAndPublishesTheJoin()
+    {
+        await using var discord = FakeDiscord.Create();
+        var elsewhere = discord.Seed.Guild("Elsewhere", withBot: false);
+        using var subscription = discord.State.SubscribeGateway();
+
+        var returned = elsewhere.Member(discord.ApplicationId);
+
+        Assert.Equal(discord.ApplicationId, returned);
+        Assert.NotNull(discord.State.GetGuild(StateCaller.Bot, elsewhere.Id).Value);
+        var added = Assert.IsType<MemberAdded>(Assert.Single(StateTestSupport.Drain(subscription)));
+        Assert.Equal(discord.ApplicationId, added.Member.UserId);
+        Assert.True(added.User.IsBot);
+    }
+
+    [Fact]
+    public async Task MemberById_BotAlreadyInTheGuild_ThrowsWithoutMutationOrNotification()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        using var subscription = discord.State.SubscribeGateway();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => guild.Member(discord.ApplicationId));
+
+        Assert.Contains("already a member", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(StateTestSupport.Drain(subscription));
+    }
+
+    [Fact]
+    public async Task ApplicationId_Always_IsTheBotAndApplicationIdAndSurvivesDisposal()
+    {
+        var discord = FakeDiscord.Create(new FakeDiscordOptions { ApplicationId = 42 });
+        var identity = discord.State.FindBotIdentity()!;
+
+        await discord.DisposeAsync();
+
+        Assert.Equal(42UL, discord.ApplicationId);
+        Assert.Equal(discord.ApplicationId, identity.User.Id);
+        Assert.Equal(discord.ApplicationId, identity.Application.Id);
+    }
+
+    [Fact]
     public async Task User_Nominal_CreatesTheUser()
     {
         await using var discord = FakeDiscord.Create();
@@ -199,7 +291,8 @@ public sealed class DiscordSeedTests
         Assert.Throws<InvalidOperationException>(() => guild.Member(alice));
 
         Assert.Empty(StateTestSupport.Drain(subscription));
-        Assert.Single(discord.State.ListGuildMembers(guild.Id).Value);
+        // The bot (a member from creation) and alice.
+        Assert.Equal(2, discord.State.ListGuildMembers(StateCaller.Fixture, guild.Id).Value.Length);
     }
 
     [Fact]
@@ -211,7 +304,10 @@ public sealed class DiscordSeedTests
         var exception = Assert.Throws<InvalidOperationException>(() => guild.Member(123456));
 
         Assert.Contains("123456", exception.Message, StringComparison.Ordinal);
-        Assert.Empty(discord.State.ListGuildMembers(guild.Id).Value);
+        // Only the bot: the failed call added nobody.
+        Assert.Equal(
+            [discord.ApplicationId],
+            discord.State.ListGuildMembers(StateCaller.Fixture, guild.Id).Value.Select(m => m.UserId));
     }
 
     [Fact]
@@ -272,7 +368,7 @@ public sealed class DiscordSeedTests
         Assert.Throws<InvalidOperationException>(() => channel.Message("hello", authorId: 4242));
 
         Assert.Empty(StateTestSupport.Drain(subscription));
-        Assert.Empty(discord.State.ListMessages(channel.Id, 10).Value);
+        Assert.Empty(discord.State.ListMessages(StateCaller.Fixture, channel.Id, 10).Value);
     }
 
     [Fact]
@@ -328,7 +424,7 @@ public sealed class DiscordSeedTests
         var channel = discord.Seed.Guild("Test").TextChannel("general");
         var alice = discord.Seed.User("alice");
         var id = channel.Message("gone", alice, id: 777);
-        discord.State.DeleteMessage(channel.Id, id);
+        discord.State.DeleteMessage(StateCaller.Fixture, channel.Id, id);
         Assert.Null(discord.State.FindMessage(channel.Id, id));
 
         Assert.Throws<InvalidOperationException>(() => channel.Message("again", alice, id: id));
@@ -361,6 +457,6 @@ public sealed class DiscordSeedTests
         var ids = Enumerable.Range(0, 500).Select(i => guild.Member($"member-{i}")).ToList();
 
         Assert.Equal(500, ids.Distinct().Count());
-        Assert.Equal(500, discord.State.ListGuildMembers(guild.Id).Value.Length);
+        Assert.Equal(501, discord.State.ListGuildMembers(StateCaller.Fixture, guild.Id).Value.Length); // 500 + the bot
     }
 }

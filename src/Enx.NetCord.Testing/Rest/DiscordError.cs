@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Text.Json;
 using Enx.NetCord.Testing.Serialization;
+using Enx.NetCord.Testing.State;
 
 namespace Enx.NetCord.Testing.Rest;
 
@@ -45,6 +46,14 @@ internal sealed class DiscordError
     /// <summary>404 with code 10003.</summary>
     /// <returns>The error.</returns>
     public static DiscordError UnknownChannel() => new(HttpStatusCode.NotFound, 10003, "Unknown Channel");
+
+    /// <summary>404 with code 10004: the guild does not exist, or exists but the bot is not a member of it.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError UnknownGuild() => new(HttpStatusCode.NotFound, 10004, "Unknown Guild");
+
+    /// <summary>403 with code 50001: the resource exists but the bot cannot see it.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError MissingAccess() => new(HttpStatusCode.Forbidden, 50001, "Missing Access");
 
     /// <summary>404 with code 10008.</summary>
     /// <returns>The error.</returns>
@@ -93,6 +102,24 @@ internal sealed class DiscordError
         return new DiscordError(HttpStatusCode.BadRequest, 50035, "Invalid Form Body", errors);
     }
 
+    /// <summary>
+    /// Translates a business refusal of the state into its catalog error, once for every route
+    /// (ADR 0004, amendment 04B, § 2). A kind without a catalog entry yet is a programming error, not a silent 500.
+    /// </summary>
+    /// <param name="failure">The refusal.</param>
+    /// <returns>The error.</returns>
+    /// <exception cref="NotSupportedException">The kind has no catalog error yet.</exception>
+    public static DiscordError FromStateFailure(StateFailure failure)
+        => failure.Kind switch
+        {
+            StateFailureKind.UnknownGuild => UnknownGuild(),
+            StateFailureKind.UnknownChannel => UnknownChannel(),
+            StateFailureKind.UnknownMessage => UnknownMessage(),
+            StateFailureKind.UnknownUser => UnknownUser(),
+            StateFailureKind.MissingAccess => MissingAccess(),
+            _ => throw new NotSupportedException($"The state failure {failure.Kind} has no catalog error yet."),
+        };
+
     /// <summary>Tries to create one of the simple (detail-free) catalog errors for a status/code pair.</summary>
     /// <param name="status">The HTTP status.</param>
     /// <param name="code">The Discord JSON code.</param>
@@ -106,6 +133,8 @@ internal sealed class DiscordError
             (HttpStatusCode.Forbidden, 50013) => MissingPermissions(),
             (HttpStatusCode.NotFound, 0) => NotFound(),
             (HttpStatusCode.NotFound, 10003) => UnknownChannel(),
+            (HttpStatusCode.NotFound, 10004) => UnknownGuild(),
+            (HttpStatusCode.Forbidden, 50001) => MissingAccess(),
             (HttpStatusCode.NotFound, 10008) => UnknownMessage(),
             (HttpStatusCode.NotFound, 10013) => UnknownUser(),
             (HttpStatusCode.Forbidden, 50025) => InvalidOAuth2AccessToken(),

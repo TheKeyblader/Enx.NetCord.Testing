@@ -23,7 +23,8 @@ internal sealed record CreateGuildInput(
     ulong? OwnerId = null,
     string? IconHash = null,
     string? Description = null,
-    ulong? EveryonePermissions = null);
+    ulong? EveryonePermissions = null,
+    bool WithBot = false);
 
 internal sealed record CreateTextChannelInput(
     ulong GuildId,

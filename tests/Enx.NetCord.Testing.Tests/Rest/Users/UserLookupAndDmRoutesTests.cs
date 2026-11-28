@@ -174,7 +174,7 @@ public sealed class UserLookupAndDmRoutesTests
         var aliceId = discord.Seed.User("alice");
         using var rest = discord.CreateRestClient();
         var channel = await rest.GetDMChannelAsync(aliceId, cancellationToken: Ct);
-        var message = discord.State.CreateMessage(new CreateMessageInput(channel.Id, aliceId, "hello")).Value;
+        var message = discord.State.CreateMessage(StateCaller.Fixture, new CreateMessageInput(channel.Id, aliceId, "hello")).Value;
 
         var again = await rest.GetDMChannelAsync(aliceId, cancellationToken: Ct);
 
