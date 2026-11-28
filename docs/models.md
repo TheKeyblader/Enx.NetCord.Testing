@@ -42,7 +42,8 @@ Ce que disent les sources, au-delà des chiffres :
 Choix initial du 2026-11-26, révisé par l'utilisateur le 2026-11-27 (commit `38d1dfe`, « update
 models ») : tout passe sur l'abonnement Claude, sauf deux commandes. **Le champ `model:` des
 fichiers `.opencode/agents/*.md` et `.opencode/commands/**.md` fait foi** ; ce tableau le recopie
-(réaligné le 2026-11-28 après l'analyse des sessions exportées).
+(réaligné le 2026-11-28 après l'analyse des sessions exportées ; tous les ID et variants
+vérifiés le même jour, le provider `openai` ne liste plus aucun modèle).
 
 | Agent / commande | Modèle | Raison |
 | --- | --- | --- |
@@ -72,7 +73,9 @@ d'agent**, pas celui d'une commande : c'est pourquoi `/parity/status` a son prop
 - Quota Claude atteint (repli sur `opencode-go`) : reviewer et architecte →
   `opencode-go/gemini-4-argon#high`, implementers → `opencode-go/deepseek-v4.1-flash#high`,
   orchestrateur → `opencode-go/glm-5.3#high`, `parity-status` → `opencode-go/deepseek-v4.1-flash#low`.
-  Vérifier les ID exacts avec la liste des modèles d'opencode avant de basculer.
+  ID et variants vérifiés le 2026-11-28 avec `tools.opencode.models` ; `gpt-6-luna` reste
+  accessible via `opencode-go/gpt-6-luna` (variants `none`→`max`), autre repli possible pour
+  `parity-status`.
 - À réévaluer à chaque sortie de modèle : le classement bouge environ tous les dix jours.
 
 ## Modifier
