@@ -10,8 +10,8 @@ Forme d'erreur Discord (à reproduire exactement, via `DiscordError`) :
 ```
 
 Rate limit (429) : corps `{ "message": "You are being rate limited.", "retry_after": 1.5, "global": false, "code"?: … }`
-(Discord renvoie un flottant ; le 429 injecté par `Intercept` écrit un **entier**, ADR 0005 — les flottants relèvent de M6-02)
-+ en-têtes `Retry-After`, `X-RateLimit-*`, `X-RateLimit-Scope`.
+(Discord renvoie un flottant ; le 429 injecté par `Intercept` écrit un **entier**, ADR 0005 — les flottants relèvent de M6-02),
+accompagné des en-têtes `Retry-After`, `X-RateLimit-*` et `X-RateLimit-Scope`.
 
 Progression `Fake` : ✅ **4** · 🟡 **9** · ⬜ **29** · ⛔ **0**
 

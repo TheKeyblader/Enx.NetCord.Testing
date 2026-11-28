@@ -9,7 +9,8 @@ internal sealed class FakeRestRequest
         IReadOnlyList<KeyValuePair<string, string>> query,
         RestRequestBody? body,
         RestCaller caller,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        object? payload = null)
     {
         Operation = operation;
         RouteParameters = routeParameters;
@@ -17,6 +18,7 @@ internal sealed class FakeRestRequest
         Body = body;
         Caller = caller;
         TimeProvider = timeProvider;
+        Payload = payload;
     }
 
     /// <summary>Gets the matched operation.</summary>
@@ -35,10 +37,17 @@ internal sealed class FakeRestRequest
     public RestCaller Caller { get; }
 
     /// <summary>Gets the detached input produced by the operation's validator, or <see langword="null"/> when it has none.</summary>
-    public object? Payload { get; internal set; }
+    /// <remarks>Immutable: the pipeline attaches the payload by creating a new request with <see cref="WithPayload"/> once validation succeeds.</remarks>
+    public object? Payload { get; }
 
     /// <summary>Gets the fake's clock.</summary>
     public TimeProvider TimeProvider { get; }
+
+    /// <summary>Returns a copy of this request that carries the payload produced by the operation's validator.</summary>
+    /// <param name="payload">The validated payload.</param>
+    /// <returns>A new request; this instance is left unchanged.</returns>
+    internal FakeRestRequest WithPayload(object? payload)
+        => new(Operation, RouteParameters, Query, Body, Caller, TimeProvider, payload);
 
     /// <summary>Returns the payload the validator parsed, so the handler never re-reads the body.</summary>
     /// <typeparam name="T">The payload type the operation's validator returns.</typeparam>

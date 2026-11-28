@@ -120,7 +120,7 @@ internal sealed class RestPipeline(RestPipelineContext context)
                 return WithOrdinaryHeaders(FakeRestResponse.From(validation.Error), entry);
             }
 
-            fakeRequest.Payload = validation.Payload;
+            fakeRequest = fakeRequest.WithPayload(validation.Payload);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
