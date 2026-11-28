@@ -91,7 +91,9 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
 - **Origine** : M1-REST-01 ; roadmap `PAR-REST-01`
 - **Concerne** : `rest.md` `POST /users/@me/channels`, `PATCH /users/@me`, `GET /users/@me` ; `errors.md` `10013`, `50007`, `50025`
 - **Hypothèse** : `access_tokens` invalide (group DM) ⇒ 403 `50025` ; `recipient_id` inconnu ⇒
-  `10013` (fauxcord) ; DM vers soi-même ou un autre bot ⇒ `50007` ; avatar/banner WebP accepté ;
+  `10013` (fauxcord) ; DM vers soi-même ou un autre bot ⇒ `50007` (vers soi-même : refus d'état
+  `CannotMessageUser`, 403 `50007`, décidé par l'ADR 0014 et implémenté en M1-REST-02C1 ; vers
+  un autre bot : manque) ; avatar/banner WebP accepté ;
   champs `verified`/`email`/`locale` de `GET /users/@me` pour un bot tels que le fake les rend.
 - **Procédure** :
   1. `POST /users/@me/channels` `{"access_tokens":["x"],"nicks":{}}`.
@@ -449,6 +451,77 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
 - **Si différent** : corriger `FakeDiscordState.Members.cs`, `MemberValidators.cs`, `DiscordError`,
   `errors.md`, `rest.md` et les tests.
 - **Réponse** : _(à remplir)_
+
+### UR-020 — Seed des salons privés : `DMChannel`, `GroupDMChannel`, `SeededDMChannel` (`décision`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-ADR-04C, [ADR 0014 § 3](adr/0014-private-channels-dm-and-group-dm.md) (`e2e9334`, `caac255`) ; implémentation M1-REST-02C1
+- **Concerne** : API publique `DiscordSeed.DMChannel(userId, id)`, `DiscordSeed.GroupDMChannel(recipients, name, id)`, `SeededDMChannel` ; complète UR-015 (absorbe M1-REST-04B)
+- **Décision** :
+  1. Noms alignés sur les types NetCord (`DMChannel`, `GroupDMChannel`) plutôt que `Dm`/`GroupDm`.
+  2. Une seule poignée `SeededDMChannel` (`Id`, `Message`, `Reaction`) pour le DM et le group DM,
+     comme `SeededTextChannel` sert aussi aux annonces.
+  3. `Seed.DMChannel` ouvre ou retrouve le DM par la même opération d'état que
+     `POST /users/@me/channels` (refus du bot lui-même : `ArgumentException`).
+  4. `recipients` en premier paramètre (`IEnumerable<ulong>`, donc `[alice, bob]`), `name`
+     facultatif ; le bot est toujours propriétaire : ni `withBot: false`, ni icône, ni ajout de
+     destinataire dans le seed.
+  5. `Message` et `Reaction` d'un salon privé refusent un utilisateur non participant
+     (`InvalidOperationException`), DM 1:1 compris ; l'état applique la même règle à tout appelant.
+- **Réponse** : _(à remplir)_
+
+### UR-021 — Group DM : périmètre sans OAuth2 et départ du bot (`décision`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-ADR-04C, [ADR 0014 § 4](adr/0014-private-channels-dm-and-group-dm.md)
+- **Concerne** : `rest.md` `POST /users/@me/channels`, `PUT /channels/{channel_id}/recipients/{user_id}`, `DELETE /channels/{channel_id}`
+- **Décision** :
+  1. Aucun grant OAuth2 `gdm.join` simulé : `CreateGroupDMChannelAsync` et
+     `GroupDMChannelAddUserAsync` échouent toujours en 403 `50025` ; la ligne du `PUT` restera 🟡.
+     Des jetons seedés sont écartés comme non-objectif v1 (`vision.md`).
+  2. Quand le bot quitte un group DM (`DELETE /channels/{id}` ou `DELETE …/recipients/{bot}`), le
+     salon sort de l'état avec ses messages : 404 `10003` ensuite, pas de retour possible.
+     Alternative écartée : garder le salon avec un drapeau et rendre 403 `50001`.
+- **Réponse** : _(à remplir)_
+
+### UR-022 — Group DM : comportement réel de Discord, lot D (`test-manuel`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-ADR-04C, [ADR 0014, lot D](adr/0014-private-channels-dm-and-group-dm.md) ; roadmap `PAR-REST-05`
+- **Concerne** : `rest.md` `GET`/`PATCH`/`DELETE /channels/{channel_id}`, `PUT`/`DELETE /channels/{channel_id}/recipients/{user_id}` ; `errors.md` `10003`, `10013`, `50024`, `50025`, `50035`, `50109` ; `gateway.md` `CHANNEL_CREATE`, `CHANNEL_UPDATE`, `CHANNEL_DELETE`
+- **Hypothèse** :
+  - objet : `owner_id` = le bot, `managed: true`, `application_id` = l'application, `recipients` sans le bot ;
+  - limites : 10 participants bot compris, 10 groupes actifs ;
+  - `PATCH` : `name: ""` efface, `name: null` ne change rien, `icon: null` retire l'icône, icône
+    invalide ⇒ `50035` `IMAGE_INVALID` sur un group DM, ignorée sur tout autre salon ;
+  - `DELETE` du salon : le bot quitte, 200 avec le salon, puis 404 `10003` ;
+  - destinataires : `PUT` sans corps ⇒ `50109` ; ordre structurel → accès → `50024` (hors group
+    DM) → `10013` → `50025` ; `DELETE` d'un non-destinataire ⇒ 204 ; `DELETE` du bot = départ ;
+  - Gateway : `CHANNEL_CREATE`/`CHANNEL_UPDATE`/`CHANNEL_DELETE` d'un group DM sous l'intent
+    `GUILDS` (lecture des docs, `gateway.mdx:320-322` ; alternative : `DIRECT_MESSAGES`), rien au
+    retrait d'un destinataire.
+- **Procédure** (coûteuse : application de test avec URI de redirection, un ou deux comptes
+  utilisateur qui accordent `gdm.join`, échange du code contre un jeton ; bot connecté qui
+  journalise les dispatchs bruts) :
+  1. `POST /users/@me/channels` `{"access_tokens":["<jeton>"],"nicks":{}}` : copier le JSON, noter les dispatchs.
+  2. `PATCH /channels/$GDM` avec `{"name":"x"}`, `{"name":""}`, `{"name":null}`, `{"icon":null}`,
+     `{"icon":"data:image/png;base64,xx"}`, `{"topic":"x"}` ; puis `{"icon":"data:image/png;base64,xx"}` sur `$CH1`.
+  3. `PUT /channels/$GDM/recipients/$USER2` avec `{"access_token":"x"}`, puis sans corps, puis
+     `{}`, puis avec un `user_id` inexistant ; même `PUT` sur `$CH1` et sur un DM 1:1.
+  4. `DELETE /channels/$GDM/recipients/$USER`, deux fois ; noter les dispatchs.
+  5. Dans un autre groupe : `DELETE /channels/$GDM/recipients/$APP`.
+  6. `DELETE /channels/$GDM`, puis `GET /channels/$GDM` ; noter les dispatchs.
+  7. Refaire 1 et 6 avec le seul intent `GUILDS`, puis le seul `DIRECT_MESSAGES`.
+- **Résultat attendu** : 1 ⇒ `type: 3`, `owner_id` = `$APP`, `managed: true`, `CHANNEL_CREATE` ;
+  2 ⇒ nom posé, effacé, inchangé, icône retirée, 400 `50035` `IMAGE_INVALID`, `topic` ignoré, un
+  `CHANNEL_UPDATE` par changement, puis 200 sur `$CH1` sans changement ; 3 ⇒ 403 `50025`, 400
+  `50109`, noter `{}`, 404 `10013`, 400 `50024` ×2 ; 4 ⇒ 204 ×2, aucun dispatch ; 5 ⇒ 204 et
+  `CHANNEL_DELETE` ; 6 ⇒ 200, `CHANNEL_DELETE`, puis 404 `10003` ; 7 ⇒ dispatchs reçus avec
+  `GUILDS`, pas avec `DIRECT_MESSAGES` seul.
+- **Si différent** : corriger l'ADR 0014, `FakeDiscordState.Channels.cs`, les routes de
+  M1-REST-02C2, `errors.md`, `rest.md` et les tests ; si 6 rend 403 `50001`, garder une liste des
+  groupes quittés ; si l'intent diffère, ajuster M3-03.
+- **Réponse** : _(à remplir ; le point peut rester ouvert, les lignes restant 🟡)_
 
 ## Traités
 
