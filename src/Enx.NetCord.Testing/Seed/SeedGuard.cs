@@ -16,6 +16,29 @@ internal static class SeedGuard
         }
     }
 
+    /// <summary>Validates the arguments of a seeded reaction and adds it through the state, as the fixture caller.</summary>
+    /// <param name="fake">The fake.</param>
+    /// <param name="channelId">The channel of the message.</param>
+    /// <param name="messageId">The message ID.</param>
+    /// <param name="emoji">A unicode emoji or a custom one written <c>name:id</c>.</param>
+    /// <param name="userId">The reacting user.</param>
+    /// <param name="burst">Whether it is a super reaction.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="emoji"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="emoji"/> is neither a unicode emoji nor <c>name:id</c>.</exception>
+    /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">The message or the user does not exist in this fake, or the message already has 20 other emojis.</exception>
+    public static void AddReaction(FakeDiscord fake, ulong channelId, ulong messageId, string emoji, ulong userId, bool burst)
+    {
+        ArgumentNullException.ThrowIfNull(emoji);
+        if (!ReactionEmoji.TryParse(emoji, out var parsed))
+        {
+            throw new ArgumentException($"'{emoji}' is neither a unicode emoji nor a custom emoji written name:id.", nameof(emoji));
+        }
+
+        fake.ThrowIfDisposed();
+        Unwrap(fake.State.AddReaction(StateCaller.Fixture, channelId, messageId, parsed, userId, burst));
+    }
+
     /// <summary>Returns the value of a successful state result, or throws the seed-style error for its failure.</summary>
     /// <typeparam name="T">The value type.</typeparam>
     /// <param name="result">The result.</param>

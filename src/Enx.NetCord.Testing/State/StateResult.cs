@@ -64,6 +64,12 @@ internal enum StateFailureKind
     /// <summary>The action does not apply to this type of channel: 400 <c>50024</c>.</summary>
     CannotExecuteOnChannelType,
 
+    /// <summary>The user has no such reaction to remove, or nobody reacted with that emoji: 404 <c>10014</c> (hypothesis, docs/parity/errors.md).</summary>
+    UnknownEmoji,
+
+    /// <summary>The message already has 20 distinct reactions and the emoji is a new one: 400 <c>30010</c> (status is a hypothesis).</summary>
+    MaxReactions,
+
     /// <summary>A message is sent to a channel that has no chat, a category: 400 <c>50008</c> (status is a hypothesis).</summary>
     CannotSendInNonTextChannel,
 

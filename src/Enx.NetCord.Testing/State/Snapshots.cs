@@ -225,6 +225,9 @@ internal sealed record MessageSnapshot(
 
     /// <summary>Gets the nonce sent by the client, if any.</summary>
     internal string? Nonce { get; init; }
+
+    /// <summary>Gets the reactions, in the order of the first reaction with each emoji.</summary>
+    internal ImmutableArray<ReactionSnapshot> Reactions { get; init; } = [];
 }
 
 /// <summary>

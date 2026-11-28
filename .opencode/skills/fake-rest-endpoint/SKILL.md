@@ -58,6 +58,7 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
 - Validation structurelle (étape 3 du pipeline, sans lire l'état) : un validateur par opération,
   lié par `RouteBinding.Of(clé, handler, validateur)`. **Réutiliser** `Rest/FormValidation.cs`
   (ne pas recopier dans la famille) : `ValidateRouteSnowflake(request, "channel_id")`,
+  `ReadRouteSnowflake(request, "message_id", errors)` (une route à plusieurs IDs : tous les `50035` d'ID dans un seul `FormErrors`),
   `TryReadJsonObject(request, out doc, out error)` (`50109` / `50035` `MODEL_TYPE_CONVERT`),
   `ReadOptionalString`, `ReadNullableString` (distingue « absent » de `null` = effacer, via `out present`),
   `ReadOptionalInteger(root, name, min, max, errors)` (entier ou chaîne numérique ; `NUMBER_TYPE_COERCE`/`MIN`/`MAX` ;
@@ -131,6 +132,21 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
 - Une opération qui supprime ou ferme une ressource suit Discord, pas le nom de la route : fermer un
   DM (`DELETE /channels/{dm}`) ne détruit rien et ne committe aucun `StateChange` ; une mise à jour
   (`PATCH`) ne committe un `StateChange` que si une valeur change (comme `UpdateUser`).
+- **Sous-ressource d'un message** (réactions, M1-REST-04) : l'état de la sous-ressource vit **sur `MessageEntity`** (liste d'entités
+  `ReactionEntity`, dans l'ordre de première apparition) et ses opérations sont des membres de `FakeDiscordState.<Domaine>.cs` qui
+  résolvent par `TryGetMessage(caller, …)` (salon `10003`/`50001` puis message `10008`). Ce que la réponse d'un message en lit est un
+  champ d'init de `MessageSnapshot` ; un champ relatif à l'appelant (`me`) est calculé par `MessageEntity.ToSnapshot(…, viewerId)`
+  avec le bot (`_botId`), seule identité REST, jamais dans la couche `Rest/`. Une propriété que Discord omet sans valeur (`reactions`)
+  est un DTO nullable `WhenWritingNull` rendu `null` quand la liste est vide (`ReactionWire.ToResponses`).
+- **Opération idempotente ou non** : un `PUT` qui crée un fait déjà vrai renvoie succès **sans** `StateChange` (`StateResult<bool>` :
+  `true` = nouveau) ; un `DELETE` d'un fait absent n'est pas silencieux quand Discord répond une erreur (réactions : `10014`, hypothèse
+  consignée), alors que vider « tout » (aucun emoji nommé) réussit toujours. Un `StateFailureKind` sans corps `50035` propre
+  (`UnknownEmoji`, `MaxReactions`) a sa fabrique `DiscordError`, son entrée `FromStateFailure` et son entrée `TryCreateSimple`.
+- **Segment de route qui désigne une ressource sans ID** (`emoji_name` : unicode encodé dans l'URL ou `name:id`) : le validateur
+  l'analyse avec une aide de domaine (`ReactionEmoji.TryParse`, dans `State/`) **après** les `50035` d'ID et rend l'erreur du catalogue
+  (`10014`) à l'étape structurelle ; une table d'emojis unicode n'existe pas, la règle est « un caractère non ASCII, pas de lettre ASCII ni
+  de blanc ». Un test qui envoie un segment brut par `SendRequestAsync` passe un littéral interpolé (NetCord l'encode ; `%` et `:` sont
+  encodés, donc on ne peut pas simuler un pourcentage mal formé par ce chemin).
 - En-têtes rate limit (`X-RateLimit-Limit/Remaining/Reset/Reset-After/Bucket`) via le
   middleware commun ; ne pas les écrire dans le handler.
 - `204 No Content` quand Discord le fait (DELETE, PUT réaction…).
@@ -169,7 +185,10 @@ Pièges de test : (1) `array.Reverse()` se lie à `MemoryExtensions.Reverse` (C#
 défaut est figée (`VirtualTimeProvider.DefaultNow`) : pour un message « ancien » (bulk-delete), semer avec un ID explicite
 `IdAt(instant)` ; un ID **inventé** comme `424242` est déjà vieux de plus de 14 jours (snowflake de 2015), prendre `IdAt(now, n)` ;
 (4) `NetCord.DeleteMessagesAsync` n'appelle `bulk-delete` que pour 2 IDs ou plus, un seul passe par `DELETE …/{message_id}` ;
-(5) ne pas écrire de route avec `string` pour `SendRequestAsync` : un littéral interpolé, ou un paramètre `FormattableString`.
+(5) ne pas écrire de route avec `string` pour `SendRequestAsync` : un littéral interpolé, ou un paramètre `FormattableString` ;
+(6) le bot est créé avec le fake : son ID est le plus petit, donc il passe **en premier** dans un listing trié par ID (réactions) ;
+(7) une réaction posée par un autre utilisateur se sème avec `channel.Reaction(messageId, "👍", userId, burst: false)`
+(`SeededTextChannel`), pas par un faux `PUT`.
 
 Minimum : nominal, relecture d'état, `Unknown *` 404, validation 50035, (401 si token
 invalide modélisé), event Gateway émis (ou non). Les API exactes (`Seed`, `CreateRestClient`,

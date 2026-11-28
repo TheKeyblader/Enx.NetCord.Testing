@@ -51,6 +51,28 @@ internal static class FormValidation
             : DiscordError.InvalidFormBody(new FormErrors().Add(parameterName, "NUMBER_TYPE_COERCE", NotSnowflakeMessage(raw)));
     }
 
+    /// <summary>
+    /// Reads a route parameter that must be a snowflake and collects the error instead of returning it, so a route with several IDs
+    /// reports them all in one <c>50035</c>.
+    /// </summary>
+    /// <param name="request">The request.</param>
+    /// <param name="parameterName">The template parameter name, also the error path.</param>
+    /// <param name="errors">The collector.</param>
+    /// <returns>The ID, or zero when the value is not a snowflake (an error was then added).</returns>
+    public static ulong ReadRouteSnowflake(FakeRestRequest request, string parameterName, FormErrors errors)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(errors);
+        var raw = request.RouteParameters[parameterName];
+        if (TryParseSnowflake(raw, out var id))
+        {
+            return id;
+        }
+
+        errors.Add(parameterName, "NUMBER_TYPE_COERCE", NotSnowflakeMessage(raw));
+        return 0;
+    }
+
     /// <summary>Reads the request body as a JSON object.</summary>
     /// <param name="request">The request.</param>
     /// <param name="document">The document when the body is an object; the caller disposes it and reads <see cref="JsonDocument.RootElement"/>.</param>

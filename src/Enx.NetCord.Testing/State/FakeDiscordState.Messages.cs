@@ -461,8 +461,9 @@ internal sealed partial class FakeDiscordState
         message.ToSnapshot(
             guildId,
             message.Reference is { } reference && _messages.TryGetValue(reference.MessageId, out var referenced)
-                ? referenced.ToSnapshot(guildId)
-                : null);
+                ? referenced.ToSnapshot(guildId, viewerId: _botId)
+                : null,
+            _botId);
 
     private List<AttachmentValue> AllocateAttachments(IReadOnlyList<NewAttachment>? files, DateTimeOffset now)
     {

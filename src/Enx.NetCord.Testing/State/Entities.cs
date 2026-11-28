@@ -137,11 +137,18 @@ internal sealed class MessageEntity(ulong id, ulong channelId, ulong authorId, l
     internal MessageReferenceValue? Reference { get; set; }
     internal string? Nonce { get; set; }
 
-    /// <summary>Projects the message; <paramref name="referenced"/> is the message it replies to, already detached.</summary>
-    internal MessageSnapshot ToSnapshot(ulong? guildId, MessageSnapshot? referenced = null) =>
+    // In the order of the first reaction with each emoji; an emoji nobody reacted with any more is removed.
+    internal List<ReactionEntity> Reactions { get; } = [];
+
+    /// <summary>
+    /// Projects the message; <paramref name="referenced"/> is the message it replies to, already detached, and
+    /// <paramref name="viewerId"/> the user the reactions' <c>me</c> flags are relative to.
+    /// </summary>
+    internal MessageSnapshot ToSnapshot(ulong? guildId, MessageSnapshot? referenced = null, ulong? viewerId = null) =>
         new(Id, ChannelId, guildId, AuthorId, Content, Snowflake.CreatedAt(Id), EditedTimestamp,
             Tts, Pinned, Type, Flags, Ordinal)
         {
+            Reactions = [.. Reactions.Select(reaction => reaction.ToSnapshot(viewerId))],
             Embeds = [.. Embeds],
             Attachments = [.. Attachments],
             MentionUserIds = [.. MentionUserIds],
