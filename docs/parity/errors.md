@@ -25,7 +25,7 @@ Progression `Fake` : ✅ **4** · 🟡 **9** · ⬜ **29** · ⛔ **0**
 | `http:400` | 400 Bad Request | corps invalide (avec `50035`) | 🟡 | ✅ | `DiscordError.InvalidFormBody`/`InvalidJson` testés via le vrai `RestClient` avec des handlers factices (M1-03) ; reste à les produire depuis les vrais handlers (M1-REST) |
 | `http:401` | 401 Unauthorized | token absent/inconnu | ✅ | ✅ | `{"message":"401: Unauthorized","code":0}` ; absent, inconnu ou `Bearer <token bot>` ; une opération `{}` accepte l'anonyme **et** un token inconnu (le header est ignoré, `Caller.Kind == Unrecognized`). Source : fauxcord `src/middleware/auth.ts:109-118` (chemins exemptés, dont le callback d'interaction et les webhooks à token, sans contrôle de l'en-tête) ; le comportement réel de Discord pour un token invalide sur ces routes n'est **pas vérifié** (M1-03) |
 | `http:403` | 403 Forbidden | permission manquante (`50013`) / accès (`50001`) | 🟡 | ✅ | produit via `Intercept`/handler factice seulement ; calcul de permissions : M4-REST-05 ; `50001` pas encore dans le catalogue |
-| `http:404` | 404 Not Found | ressource inconnue (`10xxx`) ou route inconnue (`code 0`) | 🟡 | ✅ | route inconnue / non implémentée (Lenient) : produit par le pipeline ; ressources `10xxx` : via handler factice, vrais handlers à venir (M1-REST) |
+| `http:404` | 404 Not Found | ressource inconnue (`10xxx`) ou route inconnue (`code 0`) | 🟡 | ✅ | route inconnue / non implémentée (Lenient) : produit par le pipeline, aussi testé via `FakeDiscord.CreateRestClient()` (M1-02) ; ressources `10xxx` : via handler factice, vrais handlers à venir (M1-REST) |
 | `http:405` | 405 Method Not Allowed | méthode non supportée sur une route connue | ✅ | ✅ | en-tête `Allow` = méthodes inventoriées du chemin ; Lenient et Strict ; pas d'en-têtes de rate limit (aucune opération résolue) |
 | `http:429` | 429 Too Many Requests | simulation de rate limit (opt-in) ou `Intercept` | 🟡 | ✅ | `Intercept(RestEffect.RateLimited(s))` : corps `{"message":"You are being rate limited.","retry_after":s,"global":false}`, scope `user`, sans `code` (exemple Discord) ; un 429 injecté ne prouve pas un quota : M6-02 |
 | `http:5xx` | 500/502 | injecté par le test via `Intercept` | ✅ | ✅ | `RestEffect.Error` 500 ou 502 → corps `{"message":"500: Internal Server Error","code":0}` ; NetCord ne réessaie pas sur 5xx (`RestException`) |
@@ -34,7 +34,7 @@ Progression `Fake` : ✅ **4** · 🟡 **9** · ⬜ **29** · ⛔ **0**
 
 | Code | Message Discord | Contexte typique | Fake | Tests | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `0` | General error / `404: Not Found` / `401: Unauthorized` | route inconnue, auth | ✅ | ✅ | 401, 404 (Lenient) et 405 ; messages `NNN: Reason` comme Discord |
+| `0` | General error / `404: Not Found` / `401: Unauthorized` | route inconnue, auth | ✅ | ✅ | 401, 404 (Lenient, aussi via la façade `FakeDiscord`) et 405 ; messages `NNN: Reason` comme Discord |
 | `10003` | Unknown Channel | `/channels/{id}` | 🟡 | ✅ | fabrique `DiscordError.UnknownChannel()` testée via un handler factice (404 même en Strict) ; le vrai `GET /channels/{channel_id}` vient en M1-REST |
 | `10004` | Unknown Guild | `/guilds/{id}` | ⬜ | ⬜ | |
 | `10007` | Unknown Member | `/guilds/{id}/members/{user_id}` | ⬜ | ⬜ | |

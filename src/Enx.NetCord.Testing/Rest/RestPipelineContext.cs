@@ -1,8 +1,10 @@
+using Enx.NetCord.Testing.State;
+
 namespace Enx.NetCord.Testing.Rest;
 
 /// <summary>
-/// The internal configuration shared by every transport of one fake: clock, route table, identity, strictness,
-/// interception registry and journal sink. M1-02 builds one per <c>FakeDiscord</c>.
+/// The internal configuration shared by every transport of one fake: state, clock, route table, identity, strictness,
+/// interception registry and journal sink. <c>FakeDiscord</c> builds one per fake.
 /// </summary>
 internal sealed class RestPipelineContext
 {
@@ -14,6 +16,7 @@ internal sealed class RestPipelineContext
 
     /// <summary>Initializes a new instance of the <see cref="RestPipelineContext"/> class.</summary>
     /// <param name="routes">The route table.</param>
+    /// <param name="state">The fake's state, handed to the route handlers through <see cref="FakeRestRequest.State"/>.</param>
     /// <param name="identities">The resolver mapping an <c>Authorization</c> value to a caller.</param>
     /// <param name="timeProvider">The fake's clock.</param>
     /// <param name="unimplementedRoutes">The policy for routes without a handler.</param>
@@ -21,6 +24,7 @@ internal sealed class RestPipelineContext
     /// <param name="hostname">The sentinel hostname.</param>
     public RestPipelineContext(
         RouteTable routes,
+        FakeDiscordState state,
         IRestIdentityResolver identities,
         TimeProvider timeProvider,
         UnimplementedRouteMode unimplementedRoutes = UnimplementedRouteMode.Lenient,
@@ -28,6 +32,7 @@ internal sealed class RestPipelineContext
         string hostname = DefaultHostname)
     {
         Routes = routes;
+        State = state;
         Identities = identities;
         TimeProvider = timeProvider;
         UnimplementedRoutes = unimplementedRoutes;
@@ -38,6 +43,9 @@ internal sealed class RestPipelineContext
 
     /// <summary>Gets the route table.</summary>
     public RouteTable Routes { get; }
+
+    /// <summary>Gets the state shared by every transport of the fake.</summary>
+    public FakeDiscordState State { get; }
 
     /// <summary>Gets the identity resolver.</summary>
     public IRestIdentityResolver Identities { get; }

@@ -109,7 +109,8 @@ internal sealed class RestPipeline(RestPipelineContext context)
             target.Query,
             body,
             caller,
-            context.TimeProvider);
+            context.TimeProvider,
+            context.State);
 
         // Structural validation comes first: an invalid request never consumes an interception rule (ADR 0005).
         if (entry.Validator is { } validator)

@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Enx.NetCord.Testing.Rest;
+using Enx.NetCord.Testing.State;
 using Microsoft.Extensions.Time.Testing;
 using NetCord;
 using NetCord.Rest;
@@ -73,6 +74,7 @@ internal sealed class RestTestHarness : IDisposable
 
         Context = new RestPipelineContext(
             RouteTable.Create(RouteInventory.All, bindings),
+            new FakeDiscordState(timeProvider ?? Clock, new DefaultSnowflakeGenerator()),
             new BotIdentityResolver(BotRawToken, BotId),
             timeProvider ?? Clock,
             mode,
