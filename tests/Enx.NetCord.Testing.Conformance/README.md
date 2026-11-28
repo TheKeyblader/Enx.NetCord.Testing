@@ -8,8 +8,8 @@ produced is validated against the **Discord OpenAPI spec** pinned in `docs/parit
 | Path | Role |
 | --- | --- |
 | `Rest/*ConformanceTests.cs` | One scenario per operation (and its main `Unknown *` error), through the NetCord API. |
-| `Contract/openapi-contract.json` | Checked-in extract of the pinned spec: 2xx response schemas of **every** operation + the `$ref` closure + `ErrorResponse`. Embedded in the assembly; CI needs no checkout of `discord-api-spec`. |
-| `Contract/extract-openapi-contract.py` | Generates the extract (offline, reproducible; the spec SHA is in the extract header). |
+| `Contract/openapi-contract.json` | Checked-in extract of the pinned spec: 2xx response schemas of **every** operation + the `$ref` closure + the error envelopes (`ErrorResponse`, and `RatelimitedResponse` for 429). Embedded in the assembly; CI needs no checkout of `discord-api-spec`. |
+| `Contract/extract-openapi-contract.py` | Generates the extract (offline, reproducible; the spec SHA is in the extract's `source` object). |
 | `Contract/JsonSchemaValidator.cs` | Small validator for the subset of JSON Schema the spec uses. It **throws** on an unsupported keyword. |
 | `Contract/ContractAssert.cs` | `ContractAssert.Conforms(discord, "METHOD /template"…)`. |
 | `Contract/ContractInfrastructureTests.cs` | Guards: pinned commit, inventory ↔ extract in sync, supported keywords, one scenario per implemented operation. |
@@ -25,6 +25,10 @@ The extract covers all spec operations, so a new handler only needs a scenario:
 2. Tag it with `[Parity("METHOD /template")]` (the exact route key, e.g. `[Parity("GET /channels/{channel_id}")]`);
    error scenarios also carry `[Parity("<code>")]`.
 3. `ConformanceTests_EveryImplementedOperation_HasAScenarioTaggedWithItsKey` fails until step 2 is done.
+
+Handlers of interactions and webhooks (`POST /interactions/…/callback`, `/webhooks/…`) get their scenarios in
+`Interactions/` instead of `Rest/`, still `[Parity]`-tagged and ending with `ContractAssert.Conforms`.
+A skipped test (`Skip` set) does not count for the guard: it must not stand in for a missing scenario.
 
 A violation is a bug in the fake (fix it, or `Skip` the test with the reason and a task ID, and downgrade the parity row to 🟡).
 A route NetCord calls but the spec does not document (`InSpecification: false`) has no contract: `Conforms` only

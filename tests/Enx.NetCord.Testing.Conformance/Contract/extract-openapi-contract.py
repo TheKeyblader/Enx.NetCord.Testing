@@ -9,7 +9,7 @@ Usage:
 The tool runs offline, outside the build, and its output is checked in and embedded in the test assembly: CI never
 needs a checkout of discord-api-spec. For every operation of the spec ("METHOD /template") it keeps the 2xx response
 schemas (null when the response has no body; the media type string when it is not JSON), plus the transitive closure of the "#/components/schemas/*"
-references and the Discord error envelope (ErrorResponse). Extracting every operation (not only the implemented ones)
+references and the Discord error envelopes (ErrorResponse, RatelimitedResponse). Extracting every operation (not only the implemented ones)
 means adding a fake handler never requires regenerating the extract.
 
 Known inaccuracies of the spec are corrected by explicit, guarded errata (see apply_errata); each one must be dropped
@@ -25,7 +25,7 @@ import re
 import sys
 
 SCHEMA_PREFIX = "#/components/schemas/"
-ALWAYS_INCLUDED = ["ErrorResponse"]
+ALWAYS_INCLUDED = ["ErrorResponse", "RatelimitedResponse"]
 METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
 
 

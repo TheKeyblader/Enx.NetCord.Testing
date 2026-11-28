@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Enx.NetCord.Testing.Conformance.Contract;
 using NetCord;
 using NetCord.Rest;
@@ -110,6 +111,12 @@ public sealed class ChannelsConformanceTests
         Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
         Assert.Equal(50035, exception.Error!.Code);
         ContractAssert.Conforms(discord, "PATCH /channels/{channel_id}");
+
+        // The contract only types the tree loosely: check the field error itself (string code under errors.name._errors).
+        var body = discord.Recorded.Requests[^1].ResponseBody!.Value;
+        var fieldError = body.GetProperty("errors").GetProperty("name").GetProperty("_errors")[0];
+        Assert.Equal(JsonValueKind.String, fieldError.GetProperty("code").ValueKind);
+        Assert.Equal("BASE_TYPE_BAD_LENGTH", fieldError.GetProperty("code").GetString());
     }
 
     [Fact]

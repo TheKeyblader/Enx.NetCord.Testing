@@ -273,7 +273,7 @@ public sealed class MessagesConformanceTests
         ContractAssert.Conforms(discord, "POST /channels/{channel_id}/messages/{message_id}/crosspost");
     }
 
-    [Fact(Skip = "Needs an announcement channel in the seed (M1-REST-02B1: SeededGuild.AnnouncementChannel). Proposed task M1-T-03: enable this nominal crosspost scenario once it merges.")]
+    [Fact(Skip = "M1-REST-03B: the nominal scenario needs an announcement channel in the seed; 50024 above is the coverage until then.")]
     [Parity("POST /channels/{channel_id}/messages/{message_id}/crosspost")]
     public Task CrosspostMessageAsync_AnnouncementChannel_ReturnsTheMessageAndConformsToMessageResponse()
         => Task.CompletedTask;

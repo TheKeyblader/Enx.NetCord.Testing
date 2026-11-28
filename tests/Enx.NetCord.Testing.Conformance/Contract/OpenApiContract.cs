@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Enx.NetCord.Testing.Rest;
 
@@ -38,6 +39,22 @@ internal sealed class OpenApiContract
     /// <summary>Gets the validator over the extracted component schemas.</summary>
     public JsonSchemaValidator Validator => _validator;
 
+    /// <summary>Lists what the validator could not handle in the extract: component schemas and inline operation responses.</summary>
+    /// <returns>One line per problem; empty when everything can be validated.</returns>
+    public IReadOnlyList<string> FindUnsupported()
+    {
+        var problems = new List<string>(_validator.FindUnsupported());
+        foreach (var operation in _document.RootElement.GetProperty("operations").EnumerateObject())
+        {
+            foreach (var response in operation.Value.GetProperty("responses").EnumerateObject())
+            {
+                problems.AddRange(_validator.FindUnsupported(response.Value, $"{operation.Name} {response.Name}"));
+            }
+        }
+
+        return problems;
+    }
+
     /// <summary>Returns whether the extract describes an operation.</summary>
     /// <param name="key">The <c>METHOD /template</c> key.</param>
     /// <returns><see langword="true"/> when the operation is in the extract.</returns>
@@ -48,7 +65,7 @@ internal sealed class OpenApiContract
     /// <returns>The violations; empty when the attempt conforms.</returns>
     /// <remarks>
     /// A success status must be documented for the operation and its body must match the schema (no body for a response
-    /// the spec documents without content). A 4xx/5xx status with a body must match the Discord error envelope.
+    /// the spec documents without content). A 429 body must match <c>RatelimitedResponse</c>, any other 4xx/5xx body the Discord error envelope.
     /// </remarks>
     public IReadOnlyList<string> Validate(RecordedRestRequest request)
     {
@@ -62,8 +79,10 @@ internal sealed class OpenApiContract
         var code = (int)status;
         if (code >= 400)
         {
+            // The spec documents 429 with its own envelope (retry_after, global); every other 4xx with ErrorResponse.
+            var envelope = code == 429 ? "RatelimitedResponse" : "ErrorResponse";
             return request.ResponseBody is { } error
-                ? Prefix(key, _validator.ValidateNamed(error, "ErrorResponse"))
+                ? Prefix(key, _validator.ValidateNamed(error, envelope))
                 : [$"{key}: {code} response has no JSON error body"];
         }
 
@@ -76,7 +95,7 @@ internal sealed class OpenApiContract
         }
 
         var responses = operation.GetProperty("responses");
-        var statusText = code.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var statusText = code.ToString(CultureInfo.InvariantCulture);
         if (!responses.TryGetProperty(statusText, out var schema))
         {
             var documented = string.Join(", ", responses.EnumerateObject().Select(static p => p.Name));

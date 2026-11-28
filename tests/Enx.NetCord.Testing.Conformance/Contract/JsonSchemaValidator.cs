@@ -9,8 +9,8 @@ namespace Enx.NetCord.Testing.Conformance.Contract;
 /// A small JSON Schema validator for the subset of OpenAPI 3.1 used by the Discord spec responses:
 /// <c>$ref</c> (to <c>#/components/schemas/*</c>), <c>type</c> (string or array), <c>properties</c>, <c>required</c>,
 /// <c>additionalProperties</c>, <c>items</c>, <c>uniqueItems</c>, <c>enum</c>, <c>const</c>, <c>allOf</c>, <c>oneOf</c>,
-/// <c>anyOf</c>, <c>pattern</c>, <c>minimum</c>/<c>maximum</c>, <c>maxLength</c> and the formats
-/// <c>snowflake</c>, <c>date-time</c>, <c>int32</c> and <c>int64</c>.
+/// <c>anyOf</c>, <c>pattern</c>, <c>minimum</c>/<c>maximum</c>, <c>minLength</c>/<c>maxLength</c> (in code points) and the formats
+/// <c>snowflake</c>, <c>date-time</c>, <c>uri</c>, <c>int32</c> and <c>int64</c> (<c>double</c> and <c>nonce</c> are accepted as plain values).
 /// </summary>
 /// <remarks>
 /// A keyword outside this subset throws instead of being ignored, so a spec sync that introduces a new keyword cannot
@@ -26,6 +26,9 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
         "description", "title", "default", "format", "example", "examples", "deprecated", "readOnly", "writeOnly",
     ];
 
+    // "nonce" and "double" carry no constraint beyond their type; the others are checked in CheckString/CheckNumber.
+    private static readonly HashSet<string> KnownFormats = ["snowflake", "date-time", "int32", "int64", "double", "uri", "nonce"];
+
     private static readonly HashSet<string> Supported =
     [
         "$ref", "type", "properties", "required", "additionalProperties", "items", "uniqueItems", "enum", "const",
@@ -33,7 +36,7 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
     ];
 
     private static readonly Regex DateTimePattern = new(
-        @"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$",
+        "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>Validates an instance against a schema node.</summary>
@@ -74,6 +77,17 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
         return problems;
     }
 
+    /// <summary>Scans one inline schema (for example an operation response) the way <see cref="FindUnsupported()"/> scans components.</summary>
+    /// <param name="schema">The schema.</param>
+    /// <param name="path">A label used to locate problems.</param>
+    /// <returns>One line per problem; empty when the schema can be validated.</returns>
+    public IReadOnlyList<string> FindUnsupported(JsonElement schema, string path)
+    {
+        var problems = new List<string>();
+        Scan(schema, path, problems);
+        return problems;
+    }
+
     private void Scan(JsonElement schema, string path, List<string> problems)
     {
         if (schema.ValueKind != JsonValueKind.Object)
@@ -108,6 +122,13 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
                     if (!target.StartsWith(SchemaPrefix, StringComparison.Ordinal) || !schemas.ContainsKey(target[SchemaPrefix.Length..]))
                     {
                         problems.Add($"{here}: unresolved reference '{target}'");
+                    }
+
+                    break;
+                case "format":
+                    if (keyword.Value.ValueKind != JsonValueKind.String || !KnownFormats.Contains(keyword.Value.GetString()!))
+                    {
+                        problems.Add($"{here}: unsupported format {keyword.Value.GetRawText()}");
                     }
 
                     break;
@@ -352,7 +373,7 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
     private void CheckArray(JsonElement instance, JsonElement schema, string path, List<string> errors)
     {
         var index = 0;
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new List<JsonElement>();
         var unique = schema.TryGetProperty("uniqueItems", out var u) && u.ValueKind == JsonValueKind.True;
         foreach (var item in instance.EnumerateArray())
         {
@@ -361,9 +382,15 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
                 Check(item, items, $"{path}[{index}]", errors);
             }
 
-            if (unique && !seen.Add(item.GetRawText()))
+            if (unique)
             {
-                errors.Add($"{path}[{index}]: duplicate item {Describe(item)}");
+                // Structural equality (number 1 equals 1.0, object key order is irrelevant); quadratic, which is fine for responses.
+                if (seen.Any(other => SameJson(other, item)))
+                {
+                    errors.Add($"{path}[{index}]: duplicate item {Describe(item)}");
+                }
+
+                seen.Add(item);
             }
 
             index++;
@@ -380,14 +407,14 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
             errors.Add($"{path}: '{value}' does not match {pattern.GetString()}");
         }
 
-        if (schema.TryGetProperty("maxLength", out var max) && new StringInfo(value).LengthInTextElements > max.GetInt32())
+        if (schema.TryGetProperty("maxLength", out var max) && value.EnumerateRunes().Count() > max.GetInt32())
         {
-            errors.Add($"{path}: longer than {max.GetInt32()} characters");
+            errors.Add($"{path}: longer than {max.GetInt32()} code points");
         }
 
-        if (schema.TryGetProperty("minLength", out var min) && new StringInfo(value).LengthInTextElements < min.GetInt32())
+        if (schema.TryGetProperty("minLength", out var min) && value.EnumerateRunes().Count() < min.GetInt32())
         {
-            errors.Add($"{path}: shorter than {min.GetInt32()} characters");
+            errors.Add($"{path}: shorter than {min.GetInt32()} code points");
         }
 
         if (schema.TryGetProperty("format", out var format))
@@ -398,6 +425,13 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
                     if (!ulong.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out _))
                     {
                         errors.Add($"{path}: '{value}' is not an unsigned 64-bit snowflake");
+                    }
+
+                    break;
+                case "uri":
+                    if (!Uri.TryCreate(value, UriKind.Absolute, out _))
+                    {
+                        errors.Add($"{path}: '{value}' is not an absolute URI");
                     }
 
                     break;
