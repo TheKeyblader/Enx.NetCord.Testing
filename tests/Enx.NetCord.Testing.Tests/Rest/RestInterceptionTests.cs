@@ -334,6 +334,24 @@ public sealed class RestInterceptionTests
     }
 
     [Fact]
+    public void WithPayload_OnARequest_ReturnsACopyAndLeavesTheOriginalUnchanged()
+    {
+        var request = new FakeRestRequest(
+            new RouteOperation("GET", "/x", null, RouteSecurity.Bot),
+            new Dictionary<string, string>(),
+            [],
+            null,
+            RestCaller.Anonymous,
+            TimeProvider.System);
+
+        var withPayload = request.WithPayload("validated");
+
+        Assert.Null(request.Payload);
+        Assert.Equal("validated", withPayload.GetPayload<string>());
+        Assert.Same(request.Operation, withPayload.Operation);
+    }
+
+    [Fact]
     public async Task Delay_AfterReadingASuspendedBody_ArmsOnlyOnInterceptionAndRunsTheHandlerOnceAtTheDeadline()
     {
         const string Key = "POST /channels/{channel_id}/messages";

@@ -109,7 +109,8 @@ internal sealed class RestPipeline(RestPipelineContext context)
             target.Query,
             body,
             caller,
-            context.TimeProvider);
+            context.TimeProvider,
+            context.State);
 
         // Structural validation comes first: an invalid request never consumes an interception rule (ADR 0005).
         if (entry.Validator is { } validator)
@@ -120,7 +121,7 @@ internal sealed class RestPipeline(RestPipelineContext context)
                 return WithOrdinaryHeaders(FakeRestResponse.From(validation.Error), entry);
             }
 
-            fakeRequest.Payload = validation.Payload;
+            fakeRequest = fakeRequest.WithPayload(validation.Payload);
         }
 
         cancellationToken.ThrowIfCancellationRequested();

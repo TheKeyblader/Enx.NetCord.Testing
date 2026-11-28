@@ -231,20 +231,54 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            var now = ReadClock();
-            var id = ResolveNewId(input.Id, now);
-            _assigned.Add(id);
+            return AddUserUnderLock(input, ReadClock()).ToSnapshot();
+        }
+    }
 
-            var user = new UserEntity(id, input.Username, NextOrdinal())
+    /// <summary>Resolves the ID, stores the user and publishes <see cref="UserCreated"/>. Call only under the lock.</summary>
+    private UserEntity AddUserUnderLock(CreateUserInput input, DateTimeOffset now)
+    {
+        var id = ResolveNewId(input.Id, now);
+        _assigned.Add(id);
+
+        var user = new UserEntity(id, input.Username, NextOrdinal())
+        {
+            GlobalName = input.GlobalName,
+            AvatarHash = input.AvatarHash,
+            IsBot = input.IsBot,
+        };
+        _users.Add(id, user);
+
+        Publish(new UserCreated(NextChangeNumber(), user.ToSnapshot()));
+        return user;
+    }
+
+    /// <summary>
+    /// Creates a user and its membership of an existing guild in one commit (two ordered changes,
+    /// <see cref="UserCreated"/> then <see cref="MemberAdded"/>). An unknown guild fails before anything is
+    /// allocated or written; an unavailable ID throws before any write.
+    /// </summary>
+    internal StateResult<MemberSnapshot> CreateUserAndMember(ulong guildId, CreateUserInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(input.Username);
+        ValidateExplicitId(input.Id, nameof(input));
+
+        lock (_gate)
+        {
+            if (!_guilds.TryGetValue(guildId, out var guild))
             {
-                GlobalName = input.GlobalName,
-                AvatarHash = input.AvatarHash,
-                IsBot = input.IsBot,
-            };
-            _users.Add(id, user);
+                return new StateFailure(StateFailureKind.UnknownGuild, guildId);
+            }
 
-            var snapshot = user.ToSnapshot();
-            Publish(new UserCreated(NextChangeNumber(), snapshot));
+            var now = ReadClock();
+            var user = AddUserUnderLock(input, now);
+            var member = new MemberEntity(guild.Id, user.Id, now, NextOrdinal());
+            _members.Add((guild.Id, user.Id), member);
+            guild.MemberUserIds.Add(user.Id);
+
+            var snapshot = member.ToSnapshot();
+            Publish(new MemberAdded(NextChangeNumber(), snapshot, user.ToSnapshot()));
             return snapshot;
         }
     }
