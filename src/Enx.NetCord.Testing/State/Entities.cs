@@ -64,6 +64,9 @@ internal sealed class ChannelEntity(ulong id, ChannelKind kind, long ordinal)
     internal bool Nsfw { get; set; }
     internal int RateLimitPerUser { get; set; }
     internal ulong? LastMessageId { get; set; }
+
+    // The time of the most recent pin of the channel; never earlier than a message that is still pinned (FakeDiscordState.NextPinTime).
+    internal DateTimeOffset? LastPinTimestamp { get; set; }
     internal List<ulong> RecipientIds { get; } = [];
 
     // The category the channel sits in (ADR 0013, § 2); always null for a category and for a DM.
@@ -82,7 +85,10 @@ internal sealed class ChannelEntity(ulong id, ChannelKind kind, long ordinal)
     internal ChannelSnapshot ToSnapshot() =>
         new(Id, Kind, GuildId, Name, Topic, Position, Nsfw, RateLimitPerUser, LastMessageId,
             [.. RecipientIds], ParentId, Flags, DefaultAutoArchiveDuration, DefaultThreadRateLimitPerUser,
-            Voice, Forum, Snowflake.CreatedAt(Id), Ordinal);
+            Voice, Forum, Snowflake.CreatedAt(Id), Ordinal)
+        {
+            LastPinTimestamp = LastPinTimestamp,
+        };
 }
 
 internal sealed class RoleEntity(ulong id, ulong guildId, string name, long ordinal)
@@ -129,7 +135,9 @@ internal sealed class MessageEntity(ulong id, ulong channelId, ulong authorId, l
     internal string Content { get; set; } = string.Empty;
     internal DateTimeOffset? EditedTimestamp { get; set; }
     internal bool Tts { get; set; }
-    internal bool Pinned { get; set; }
+    // When the message was pinned (second precision, see FakeDiscordState.NextPinTime); null when it is not pinned.
+    internal DateTimeOffset? PinnedAt { get; set; }
+    internal bool Pinned => PinnedAt is not null;
     internal int Type { get; set; }
     internal int Flags { get; set; }
     internal List<EmbedValue> Embeds { get; } = [];

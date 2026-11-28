@@ -80,6 +80,9 @@ internal enum StateFailureKind
     /// <summary>The message already has 20 distinct reactions and the emoji is a new one: 400 <c>30010</c> (status is a hypothesis).</summary>
     MaxReactions,
 
+    /// <summary>The channel already has 250 pinned messages: 400 <c>30003</c> (status is a hypothesis).</summary>
+    MaxPins,
+
     /// <summary>A message is sent to a channel that has no chat, a category: 400 <c>50008</c> (status is a hypothesis).</summary>
     CannotSendInNonTextChannel,
 

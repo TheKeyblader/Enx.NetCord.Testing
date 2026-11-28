@@ -79,6 +79,13 @@ internal sealed class DiscordError
     public static DiscordError MaxReactionsReached() => new(HttpStatusCode.BadRequest, 30010, "Maximum number of reactions reached (20)");
 
     /// <summary>
+    /// 400 with code 30003: the channel already has 250 pinned messages. The code and message are documented (250 in
+    /// <c>opcodes-and-status-codes.mdx</c>); the HTTP status is not (hypothesis, see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError MaxPinsReached() => new(HttpStatusCode.BadRequest, 30003, "Maximum number of pins reached for the channel (250)");
+
+    /// <summary>
     /// 403 with code 50025: an OAuth2 access token (group DM creation) is not one the fake knows. Discord documents
     /// <c>50025</c> with HTTP 403 for an invalid <c>external_auth_token</c> (provisional accounts, merging accounts); the same
     /// status is assumed for group DM creation, which is not documented (see <c>docs/parity/errors.md</c>).
@@ -254,6 +261,7 @@ internal sealed class DiscordError
             StateFailureKind.CannotExecuteOnChannelType => CannotExecuteOnChannelType(),
             StateFailureKind.UnknownEmoji => UnknownEmoji(),
             StateFailureKind.MaxReactions => MaxReactionsReached(),
+            StateFailureKind.MaxPins => MaxPinsReached(),
             StateFailureKind.CannotSendInNonTextChannel => CannotSendInNonTextChannel(),
             StateFailureKind.CannotSendInForumChannel => CannotSendInForumChannel(),
             StateFailureKind.MessageAlreadyCrossposted => MessageAlreadyCrossposted(),
@@ -307,6 +315,7 @@ internal sealed class DiscordError
             (HttpStatusCode.BadRequest, 40009) => OnlyOneParentChange(),
             (HttpStatusCode.NotFound, 10014) => UnknownEmoji(),
             (HttpStatusCode.BadRequest, 30010) => MaxReactionsReached(),
+            (HttpStatusCode.BadRequest, 30003) => MaxPinsReached(),
             (HttpStatusCode.NotFound, 10013) => UnknownUser(),
             (HttpStatusCode.Forbidden, 50025) => InvalidOAuth2AccessToken(),
             (HttpStatusCode.InternalServerError, 0) => InternalServerError(),

@@ -175,6 +175,19 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   (`10014`) à l'étape structurelle ; une table d'emojis unicode n'existe pas, la règle est « un caractère non ASCII, pas de lettre ASCII ni
   de blanc ». Un test qui envoie un segment brut par `SendRequestAsync` passe un littéral interpolé (NetCord l'encode ; `%` et `:` sont
   encodés, donc on ne peut pas simuler un pourcentage mal formé par ce chemin).
+- **Pins et typing** (M1-REST-05) : conventions qui se réutilisent pour une sous-ressource à horodatage ou un fait sans état.
+  - **Horodatage que NetCord repagine** : `GET …/messages/pins` est paginé par NetCord avec `before` écrit à la **seconde** (`ToString("s")`, sans offset ⇒
+    lu en UTC par `DateTimeStyles.AssumeUniversal`). `pinned_at` est donc coupé à la seconde et strictement croissant par salon (`NextPinTime` : une seconde de plus
+    que `ChannelEntity.LastPinTimestamp` si l'horloge n'a pas avancé) ; sinon deux pins de la même seconde (toujours le cas avec l'horloge virtuelle figée) seraient perdus à la
+    page suivante. Tout autre curseur horodaté NetCord doit être vérifié dans `RestClient.*.cs` (format de `AppendQueryParameter`) avant de choisir la précision.
+  - **Message système créé par une opération** (pin ⇒ type 6, `message_reference` vers le message épinglé, contenu vide, auteur = l'appelant) : construit **dans** l'opération d'état, sous le
+    même verrou, sans passer par `CreateMessage` (qui ajouterait mentions et type 19 de réponse) ; il compte dans `last_message_id`. Faits dans l'ordre : `MessageEdited`, `ChannelPinsUpdated`, `MessageCreated`.
+  - **Opération sans mutation qui publie un fait** (`TriggerTyping` ⇒ `TypingStarted`) : permise sans changement structurel de l'état (`NextChangeNumber()` + `Publish`) ; ne rien stocker si Discord n'expose rien à relire.
+  - **Idempotence** : `PUT` d'un fait déjà vrai et `DELETE` d'un fait déjà faux rendent `204` sans fait publié (`StateResult<bool>` `false`) ; la limite (`30003`) se contrôle **après** l'idempotence.
+  - Un salon sans chat (catégorie, forum, media) : les routes qui **listent** ou **déclenchent** (`GET …/pins`, `POST …/typing`) rendent `50024` ; celles qui visent **un message** (`PUT`/`DELETE …/pins/{message_id}`) rendent `10008`.
+  - **Nom NetCord** : `RestMessage.IsPinned` (pas `Pinned`) ; `GetChannelPinsAsync` prend `paginationProperties` (`BatchSize`) et, comme les autres lecteurs paginés, `cancellationToken: Ct` doit être nommé (xUnit1051). Pour semer un message déjà épinglé :
+    `discord.State.CreateMessage(StateCaller.Fixture, new CreateMessageInput(channel, author, "x", Pinned: true))` (aucune API de seed publique, UR-015) ; un DM : `discord.State.GetOrCreateDmChannel(new CreateDmChannelInput(userId))`.
+  - **Un champ de salon alimenté par une autre famille** (`last_pin_timestamp`) : `ChannelEntity` → `ChannelSnapshot` (propriété `init`) → `ChannelWire.ToText/ToVoice` et `UserWire.ToDmChannel` ; NetCord ne l'expose pas sur ses types de salon REST, le lire par `GetRawAsync`.
 - En-têtes rate limit (`X-RateLimit-Limit/Remaining/Reset/Reset-After/Bucket`) via le
   middleware commun ; ne pas les écrire dans le handler.
 - `204 No Content` quand Discord le fait (DELETE, PUT réaction…).
