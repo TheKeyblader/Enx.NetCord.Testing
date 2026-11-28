@@ -102,6 +102,27 @@ internal sealed class DiscordError
     /// <returns>The error.</returns>
     public static DiscordError CannotExecuteOnChannelType() => new(HttpStatusCode.BadRequest, 50024, "Cannot execute action on this channel type");
 
+    /// <summary>
+    /// 400 with code 50008: a message is sent to a channel with no chat (a category). The code and message are documented;
+    /// the HTTP status is not (hypothesis, see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError CannotSendInNonTextChannel() => new(HttpStatusCode.BadRequest, 50008, "Cannot send messages in a non-text channel");
+
+    /// <summary>
+    /// 400 with code 40058: a message is sent to a forum or media channel. The code and message are documented (for forum channels);
+    /// the HTTP status is not (hypothesis, see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError CannotSendInForumChannel() => new(HttpStatusCode.BadRequest, 40058, "Cannot send a message in a forum channel");
+
+    /// <summary>
+    /// 400 with code 40033: the message was already crossposted. The code and message are documented; the HTTP status is not
+    /// (hypothesis, see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError MessageAlreadyCrossposted() => new(HttpStatusCode.BadRequest, 40033, "This message has already been crossposted");
+
     /// <summary>400 with code 50034: a message named by a bulk delete is older than two weeks.</summary>
     /// <returns>The error.</returns>
     public static DiscordError MessageTooOldToBulkDelete() => new(HttpStatusCode.BadRequest, 50034, "You can only bulk delete messages that are under 14 days old.");
@@ -202,6 +223,9 @@ internal sealed class DiscordError
             StateFailureKind.CannotExecuteOnChannelType => CannotExecuteOnChannelType(),
             StateFailureKind.UnknownEmoji => UnknownEmoji(),
             StateFailureKind.MaxReactions => MaxReactionsReached(),
+            StateFailureKind.CannotSendInNonTextChannel => CannotSendInNonTextChannel(),
+            StateFailureKind.CannotSendInForumChannel => CannotSendInForumChannel(),
+            StateFailureKind.MessageAlreadyCrossposted => MessageAlreadyCrossposted(),
 
             // Hypotheses, see docs/parity/errors.md: the codes of these field errors are not documented by Discord.
             StateFailureKind.InvalidChannelType => InvalidChannelType(),
@@ -240,6 +264,9 @@ internal sealed class DiscordError
             (HttpStatusCode.BadRequest, 50006) => EmptyMessage(),
             (HttpStatusCode.BadRequest, 50024) => CannotExecuteOnChannelType(),
             (HttpStatusCode.BadRequest, 50034) => MessageTooOldToBulkDelete(),
+            (HttpStatusCode.BadRequest, 50008) => CannotSendInNonTextChannel(),
+            (HttpStatusCode.BadRequest, 40058) => CannotSendInForumChannel(),
+            (HttpStatusCode.BadRequest, 40033) => MessageAlreadyCrossposted(),
             (HttpStatusCode.BadRequest, 30052) => BitrateTooHigh(),
             (HttpStatusCode.NotFound, 10014) => UnknownEmoji(),
             (HttpStatusCode.BadRequest, 30010) => MaxReactionsReached(),

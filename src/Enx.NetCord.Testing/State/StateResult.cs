@@ -69,6 +69,15 @@ internal enum StateFailureKind
 
     /// <summary>The message already has 20 distinct reactions and the emoji is a new one: 400 <c>30010</c> (status is a hypothesis).</summary>
     MaxReactions,
+
+    /// <summary>A message is sent to a channel that has no chat, a category: 400 <c>50008</c> (status is a hypothesis).</summary>
+    CannotSendInNonTextChannel,
+
+    /// <summary>A message is sent to a forum or media channel, where a post is a thread: 400 <c>40058</c> (status is a hypothesis).</summary>
+    CannotSendInForumChannel,
+
+    /// <summary>The message was already published by a crosspost: 400 <c>40033</c> (status is a hypothesis).</summary>
+    MessageAlreadyCrossposted,
 }
 
 /// <summary>A refused operation: the reason and the ID of the resource it concerns. No HTTP here.</summary>
