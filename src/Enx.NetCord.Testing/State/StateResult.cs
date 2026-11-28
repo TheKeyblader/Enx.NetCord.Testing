@@ -46,7 +46,7 @@ internal enum StateFailureKind
     /// <summary>The user limit exceeds what the voice or stage channel allows, carried by <see cref="StateFailure.Limit"/> (ADR 0013, § 1): 400 <c>50035</c> on <c>user_limit</c> (form is a hypothesis).</summary>
     InvalidChannelUserLimit,
 
-    /// <summary>More than one channel of a <c>PATCH /guilds/{guild_id}/channels</c> would change its parent (ADR 0013, § 4): 400 <c>40009</c> (status is a hypothesis).</summary>
+    /// <summary>More than one channel of a <c>PATCH /guilds/{guild_id}/channels</c> would change its parent (ADR 0013, § 4): 400 <c>40009</c> (status documented, <c>guild.mdx:961</c>).</summary>
     TooManyParentChanges,
 
     /// <summary>
