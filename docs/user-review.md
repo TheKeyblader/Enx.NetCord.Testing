@@ -240,6 +240,46 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   en guilde non Community fixe le contenu de M4-REST-10.
 - **Réponse** : _(à remplir)_
 
+### UR-011 — Messages : codes, statuts et pagination (`test-manuel`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-REST-03 (`3aea9b6`…`18f71be`) ; roadmap `PAR-ERR-04`
+- **Concerne** : `rest.md` `/channels/{channel_id}/messages…` (7 lignes) ; `errors.md` `50003`, `50005`, `50006`, `50024`, `50034`, `50035` ; tests `tests/Enx.NetCord.Testing.Tests/Rest/Messages/*` (`SendRequest_InvalidField_*`, `SendRequest_InvalidEmbed_*`, `SendRequest_BulkDeleteWithInvalidMessages_*`)
+- **Hypothèse** :
+  - codes de champ `50035` : `MESSAGE_REFERENCE_UNKNOWN_MESSAGE` (réponse à un message
+    inexistant), `MAX_EMBED_SIZE_EXCEEDED`, `MESSAGE_ALLOWED_MENTIONS_PARSE_EXCLUSIVE`,
+    `BASE_TYPE_ARRAY_UNIQUE` (doublons du bulk-delete), `URL_TYPE_INVALID_URL`,
+    `BASE_TYPE_CHOICES` (`allowed_mentions.parse.N`, `message_reference.type`) ;
+  - statuts : `50003` ⇒ 403, `50005` ⇒ 403, `50024` ⇒ 400 ;
+  - `50006` (message vide) et `50035` passent avant `10003`/`50001` ; `50006` aussi quand une
+    édition viderait le message ;
+  - en DM, supprimer le message de l'autre partie ⇒ 403 `50003` ;
+  - `around` : `limit / 2` messages plus anciens, puis la cible et les suivants ; plusieurs
+    curseurs ⇒ `around`, puis `before`, puis `after`, sans erreur ;
+  - texte de `50034` repris du message observé de Discord (pas de la table des docs) ; un
+    `nonce` numérique est renvoyé en chaîne ;
+  - `attachments[].id` à l'édition : un `id` qui est un index `files[n]` désigne un fichier
+    téléversé, sinon une pièce existante à conserver.
+- **Procédure** (G1, `$CH1`, un DM du bot avec un utilisateur qui y a écrit) :
+  1. `POST /channels/$CH1/messages` avec chaque corps invalide (réponse à `"message_id":"1"`,
+     embed de plus de 6000 caractères, `allowed_mentions` `{"parse":["users"],"users":["1"]}`,
+     `parse: ["x"]`, URL d'embed `"x"`) ; relever `errors.<chemin>._errors[0].code`.
+  2. `POST …/messages/bulk-delete` avec deux ID identiques ; avec un message de plus de 14 jours
+     (noter le texte) ; dans le DM (noter statut et code).
+  3. `POST …/messages/{id}/crosspost` sur un message de `$CH1` (salon texte).
+  4. `PATCH` du contenu d'un message d'un autre utilisateur ; `PATCH {"content":""}` sur un
+     message sans embed ; `PATCH` avec `attachments: [{"id":"<id existant>"}]`.
+  5. `POST {}` sur `/channels/1/messages` (inexistant).
+  6. `DELETE` du message de l'utilisateur dans le DM.
+  7. 7 messages, puis `GET …/messages?around=<4ᵉ>&limit=5` ; puis `?before=A&after=B`.
+  8. `POST` avec `"nonce": 123`.
+- **Résultat attendu** : 1-2 ⇒ les codes ci-dessus, 400 `50034` et 403 `50003` en DM ; 3 ⇒
+  400 `50024` ; 4 ⇒ 403 `50005`, 400 `50006`, pièce conservée ; 5 ⇒ 400 `50006` ; 6 ⇒ 403
+  `50003` ; 7 ⇒ 2 plus anciens + cible + 2 suivants, puis réponse 200 ; 8 ⇒ `"nonce":"123"`.
+- **Si différent** : corriger `DiscordError`, `Routes/Messages/MessageValidators.cs`,
+  `EmbedValidation.cs`, `FakeDiscordState.Messages.cs`, `errors.md`, `rest.md` et les tests.
+- **Réponse** : _(à remplir)_
+
 ## Traités
 
 _(aucun)_
