@@ -256,6 +256,11 @@ internal sealed class MessageResponse
     [JsonPropertyName("components")]
     public required List<MessageComponentResponse> Components { get; init; }
 
+    /// <summary>Gets the reactions, in the order of the first reaction with each emoji; omitted when there are none, as Discord does.</summary>
+    [JsonPropertyName("reactions")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<MessageReactionResponse>? Reactions { get; init; }
+
     /// <summary>Gets the nonce the client sent.</summary>
     [JsonPropertyName("nonce")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

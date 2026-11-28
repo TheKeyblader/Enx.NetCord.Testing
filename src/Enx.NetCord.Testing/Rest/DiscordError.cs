@@ -65,6 +65,20 @@ internal sealed class DiscordError
     public static DiscordError UnknownUser() => new(HttpStatusCode.NotFound, 10013, "Unknown User");
 
     /// <summary>
+    /// 404 with code 10014: the emoji is unknown. Discord documents it for an emoji that is not URL-encoded; the fake also answers it for a
+    /// segment that is no emoji, and for the removal of a reaction nobody made (hypotheses, see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError UnknownEmoji() => new(HttpStatusCode.NotFound, 10014, "Unknown Emoji");
+
+    /// <summary>
+    /// 400 with code 30010: the message already has 20 distinct reactions. The code and message are documented; the HTTP status is not
+    /// (hypothesis, see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError MaxReactionsReached() => new(HttpStatusCode.BadRequest, 30010, "Maximum number of reactions reached (20)");
+
+    /// <summary>
     /// 403 with code 50025: an OAuth2 access token (group DM creation) is not one the fake knows. Discord documents
     /// <c>50025</c> with HTTP 403 for an invalid <c>external_auth_token</c> (provisional accounts, merging accounts); the same
     /// status is assumed for group DM creation, which is not documented (see <c>docs/parity/errors.md</c>).
@@ -186,6 +200,8 @@ internal sealed class DiscordError
             StateFailureKind.MessageTooOldForBulkDelete => MessageTooOldToBulkDelete(),
             StateFailureKind.CannotExecuteInDm => CannotExecuteOnDm(),
             StateFailureKind.CannotExecuteOnChannelType => CannotExecuteOnChannelType(),
+            StateFailureKind.UnknownEmoji => UnknownEmoji(),
+            StateFailureKind.MaxReactions => MaxReactionsReached(),
 
             // Hypotheses, see docs/parity/errors.md: the codes of these field errors are not documented by Discord.
             StateFailureKind.InvalidChannelType => InvalidChannelType(),
@@ -225,6 +241,8 @@ internal sealed class DiscordError
             (HttpStatusCode.BadRequest, 50024) => CannotExecuteOnChannelType(),
             (HttpStatusCode.BadRequest, 50034) => MessageTooOldToBulkDelete(),
             (HttpStatusCode.BadRequest, 30052) => BitrateTooHigh(),
+            (HttpStatusCode.NotFound, 10014) => UnknownEmoji(),
+            (HttpStatusCode.BadRequest, 30010) => MaxReactionsReached(),
             (HttpStatusCode.NotFound, 10013) => UnknownUser(),
             (HttpStatusCode.Forbidden, 50025) => InvalidOAuth2AccessToken(),
             (HttpStatusCode.InternalServerError, 0) => InternalServerError(),
