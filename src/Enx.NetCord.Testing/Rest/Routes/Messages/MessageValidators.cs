@@ -286,7 +286,7 @@ internal static class MessageValidators
         MultipartPart? payload = null;
         foreach (var part in parts)
         {
-            if (part.Name == "payload_json")
+            if (part.Name == RestMultipart.PayloadJsonName)
             {
                 payload = part;
             }
@@ -398,7 +398,7 @@ internal static class MessageValidators
             metadata.TryGetValue(index, out var meta);
             result.Add(new NewAttachment(
                 meta.FileName ?? part.FileName ?? "file",
-                part.Content.Length,
+                part.Length,
                 part.ContentType,
                 meta.Title,
                 meta.Description));

@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Net;
-using System.Text;
 using System.Text.Json;
 using Enx.NetCord.Testing.Rest;
 
@@ -14,8 +13,6 @@ namespace Enx.NetCord.Testing;
 /// </remarks>
 public sealed class RecordedRestRequest
 {
-    private const string PayloadJsonName = "payload_json";
-
     private RecordedRestRequest(
         string method,
         string path,
@@ -108,9 +105,9 @@ public sealed class RecordedRestRequest
             || mediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase)
             || mediaType.EndsWith("+json", StringComparison.OrdinalIgnoreCase);
 
-    private static JsonElement? ParseDetached(byte[]? json)
+    private static JsonElement? ParseDetached(ReadOnlyMemory<byte> json)
     {
-        if (json is not { Length: > 0 })
+        if (json.IsEmpty)
         {
             return null;
         }
@@ -128,71 +125,23 @@ public sealed class RecordedRestRequest
         }
     }
 
-    /// <summary>Finds the <c>payload_json</c> part of a multipart body without keeping the other parts.</summary>
-    /// <remarks>
-    /// Latin-1 maps every byte to one char, so the body can be split as text and the part converted back
-    /// to its exact original bytes. The delimiter is the first line of the body (<c>--boundary</c>).
-    /// </remarks>
-    private static byte[]? ExtractPayloadJson(byte[] body)
+    /// <summary>Finds the first <c>payload_json</c> part of a multipart body; the other parts are not kept, nor is any byte copied.</summary>
+    /// <remarks>Reads with the shared <see cref="RestMultipart"/> parser, in its lenient mode: a malformed sibling part is ignored.</remarks>
+    private static ReadOnlyMemory<byte> ExtractPayloadJson(byte[] body)
     {
-        var text = Encoding.Latin1.GetString(body);
-        var lineEnd = text.IndexOf("\r\n", StringComparison.Ordinal);
-        if (!text.StartsWith("--", StringComparison.Ordinal) || lineEnd < 0)
+        if (!RestMultipart.TryParse(body, lenient: true, out var parts))
         {
-            return null;
+            return default;
         }
 
-        var delimiter = text[..lineEnd];
-        foreach (var rawPart in text.Split(delimiter))
+        foreach (var part in parts)
         {
-            var part = rawPart.StartsWith("\r\n", StringComparison.Ordinal) ? rawPart[2..] : rawPart;
-            var headerEnd = part.IndexOf("\r\n\r\n", StringComparison.Ordinal);
-            if (headerEnd < 0 || !IsPayloadJsonPart(part[..headerEnd]))
+            if (string.Equals(part.Name, RestMultipart.PayloadJsonName, StringComparison.Ordinal))
             {
-                continue;
-            }
-
-            var content = part[(headerEnd + 4)..];
-            if (content.EndsWith("\r\n", StringComparison.Ordinal))
-            {
-                content = content[..^2];
-            }
-
-            return Encoding.Latin1.GetBytes(content);
-        }
-
-        return null;
-    }
-
-    /// <summary>Returns whether the <c>name</c> parameter of the part's <c>Content-Disposition</c> is exactly <c>payload_json</c>.</summary>
-    private static bool IsPayloadJsonPart(string headers)
-    {
-        foreach (var line in headers.Split("\r\n"))
-        {
-            const string HeaderName = "Content-Disposition:";
-            if (!line.StartsWith(HeaderName, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            foreach (var parameter in line[HeaderName.Length..].Split(';'))
-            {
-                var trimmed = parameter.Trim();
-                if (!trimmed.StartsWith("name=", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var value = trimmed["name=".Length..].Trim();
-                if (value.Length >= 2 && value[0] == '"' && value[^1] == '"')
-                {
-                    value = value[1..^1];
-                }
-
-                return string.Equals(value, PayloadJsonName, StringComparison.Ordinal);
+                return part.Content;
             }
         }
 
-        return false;
+        return default;
     }
 }

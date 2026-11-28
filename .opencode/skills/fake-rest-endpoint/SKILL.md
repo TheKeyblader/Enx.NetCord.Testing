@@ -57,9 +57,14 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   l'état** (`CreateMessageInput`, `EditMessageInput`) ; le handler complète ce que seul l'appelant connaît
   (`payload with { AuthorId = request.Caller.UserId }`).
 - **Multipart** (`payload_json` + `files[n]`, ex. NetCord `IMessageProperties.Serialize`) : `RestMultipart.IsMultipart(body)` /
-  `TryParse(body, out parts)` (`MultipartPart` : `Name`, `FileName`, `ContentType`, octets exacts ; noms non ASCII décodés) ;
-  lire `payload_json` avec `FormValidation.TryReadJsonObject(new RestRequestBody(part.Content, "application/json"), …)` (un
-  `payload_json` absent = objet vide). Le fake ne conserve que le nom, la taille et le type des fichiers ; l'`url` d'une pièce
+  `TryParse(body, out parts)` (`MultipartPart` : `Name`, `FileName`, `ContentType`, `Length`, `Content` en `ReadOnlyMemory<byte>` ;
+  noms non ASCII décodés). **C'est le seul parseur multipart** : le journal (`RecordedRestRequest`) l'utilise aussi, via
+  `TryParse(bytes, lenient: true, out parts)` (une partie sans `name` est alors ignorée au lieu d'invalider le corps). Il travaille
+  sur les octets et ne copie rien : `Content` est une tranche du corps, donc ne lire que `Length` pour un fichier et `Text`
+  seulement pour `payload_json`. Une frontière n'est reconnue qu'en début de ligne et suivie de CRLF ou `--` : des octets de
+  fichier qui lui ressemblent restent dans leur partie. Ne pas écrire un second lecteur ni décoder le corps en `string`.
+  Lire `payload_json` avec `FormValidation.TryReadJsonObject(new RestRequestBody(part.Content, "application/json"), …)` (un
+  `payload_json` absent = objet vide ; `RestMultipart.PayloadJsonName`). Le fake ne conserve que le nom, la taille et le type des fichiers ; l'`url` d'une pièce
   jointe est déterministe (`MessageWire.CdnHost`). NetCord numérote ses fichiers à partir de 0 et ne peut donc que **remplacer**
   les pièces jointes d'un message à l'édition ; tester la conservation par un `SendRequestAsync` JSON brut.
 - Ordre des contrôles d'un message : champs invalides (`50035`) puis message vide (`50006`) à l'étape structurelle ; salon
