@@ -264,4 +264,35 @@ internal static partial class RouteInventory
         new("PATCH", "/webhooks/{webhook_id}/{webhook_token}/messages/{message_id}", "update_webhook_message", RouteSecurity.Bot | RouteSecurity.Anonymous),
         new("POST", "/webhooks/{webhook_id}/{webhook_token}/slack", "execute_slack_compatible_webhook", RouteSecurity.Bot | RouteSecurity.Anonymous),
     ];
+
+    /// <summary>Path parameter names the specification types as <c>SnowflakeType</c>.</summary>
+    internal static readonly string[] SnowflakeParameters =
+    [
+        "application_id",
+        "channel_id",
+        "command_id",
+        "emoji_id",
+        "entitlement_id",
+        "exception_id",
+        "guild_id",
+        "guild_scheduled_event_exception_id",
+        "guild_scheduled_event_id",
+        "integration_id",
+        "interaction_id",
+        "lobby_id",
+        "message_id",
+        "overwrite_id",
+        "pack_id",
+        "request_id",
+        "role_id",
+        "rule_id",
+        "sku_id",
+        "sound_id",
+        "sticker_id",
+        "subscription_id",
+        "user_id",
+        "user_id_1",
+        "user_id_2",
+        "webhook_id",
+    ];
 }

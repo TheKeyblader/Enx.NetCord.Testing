@@ -8,6 +8,9 @@ description: Conventions de tests du dépôt Enx.NetCord.Testing (xUnit v3, nomm
 - Framework des tests **du dépôt** : xUnit v3 (`xunit.v3`), `Microsoft.NET.Test.Sdk`,
   `Microsoft.Extensions.TimeProvider.Testing` (`FakeTimeProvider`). La lib `src/` ne dépend
   d'aucun framework de test (ses assertions lèvent `FakeDiscordAssertionException`).
+- Requêtes REST du bot : préférer `discord.Recorded.ShouldHaveRequested…` / `ShouldNotHaveRequested`
+  (ADR 0012) au LINQ sur `Recorded.Requests` ; elles valident le motif de route et listent le
+  journal en cas d'échec.
 - Nommage : classe `<Sujet>Tests`, méthode `Method_Scenario_Expected`.
 - Un dossier par domaine (`Rest/Channels`, `Rest/Guilds`, `Gateway`, `Interactions`, `Services`, `Hosting`).
 - Attribut `[Parity("<clé de ligne>")]` (défini dans le projet de tests) sur chaque test qui
