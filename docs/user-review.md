@@ -148,6 +148,98 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   callbacks et `errors.md`.
 - **Réponse** : _(à remplir)_
 
+### UR-006 — API de seed des salons (`décision`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-ADR-13 ; [ADR 0013 § 6](adr/0013-channel-hierarchy-and-types.md)
+- **Concerne** : API publique `SeededGuild`, `SeededCategory`, `SeededVoiceChannel`, `SeededForumChannel`, `SeededChannelOptions` (implémentation M1-REST-02B1)
+- **Décision** : tout salon seedé rend une poignée, jamais un ID nu. Le parent se lit dans
+  l'appel (`category.TextChannel(...)`). Une seule classe d'options pour tous les types, qui
+  lève `ArgumentException` sur une option sans objet pour le type si sa valeur diffère du défaut
+  (ex. `Topic` sur un salon vocal). Pas de réglages vocaux (`bitrate`, `user_limit`) dans le
+  seed ; media et annuaire exclus. `Slowmode` y est (absorbe M1-REST-02D).
+- **Réponse** : _(à remplir)_
+
+### UR-007 — Périmètre des types de salons et des contrôles (`décision`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-ADR-13 ; ADR 0013 § 1, § 4, § 5
+- **Concerne** : `rest.md` `/channels/{channel_id}`, `/guilds/{guild_id}/channels` ; tâche M4-REST-10
+- **Décision** :
+  1. Le type 16 (media) est modélisé alors que la spec OpenAPI ne le liste pas (docs et NetCord oui).
+  2. Tags de forum reportés à M4-REST-01 ; d'ici là validés puis ignorés.
+  3. Aucune guilde n'exige `NEWS` ou Community pour un salon d'annonces ou stage (contrôles en M4-REST-10).
+  4. Le listing d'une guilde est rendu par ID, pas par position.
+  5. Les limites Discord (50 salons par catégorie, 500 par guilde) s'appliquent aussi au seed.
+- **Réponse** : _(à remplir)_
+
+### UR-008 — Lot A : parent et suppression de catégorie (`test-manuel`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-ADR-13 ; ADR 0013 § 2, § 3, § 7 ; roadmap `PAR-REST-02`
+- **Concerne** : `PATCH`/`DELETE /channels/{channel_id}`, `50035` ; `gateway.md` `CHANNEL_UPDATE`, `CHANNEL_DELETE`, `MESSAGE_DELETE`
+- **Hypothèse** : parent inconnu ⇒ `CHANNEL_PARENT_INVALID` ; parent non catégorie ⇒
+  `CHANNEL_PARENT_INVALID_TYPE` ; parent donné à une catégorie ⇒ `CHANNEL_PARENT_INVALID` ;
+  51ᵉ enfant ⇒ `CHANNEL_PARENT_MAX_CHANNELS` ; à la suppression d'une catégorie, les
+  `CHANNEL_UPDATE` des enfants (`parent_id: null`, position inchangée) précèdent le
+  `CHANNEL_DELETE` ; supprimer un salon qui contient des messages n'émet aucun `MESSAGE_DELETE`.
+- **Procédure** (G1, bot connecté avec l'intent `GUILDS`, qui journalise les dispatchs) :
+  1. `PATCH /channels/$CH1` `{"parent_id":"1"}`, puis avec l'ID d'un autre salon texte.
+  2. `PATCH` d'une catégorie avec `{"parent_id":"<autre catégorie>"}`.
+  3. Créer 50 salons dans une catégorie, puis un 51ᵉ.
+  4. Supprimer une catégorie de trois salons ; noter l'ordre des dispatchs et les `position`.
+  5. Supprimer un salon contenant des messages ; noter les dispatchs.
+- **Résultat attendu** : 1-3 ⇒ 400 `50035` avec les codes ci-dessus ; 4 ⇒ trois
+  `CHANNEL_UPDATE` puis `CHANNEL_DELETE` ; 5 ⇒ `CHANNEL_DELETE` seul.
+- **Si différent** : corriger `DiscordError.FromStateFailure`, l'ordre des faits de
+  `DeleteChannel`, `errors.md` et le § 7 de l'ADR 0013.
+- **Réponse** : _(à remplir)_
+
+### UR-009 — Lot B : positions et listing (`test-manuel`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-ADR-13 ; ADR 0013 § 4 ; roadmap `PAR-REST-02`
+- **Concerne** : `GET`/`POST`/`PATCH /guilds/{guild_id}/channels`, `PATCH /channels/{channel_id}`, `40009`, `10003`
+- **Hypothèse** : position par défaut = suivante du groupe (texte, annonces et forum ensemble ;
+  voix et stage ; catégories) ; aucun voisin renuméroté ; un déplacement garde la position ;
+  listing rendu par ID ; `40009` ne compte que les `parent_id` différents du parent courant ;
+  ID inconnu ⇒ 404 `10003`.
+- **Procédure** (guilde neuve) :
+  1. Créer texte, voix, catégorie, puis un second texte, sans `position` ; noter chaque `position`.
+  2. `GET /guilds/$G1/channels` : noter l'ordre du tableau.
+  3. `PATCH /channels/<texte 2>` `{"position":0}` ; relire tous les salons et les dispatchs.
+  4. `PATCH /channels/<texte 1>` `{"parent_id":"<catégorie>"}` ; noter sa `position`.
+  5. `PATCH /guilds/$G1/channels` avec deux entrées dont une seule change réellement de parent,
+     puis deux qui changent, puis `[{"id":"1","position":0}]`.
+- **Résultat attendu** : 1 ⇒ 0, 0, 0, 1 ; 2 ⇒ ordre des ID ; 3 ⇒ un seul `CHANNEL_UPDATE`,
+  texte 1 inchangé ; 4 ⇒ position inchangée ; 5 ⇒ 204, puis 400 `40009`, puis 404 `10003`.
+- **Si différent** : changer la règle de position par défaut ou le tri du listing dans l'état,
+  et le § 4 de l'ADR 0013.
+- **Réponse** : _(à remplir)_
+
+### UR-010 — Lot C : conversion et bornes par type de salon (`test-manuel`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-ADR-13 ; ADR 0013 § 1, § 5 ; roadmap `PAR-REST-02` (complète UR-004)
+- **Concerne** : `PATCH /channels/{channel_id}`, `POST /guilds/{guild_id}/channels`, `POST /channels/{channel_id}/messages`, `30013`, `30052`, `40058`, `50035`
+- **Hypothèse** : conversion 0 → 5 remet `rate_limit_per_user` à 0 et s'applique avant les
+  autres champs ; sans `NEWS`, Discord refuse (le fake accepte) ; `topic` > 1024 hors forum ⇒
+  `50035` `BASE_TYPE_BAD_LENGTH` ; `user_limit` 100 ⇒ `50035` `NUMBER_TYPE_MAX` ; bitrate trop
+  haut ⇒ 400 `30052` ; message dans un salon media ⇒ `40058` ; bitrate par défaut 64000 ;
+  `default_thread_rate_limit_per_user` présent et modifiable sur un salon d'annonces (docs
+  contradictoires : `channel.mdx:442` vs `guild.mdx:928`).
+- **Procédure** :
+  1. Guilde Community : `PATCH` d'un salon texte en slowmode 30 avec `{"type":5}` ; copier le JSON. Même appel en guilde non Community.
+  2. `{"topic":"<1025 caractères>"}` sur un salon texte, puis sur un forum.
+  3. Salon vocal : `{"user_limit":100}`, `{"bitrate":500000}` ; créer un salon vocal sans `bitrate` et lire sa valeur.
+  4. `POST` d'un message dans un salon media.
+  5. `GET` d'un salon d'annonces : `default_thread_rate_limit_per_user` présent ? puis `PATCH` de ce champ.
+- **Résultat attendu** : 1 ⇒ `type: 5`, slowmode 0 ou absent (noter le refus en guilde non
+  Community) ; 2 ⇒ `50035` puis 200 ; 3 ⇒ `50035`, 400 `30052`, 64000 ; 4 ⇒ `40058` ; 5 ⇒ présent, 200.
+- **Si différent** : corriger `ChannelTraits`, les refus d'état, `errors.md` ; le résultat de 1
+  en guilde non Community fixe le contenu de M4-REST-10.
+- **Réponse** : _(à remplir)_
+
 ## Traités
 
 _(aucun)_
