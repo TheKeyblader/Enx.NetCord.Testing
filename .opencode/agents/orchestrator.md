@@ -37,9 +37,11 @@ principal (`main`) : tu y tiens la roadmap et tu y fusionnes.
 
 1. **Créer** : un worktree par tâche avec l'outil Code Mode
    `await tools.opencode.worktree_create({ name: "<ID>" })` (dans `execute`), pas
-   `git worktree add`. Note le `directory` retourné et la branche
+   `git worktree add`. Note le `directory` retourné. Le worktree est créé en **HEAD détachée** :
+   crée aussitôt sa branche avec `git -C <directory> switch -c feat/<ID>` et vérifie-la
    (`git -C <directory> branch --show-current`). Vérifie avant que `main` est propre et à jour
-   (le worktree part de `HEAD`) ; commite d'abord la roadmap passée à `[~]` si besoin.
+   (le worktree part de `HEAD`, les changements non commités n'y sont pas) ; commite d'abord la
+   roadmap passée à `[~]`.
 2. **Déléguer** : mets dans le prompt du sous-agent, en tête :
    « Worktree : `<directory>` (branche `<branche>`). Commence par déplacer ta session dans ce
    worktree (procédure *Worktrees* d'AGENTS.md) avant toute lecture ou écriture. »
@@ -49,8 +51,13 @@ principal (`main`) : tu y tiens la roadmap et tu y fusionnes.
    et relance-le avec un suivi (`sessionID`) ; s'il a écrit dans le checkout principal,
    arrête-toi et signale-le à l'utilisateur.
 3. **Relire** : le `reviewer` travaille sur le même worktree (même consigne de déplacement) ;
-   les corrections repartent au sous-agent d'origine via son `sessionID`.
-4. **Fusionner** après `APPROVE`, depuis le checkout principal :
+   les corrections repartent au sous-agent d'origine via son `sessionID`, y compris les NIT
+   (lot court, avant fusion). Un verdict `BLOCKED` (build/tests/format non exécutés) n'est pas
+   une approbation : lance toi-même `dotnet build -c Release`, `dotnet test` et
+   `dotnet format --verify-no-changes` dans le worktree, colle le résultat au reviewer et
+   redemande un verdict.
+4. **Fusionner** après `APPROVE`, depuis le checkout principal, puis relance build/tests/format
+   sur `main` avant de cocher :
    `git merge --no-ff <branche> -m "merge: <ID> <résumé> (<branche>)"`. En cas de conflit,
    ne le résous pas toi-même dans du code : délègue à un `general` (dans le checkout principal)
    ou renvoie au sous-agent pour rebaser sa branche dans son worktree. Exception : un conflit
@@ -71,8 +78,14 @@ de Discord, et consigne l'arbitrage dans le rapport.
 
 ## Tenue des registres
 
-- `docs/roadmap.md` : passe la tâche à `[~] (agent)` quand tu délègues, `[x]` quand le
-  reviewer valide, ajoute les nouvelles tâches découvertes avec un ID.
+- `docs/roadmap.md` : **tu es le seul à l'écrire** (sur `main`). Passe la tâche à `[~] (agent)`
+  quand tu délègues, `[x]` (+ fichiers, commits, merge, verdict) après la fusion, et ajoute les
+  nouvelles tâches que les sous-agents listent dans leur rapport (section « Tâches à créer »),
+  avec un ID et leurs dépendances.
+- Skills : si un rapport ou une revue signale une convention nouvelle absente de la skill de la
+  famille, fais-la ajouter par le sous-agent dans son worktree avant la fusion.
+- `/parity/status` : délègue à l'agent `parity-status` (lecture seule, modèle léger), pas à
+  `explore`, qui ne reprend pas le modèle de la commande.
 - Vérifie que chaque rapport d'implementer mentionne les lignes de `docs/parity/*.md` mises à
   jour ; sinon renvoie la tâche.
 

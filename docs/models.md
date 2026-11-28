@@ -39,38 +39,39 @@ Ce que disent les sources, au-delà des chiffres :
 
 ## Affectation
 
-Choix arrêté par l'utilisateur le 2026-11-26 (les implementers suivent une recette détaillée,
-la qualité est garantie par la revue Opus).
+Choix initial du 2026-11-26, révisé par l'utilisateur le 2026-11-27 (commit `38d1dfe`, « update
+models ») : tout passe sur l'abonnement Claude, sauf deux commandes. **Le champ `model:` des
+fichiers `.opencode/agents/*.md` et `.opencode/commands/**.md` fait foi** ; ce tableau le recopie
+(réaligné le 2026-11-28 après l'analyse des sessions exportées).
 
 | Agent / commande | Modèle | Raison |
 | --- | --- | --- |
-| `orchestrator` | `opencode-go/glm-5.3#high` | pilotage : planifier, déléguer, tenir la roadmap ; inclus dans l'abonnement Go |
-| `architect` | `openai/gpt-6.2-astra#high` | modèle GPT le plus fort (BenchLM 91.8) ; peu d'appels, décisions à fort impact ; abonnement ChatGPT |
-| `rest-implementer` | `opencode-go/deepseek-v4.1-flash#high` | implémentation guidée par les skills ; rapide et peu coûteux en quota |
-| `gateway-implementer` | `opencode-go/deepseek-v4.1-flash#high` | idem |
-| `interactions-implementer` | `opencode-go/deepseek-v4.1-flash#high` | idem |
-| `reviewer` | `claude-agent/opus#high` | filet de sécurité : relit tout le code produit par DeepSeek, autre famille de modèle |
-| `test-engineer` | `claude-agent/sonnet#high` | tests écrits par une autre famille que le code |
-| `parity-auditor` | `openai/gpt-6.2-sol#high` | lecture/comparaison de gros corpus, contexte ~1M, peu coûteux ; abonnement ChatGPT |
+| `orchestrator` | `claude-agent/opus#high` | pilotage : planifier, déléguer, intégrer, tenir la roadmap |
+| `architect` | `claude-agent/fable#high` | meilleur score FrontierCode ; peu d'appels, décisions à fort impact |
+| `rest-implementer` | `claude-agent/sonnet#high` | implémentation guidée par une recette détaillée (`fake-rest-endpoint`) |
+| `gateway-implementer` | `claude-agent/opus#high` | concurrence, reconnexion, séquences : plus risqué que REST |
+| `interactions-implementer` | `claude-agent/opus#high` | règles d'état (délais, jetons) et harnais Services |
+| `reviewer` | `claude-agent/opus#high` | filet de sécurité : relit tout le code produit |
+| `test-engineer` | `claude-agent/sonnet#high` | tests transverses, samples |
+| `parity-auditor` | `claude-agent/sonnet#medium` | lecture/comparaison de corpus, requêtes `jq`/`rg` |
+| `parity-status` (agent de `/parity/status`) | `openai/gpt-6-luna#low` | simple comptage |
 | `docs-writer` | `claude-agent/sonnet#medium` | rédaction |
 | `/bootstrap` | `openai/gpt-6.2-sol#medium` | scaffolding .NET simple |
-| `/parity/status` | `openai/gpt-6-luna#low` | simple comptage |
 | défaut du projet | `claude-agent/opus` | sessions sans agent explicite |
 
-Répartition : 4 rôles sur Go (orchestration + tout le volume d'implémentation), 3 sur Claude (revue,
-tests, docs), 2 sur ChatGPT (architecture, audit de parité) + 2 commandes. Aucun modèle facturé au token.
+Répartition : 9 agents sur Claude, `parity-status` et `/bootstrap` sur ChatGPT. Aucun modèle
+facturé au token. Un sous-agent lancé par l'outil `subagent` prend le modèle de **son fichier
+d'agent**, pas celui d'une commande : c'est pourquoi `/parity/status` a son propre agent.
 
 ## Coût et alternatives
 
 - Règle du projet : ne jamais utiliser le provider `opencode` (Zen, payé au token).
   Gemini 4 Neon serait le meilleur auditeur (SWE-Atlas-QnA 67.7) mais n'est disponible que sur Zen.
 - L'auditeur interroge la spec avec `jq`/`rg` plutôt que de la lire en entier (≈ 300 k tokens),
-  pour ménager le quota ChatGPT.
-- Quota Go atteint : implementers → `openai/gpt-6.2-sol#high`, orchestrateur → `claude-agent/sonnet#high`.
-- Quota Claude atteint : reviewer → `openai/gpt-6.2-astra#high`.
-- Quota ChatGPT atteint : architecte → `claude-agent/fable#high`, `parity-auditor` → `opencode-go/gemini-4-argon#high`.
-- Si la revue renvoie trop souvent du code DeepSeek sur la Gateway (concurrence, reconnexion),
-  passer `gateway-implementer` sur `claude-agent/opus#high`.
+  pour ménager le quota.
+- Quota Claude atteint : reviewer → `openai/gpt-6.2-astra#high`, architecte → `openai/gpt-6.2-astra#high`,
+  implementers → `openai/gpt-6.2-sol#high`, orchestrateur → `opencode-go/glm-5.3#high`.
+- Quota ChatGPT atteint : `parity-status` → `claude-agent/haiku#low`.
 - À réévaluer à chaque sortie de modèle : le classement bouge environ tous les dix jours.
 
 ## Modifier

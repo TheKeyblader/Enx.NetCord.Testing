@@ -1,7 +1,6 @@
 ---
 description: Tableau de bord chiffré de la parité Discord (par matrice et par domaine), sans rien modifier
-agent: explore
-model: openai/gpt-6-luna#low
+agent: parity-status
 subagent: true
 ---
 

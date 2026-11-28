@@ -14,10 +14,10 @@ permissions:
     resource: "docs/architecture.md"
     effect: allow
   - action: edit
-    resource: "docs/roadmap.md"
+    resource: "src/*/PublicAPI.*.txt"
     effect: allow
   - action: edit
-    resource: "src/*/PublicAPI.*.txt"
+    resource: ".opencode/skills/netcord-seams/*"
     effect: allow
 ---
 
@@ -42,7 +42,8 @@ Charge la skill `netcord-seams`.
 2. Les signatures C# publiques proposées **dans l'ADR** (blocs de code), y compris XML doc
    résumée — tu n'écris pas l'implémentation.
 3. Mise à jour de `docs/architecture.md` si la décision change un schéma ou une couche.
-4. Si besoin, nouvelles tâches dans `docs/roadmap.md` (avec ID et dépendances).
+4. Si besoin, nouvelles tâches listées dans l'ADR et dans ton rapport (« Tâches à créer », avec
+   ID et dépendances) ; l'orchestrateur les reporte dans `docs/roadmap.md`, que tu ne modifies pas.
 
 ## Règles
 
@@ -51,4 +52,5 @@ Charge la skill `netcord-seams`.
 - Toute API publique a un exemple d'usage dans un test en pseudo-code dans l'ADR.
 - Préférer la composition et des interfaces petites ; `sealed` par défaut ; pas d'héritage de
   types NetCord sauf seam prévu pour.
-- Termine par un rapport : ADR créées/modifiées, décisions, tâches ajoutées.
+- Termine par un rapport : worktree, branche, commits, ADR créées/modifiées, décisions, tâches à
+  créer.

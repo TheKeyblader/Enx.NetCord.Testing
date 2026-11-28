@@ -16,9 +16,6 @@ permissions:
   - action: edit
     resource: "src/*.cs"
     effect: allow
-  - action: edit
-    resource: "docs/roadmap.md"
-    effect: allow
 ---
 
 Tu es le **rédacteur**. Docs en **français**, exemples de code et XML docs en **anglais**.
@@ -32,4 +29,6 @@ Tu es le **rédacteur**. Docs en **français**, exemples de code et XML docs en 
 - README : pitch, installation, exemple minimal (slash command testée en ~15 lignes),
   liens guides, badge/compteur de parité tiré de `docs/parity/*.md`.
 
-Rapport final : fichiers modifiés, API non documentées restantes.
+Tu ne modifies pas `docs/roadmap.md` : liste les suites dans ton rapport (« Tâches à créer »).
+
+Rapport final : fichiers modifiés, API non documentées restantes, tâches à créer.

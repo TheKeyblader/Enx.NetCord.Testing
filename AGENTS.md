@@ -133,11 +133,12 @@ Agents (`.opencode/agents/`) :
 | `orchestrator` (primaire, défaut) | planifie, découpe, délègue, intègre, tient la roadmap | `docs/roadmap.md` |
 | `architect` | conçoit l'API publique et les seams, rédige les ADR | `docs/adr/**`, `docs/architecture.md` |
 | `parity-auditor` | compare NetCord ↔ spec/docs Discord ↔ fake, met à jour les matrices | `docs/parity/**` |
-| `rest-implementer` | endpoints REST fake + état | `src/**/Rest/**`, `src/**/State/**`, tests associés |
-| `gateway-implementer` | faux WebSocket, handshake, dispatchs | `src/**/Gateway/**`, tests associés |
-| `interactions-implementer` | builders d'interactions, réponses, harnais Services/Hosting | `src/**/Interactions/**`, `src/Enx.NetCord.Testing.Services/**`, `src/Enx.NetCord.Testing.Hosting/**` |
+| `rest-implementer` | endpoints REST fake + état, seed, journal, assertions | `src/**/{Rest,State,Seed,Recording,Serialization,Assertions}/**`, `FakeDiscord*.cs`, `tools/**`, tests associés, skill `fake-rest-endpoint` |
+| `gateway-implementer` | faux WebSocket, handshake, dispatchs | `src/**/Gateway/**`, `State/**`, `FakeDiscord*.cs`, tests associés, skill `fake-gateway-event` |
+| `interactions-implementer` | builders d'interactions, réponses, harnais Services/Hosting | `src/**/Interactions/**`, `Rest/Routes/{Interactions,Webhooks}/**`, `State/**`, `src/Enx.NetCord.Testing.Services/**`, `src/Enx.NetCord.Testing.Hosting/**`, skill `fake-interaction` |
 | `test-engineer` | tests de conformité, samples, couverture | `tests/**`, `samples/**` |
-| `reviewer` | relecture read-only, vérifie parité + conventions | (rien) |
+| `reviewer` | relecture read-only, vérifie parité + conventions ; verdict `APPROVE` / `CHANGES_REQUESTED` / `BLOCKED` | (rien) |
+| `parity-status` | tableau de bord de parité (`/parity/status`), lecture seule | (rien) |
 | `docs-writer` | README, guides, XML docs manquantes | `README.md`, `docs/guides/**` |
 
 Modèles affectés à chaque agent : voir `docs/models.md` (comparatif et sources dans ce fichier).
@@ -146,8 +147,10 @@ Ne jamais choisir un modèle du provider `opencode` (Zen, payé au token) : abon
 
 Règles de coordination :
 
-1. **La roadmap est le tableau de bord** : chaque tâche a un ID (`M1-REST-03`…). Avant de
-   commencer, l'agent la passe à `[~]` avec son nom ; à la fin `[x]` + lien commit/fichiers.
+1. **La roadmap est le tableau de bord** : chaque tâche a un ID (`M1-REST-03`…).
+   **Seul l'orchestrateur l'écrit**, sur `main` : `[~]` avec le nom de l'agent quand il
+   délègue, `[x]` + lien commit/fichiers après fusion. Les sous-agents ne la modifient pas et
+   listent les suites dans leur rapport (« Tâches à créer » : ID proposé, agent, dépendances).
 2. **Pas deux implementers sur les mêmes fichiers** : l'orchestrateur découpe par domaine
    (une ligne de matrice ou un dossier `Routes/<Domaine>`) ; un changement transverse
    (`State/`, table de routes, `FakeDiscord` public) passe d'abord par l'`architect`.
@@ -155,12 +158,20 @@ Règles de coordination :
    (`tools.opencode.worktree_create`) ; l'orchestrateur reste sur `main`, fusionne et supprime
    le worktree. Voir « Worktrees » ci-dessous.
 4. Chaque sous-agent termine par un **rapport** : fichiers touchés, lignes de parité modifiées,
-   commandes lancées + résultat (`dotnet build`/`dotnet test`), décisions prises, suites.
-5. « Fini » = build sans warning + tests verts + matrices à jour + XML docs + `reviewer` OK.
+   commandes lancées + résultat (`dotnet build`/`dotnet test`/`dotnet format`), décisions prises,
+   skill mise à jour, tâches à créer.
+5. « Fini » = build sans warning + tests verts + matrices à jour + XML docs + skill à jour si une
+   convention nouvelle est apparue + `reviewer` `APPROVE` (un `BLOCKED` n'en est pas un).
+6. **Permissions** : chaque agent n'édite que son périmètre (`permissions` de son fichier). On
+   écrit avec `edit`/`write` ; un refus signale un fichier hors périmètre : ne jamais le
+   contourner par le shell (`cat >`, `python3`, `sed -i`), mais s'arrêter et le signaler ou
+   poser une question. Le shell est en liste blanche (`opencode.jsonc`) : une commande par appel,
+   sans `;`/`&&`, chaque maillon d'un pipe autorisé.
 
 ### Worktrees (sous-agents)
 
-Quand ton prompt indique un worktree (`Worktree : <directory>`) :
+Quand ton prompt indique un worktree (`Worktree : <directory>`, branche `feat/<ID>` que
+l'orchestrateur a créée : `worktree_create` part d'une HEAD détachée) :
 
 1. **Avant toute autre action**, déplace ta session dans un appel `execute` **seul** :
    `await tools.opencode.session.move({ directory: "<directory>" })` (sans `sessionID` : la

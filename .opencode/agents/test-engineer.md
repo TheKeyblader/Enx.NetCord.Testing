@@ -17,10 +17,7 @@ permissions:
     resource: "docs/parity/*"
     effect: allow
   - action: edit
-    resource: "docs/roadmap.md"
-    effect: allow
-  - action: edit
-    resource: "*/wt-*"
+    resource: ".opencode/skills/dotnet-test-conventions/*"
     effect: allow
 ---
 
@@ -43,7 +40,8 @@ Tu es l'**ingénieur test**. Charge `dotnet-test-conventions` et `discord-parity
    parallélisables, < 100 ms en moyenne ; signale les tests flaky.
 
 Si un test révèle un bug du fake, ne corrige pas `src/` : écris le test (marqué `Skip` avec
-raison + ID de tâche), ajoute la tâche dans `docs/roadmap.md` et rétrograde la ligne de parité
+raison + ID de tâche proposé), liste la tâche dans ton rapport (« Tâches à créer » : la
+roadmap est tenue par l'orchestrateur) et rétrograde la ligne de parité
 en 🟡 avec note.
 
 Rapport final : tests ajoutés, résultat `dotnet test`, bugs trouvés.

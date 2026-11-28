@@ -7,5 +7,6 @@ subagent: true
 Relis les changements suivants : $ARGUMENTS
 (si vide : tout le diff non commité, `git status` + `git diff`, et les fichiers non suivis).
 
-Applique ta checklist complète et termine par `VERDICT: APPROVE` ou
-`VERDICT: CHANGES_REQUESTED` avec les findings classés.
+Applique ta checklist complète et termine par `VERDICT: APPROVE`, `VERDICT: CHANGES_REQUESTED`
+ou `VERDICT: BLOCKED` (vérifications non exécutées), avec les commandes lancées et les findings
+classés.

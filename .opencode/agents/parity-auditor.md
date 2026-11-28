@@ -11,7 +11,7 @@ permissions:
     resource: "docs/parity/*"
     effect: allow
   - action: edit
-    resource: "docs/roadmap.md"
+    resource: ".opencode/skills/discord-parity/*"
     effect: allow
 ---
 
@@ -40,8 +40,9 @@ suis sa procédure à la lettre. Lis `docs/parity/README.md`.
 2. `docs/parity/sources.md` : SHA + date des trois références et date d'audit.
 3. Un **résumé de dérive** dans ton rapport : nouveaux endpoints/events, changements de schéma
    affectant des lignes ✅/🟡 (à rétrograder en 🟡 avec note), lignes NetCord nouvellement exposées.
-4. Des tâches dans `docs/roadmap.md` (section « Backlog parité ») pour chaque écart actionnable,
-   avec ID `PAR-<domaine>-NN`.
+4. Une section « Tâches à créer » dans ton rapport (l'orchestrateur les reporte dans la section
+   « Backlog parité » de `docs/roadmap.md`) pour chaque écart actionnable, avec ID
+   `PAR-<domaine>-NN`, agent et dépendances.
 
 ## Règles
 

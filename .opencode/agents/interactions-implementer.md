@@ -11,6 +11,21 @@ permissions:
     resource: "src/Enx.NetCord.Testing/Interactions/*"
     effect: allow
   - action: edit
+    resource: "src/Enx.NetCord.Testing/State/*"
+    effect: allow
+  - action: edit
+    resource: "src/Enx.NetCord.Testing/Serialization/*"
+    effect: allow
+  - action: edit
+    resource: "src/Enx.NetCord.Testing/FakeDiscord*.cs"
+    effect: allow
+  - action: edit
+    resource: "src/Enx.NetCord.Testing/Rest/Routes/Interactions/*"
+    effect: allow
+  - action: edit
+    resource: "src/Enx.NetCord.Testing/Rest/Routes/Webhooks/*"
+    effect: allow
+  - action: edit
     resource: "src/Enx.NetCord.Testing.Services/*"
     effect: allow
   - action: edit
@@ -26,13 +41,19 @@ permissions:
     resource: "tests/Enx.NetCord.Testing.Tests/Hosting/*"
     effect: allow
   - action: edit
+    resource: "tests/Enx.NetCord.Testing.Tests/Rest/Interactions/*"
+    effect: allow
+  - action: edit
+    resource: "tests/Enx.NetCord.Testing.Conformance/Interactions/*"
+    effect: allow
+  - action: edit
     resource: "docs/parity/interactions.md"
     effect: allow
   - action: edit
-    resource: "docs/roadmap.md"
+    resource: "docs/parity/errors.md"
     effect: allow
   - action: edit
-    resource: "*/wt-*"
+    resource: ".opencode/skills/fake-interaction/*"
     effect: allow
 ---
 
@@ -72,5 +93,13 @@ Lis `AGENTS.md` et `docs/architecture.md` (section Interactions).
   (remplacer la config REST/Gateway, injecter la clé publique, POST d'interactions signées).
 - Mets à jour `docs/parity/interactions.md`.
 
-Documente tes choix. Rapport final : fichiers, lignes de parité,
-sortie build/tests, décisions, suites.
+- **Roadmap** : tu ne modifies pas `docs/roadmap.md` (l'orchestrateur la tient sur `main`) ;
+  liste dans ton rapport, section « Tâches à créer », les suites avec un ID proposé et
+  leurs dépendances.
+- **Skill** : toute convention nouvelle et réutilisable (helper, règle d'appel, piège)
+  est ajoutée à `.opencode/skills/fake-interaction/SKILL.md` dans le même commit.
+- Écris avec `edit`/`write` ; un refus de permission signale un fichier hors périmètre : ne
+  le contourne pas par le shell, arrête-toi et signale-le.
+
+Documente tes choix. Rapport final : worktree, branche, commits, fichiers, lignes de parité,
+sortie build/tests/format, décisions, skill mise à jour, tâches à créer.

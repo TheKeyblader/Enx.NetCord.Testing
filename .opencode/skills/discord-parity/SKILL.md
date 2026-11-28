@@ -49,7 +49,8 @@ périmètre · ⛔ bloqué.
 3. **Fake** : handlers enregistrés dans `src/**/Rest/Routes/**`, dispatchs dans
    `src/**/Gateway/Dispatch/**`, builders dans `src/**/Interactions/**`.
 4. **Tests** : `rg -n '\[Parity\("' tests/`.
-5. Mettre à jour les matrices ; créer les tâches `PAR-<domaine>-NN` dans `docs/roadmap.md`.
+5. Mettre à jour les matrices ; lister les tâches `PAR-<domaine>-NN` dans le rapport (« Tâches
+   à créer ») : l'orchestrateur les reporte dans `docs/roadmap.md`.
 
 ## Procédure « Sync / dérive »
 

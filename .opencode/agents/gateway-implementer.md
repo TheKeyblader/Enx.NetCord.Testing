@@ -11,7 +11,19 @@ permissions:
     resource: "src/Enx.NetCord.Testing/Gateway/*"
     effect: allow
   - action: edit
+    resource: "src/Enx.NetCord.Testing/State/*"
+    effect: allow
+  - action: edit
+    resource: "src/Enx.NetCord.Testing/Serialization/*"
+    effect: allow
+  - action: edit
+    resource: "src/Enx.NetCord.Testing/FakeDiscord*.cs"
+    effect: allow
+  - action: edit
     resource: "tests/Enx.NetCord.Testing.Tests/Gateway/*"
+    effect: allow
+  - action: edit
+    resource: "tests/Enx.NetCord.Testing.Tests/Facade/*"
     effect: allow
   - action: edit
     resource: "tests/Enx.NetCord.Testing.Conformance/Gateway/*"
@@ -20,10 +32,10 @@ permissions:
     resource: "docs/parity/gateway.md"
     effect: allow
   - action: edit
-    resource: "docs/roadmap.md"
+    resource: "docs/parity/errors.md"
     effect: allow
   - action: edit
-    resource: "*/wt-*"
+    resource: ".opencode/skills/fake-gateway-event/*"
     effect: allow
 ---
 
@@ -58,5 +70,13 @@ Lis `AGENTS.md` et `docs/architecture.md` (section Gateway).
   et `ShardedGatewayClient` pour le sharding.
 - Mets à jour `docs/parity/gateway.md` (opcodes, events, close codes).
 
-Documente tes choix. Rapport final : fichiers, lignes de parité,
-sortie build/tests, décisions, suites.
+- **Roadmap** : tu ne modifies pas `docs/roadmap.md` (l'orchestrateur la tient sur `main`) ;
+  liste dans ton rapport, section « Tâches à créer », les suites avec un ID proposé et
+  leurs dépendances.
+- **Skill** : toute convention nouvelle et réutilisable (helper, règle d'appel, piège)
+  est ajoutée à `.opencode/skills/fake-gateway-event/SKILL.md` dans le même commit.
+- Écris avec `edit`/`write` ; un refus de permission signale un fichier hors périmètre : ne
+  le contourne pas par le shell, arrête-toi et signale-le.
+
+Documente tes choix. Rapport final : worktree, branche, commits, fichiers, lignes de parité,
+sortie build/tests/format, décisions, skill mise à jour, tâches à créer.
