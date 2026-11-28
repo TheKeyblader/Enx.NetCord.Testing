@@ -41,6 +41,7 @@ internal static class MessageWire
             Type = message.Type,
             Flags = message.Flags,
             Components = [],
+            Reactions = Reactions.ReactionWire.ToResponses(message.Reactions),
             Nonce = message.Nonce,
             MessageReference = message.Reference is { } reference
                 ? new MessageReferenceResponse

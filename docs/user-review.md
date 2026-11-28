@@ -63,8 +63,11 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   5. `DELETE /users/@me/guilds/$G2`.
   6. `PATCH /channels/$CH2` avec un corps mal formé `{"rate_limit_per_user": -1}` : `50035` ou `50001` ?
   7. Interaction reçue dans G1, puis retirer le bot de G1 et, dans les 15 min, `POST` un followup.
+  8. (ajout M1-REST-06) Si G2 est une guilde **publique** (découverte), `GET /guilds/$G2/preview` :
+     Discord rend peut-être la preview à un bot non membre ; le fake rend 404 `10004`.
 - **Résultat attendu** : 1 ⇒ 404 `10004` ; 2-4 ⇒ 403 `50001` (guilde inexistante en 4 ⇒ 404
-  `10004`) ; 5 ⇒ 404 `10004` ; 6 ⇒ 400 `50035` ; 7 ⇒ followup accepté.
+  `10004`) ; 5 ⇒ 404 `10004` ; 6 ⇒ 400 `50035` ; 7 ⇒ followup accepté ; 8 ⇒ 404 `10004`
+  (hypothèse du fake ; si 200, la preview d'une guilde découvrable échappe à `GuildAccess`).
 - **Si différent** : changer le profil de la famille dans `GuildAccess` (aucun handler à toucher)
   ou l'ordre du pipeline (ADR 0005) ; corriger `errors.md` et les tests concernés.
 - **Réponse** : _(à remplir)_
@@ -173,8 +176,8 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
 ### UR-009 — Lot B : positions et listing (`test-manuel`)
 
 - **Statut** : Ouvert
-- **Origine** : M1-ADR-13 ; ADR 0013 § 4 ; roadmap `PAR-REST-02`
-- **Concerne** : `GET`/`POST`/`PATCH /guilds/{guild_id}/channels`, `PATCH /channels/{channel_id}`, `40009`, `10003`
+- **Origine** : M1-ADR-13, M1-REST-06 ; ADR 0013 § 4 ; roadmap `PAR-REST-02`
+- **Concerne** : `GET`/`POST`/`PATCH /guilds/{guild_id}/channels`, `PATCH /channels/{channel_id}`, `40009`, `10003` ; tests `tests/Enx.NetCord.Testing.Tests/Rest/Guilds/*`
 - **Hypothèse** : position par défaut = suivante du groupe (texte, annonces et forum ensemble ;
   voix et stage ; catégories) ; aucun voisin renuméroté ; un déplacement garde la position ;
   listing rendu par ID ; `40009` ne compte que les `parent_id` différents du parent courant ;
@@ -186,8 +189,14 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   4. `PATCH /channels/<texte 1>` `{"parent_id":"<catégorie>"}` ; noter sa `position`.
   5. `PATCH /guilds/$G1/channels` avec deux entrées dont une seule change réellement de parent,
      puis deux qui changent, puis `[{"id":"1","position":0}]`.
+  6. (ajout M1-REST-06) `PATCH /guilds/$G1/channels` avec `[{"position":1}]` (sans `id`), puis
+     le même `id` deux fois avec deux `parent_id` différents, puis `[]`.
 - **Résultat attendu** : 1 ⇒ 0, 0, 0, 1 ; 2 ⇒ ordre des ID ; 3 ⇒ un seul `CHANNEL_UPDATE`,
-  texte 1 inchangé ; 4 ⇒ position inchangée ; 5 ⇒ 204, puis 400 `40009`, puis 404 `10003`.
+  texte 1 inchangé ; 4 ⇒ position inchangée ; 5 ⇒ 204, puis 400 `40009`, puis 404 `10003` ;
+  6 ⇒ 400 `50035` (`id` `BASE_TYPE_REQUIRED`), 400 `40009` (le salon cité deux fois compte une
+  fois, mais deux parents), 204 sans `CHANNEL_UPDATE` (hypothèses du fake : lot validé en entier
+  puis appliqué en un commit, un `CHANNEL_UPDATE` par salon réellement changé, dans l'ordre du
+  tableau).
 - **Si différent** : changer la règle de position par défaut ou le tri du listing dans l'état,
   et le § 4 de l'ADR 0013.
 - **Réponse** : _(à remplir)_
@@ -237,8 +246,8 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
 ### UR-011 — Messages : codes, statuts et pagination (`test-manuel`)
 
 - **Statut** : Ouvert
-- **Origine** : M1-REST-03 (`3aea9b6`…`18f71be`) ; roadmap `PAR-ERR-04`
-- **Concerne** : `rest.md` `/channels/{channel_id}/messages…` (7 lignes) ; `errors.md` `50003`, `50005`, `50006`, `50024`, `50034`, `50035` ; tests `tests/Enx.NetCord.Testing.Tests/Rest/Messages/*` (`SendRequest_InvalidField_*`, `SendRequest_InvalidEmbed_*`, `SendRequest_BulkDeleteWithInvalidMessages_*`)
+- **Origine** : M1-REST-03 (`3aea9b6`…`18f71be`), M1-REST-03B (`3bec8aa`) ; roadmap `PAR-ERR-04`
+- **Concerne** : `rest.md` `/channels/{channel_id}/messages…` (7 lignes) ; `errors.md` `50003`, `50005`, `50006`, `50008`, `50024`, `50034`, `50035`, `40033`, `40058` ; tests `tests/Enx.NetCord.Testing.Tests/Rest/Messages/*` (`SendRequest_InvalidField_*`, `SendRequest_InvalidEmbed_*`, `SendRequest_BulkDeleteWithInvalidMessages_*`, `MessageChannelTypeTests`)
 - **Hypothèse** :
   - codes de champ `50035` : `MESSAGE_REFERENCE_UNKNOWN_MESSAGE` (réponse à un message
     inexistant), `MAX_EMBED_SIZE_EXCEEDED`, `MESSAGE_ALLOWED_MENTIONS_PARSE_EXCLUSIVE`,
@@ -254,6 +263,11 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
     `nonce` numérique est renvoyé en chaîne ;
   - `attachments[].id` à l'édition : un `id` qui est un index `files[n]` désigne un fichier
     téléversé, sinon une pièce existante à conserver.
+  - (ajout M1-REST-03B) statut 400 de `50008` (message dans une catégorie), `40058` (forum,
+    et aussi salon media : les docs ne citent que le forum) et `40033` (second crosspost) ;
+    `GET …/messages` et `bulk-delete` d'une catégorie, d'un forum ou d'un media ⇒ 400 `50024`
+    (Discord pourrait rendre `[]` ou `10008`) ; `GET`/`PATCH`/`DELETE`/`crosspost` d'un message
+    dans ces salons ⇒ 404 `10008`.
 - **Procédure** (G1, `$CH1`, un DM du bot avec un utilisateur qui y a écrit) :
   1. `POST /channels/$CH1/messages` avec chaque corps invalide (réponse à `"message_id":"1"`,
      embed de plus de 6000 caractères, `allowed_mentions` `{"parse":["users"],"users":["1"]}`,
@@ -267,9 +281,16 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   6. `DELETE` du message de l'utilisateur dans le DM.
   7. 7 messages, puis `GET …/messages?around=<4ᵉ>&limit=5` ; puis `?before=A&after=B`.
   8. `POST` avec `"nonce": 123`.
+  9. (ajout M1-REST-03B, avec une catégorie `$CAT`, un forum `$FORUM`, un salon d'annonces
+     `$NEWS`, un salon media si la guilde est Community) `POST /channels/$CAT/messages`
+     `{"content":"x"}`, puis sur `$FORUM` et le media ; `GET /channels/$CAT/messages` puis
+     `$FORUM` ; `POST /channels/$CAT/messages/bulk-delete` avec deux ID récents ; deux
+     `POST …/crosspost` de suite sur un message de `$NEWS` ; `GET /channels/$CAT/messages/1`.
 - **Résultat attendu** : 1-2 ⇒ les codes ci-dessus, 400 `50034` et 403 `50003` en DM ; 3 ⇒
   400 `50024` ; 4 ⇒ 403 `50005`, 400 `50006`, pièce conservée ; 5 ⇒ 400 `50006` ; 6 ⇒ 403
-  `50003` ; 7 ⇒ 2 plus anciens + cible + 2 suivants, puis réponse 200 ; 8 ⇒ `"nonce":"123"`.
+  `50003` ; 7 ⇒ 2 plus anciens + cible + 2 suivants, puis réponse 200 ; 8 ⇒ `"nonce":"123"` ;
+  9 ⇒ 400 `50008`, 400 `40058` (×2), 400 `50024` (×2), 400 `50024`, 200 puis 400 `40033`,
+  404 `10008`.
 - **Si différent** : corriger `DiscordError`, `Routes/Messages/MessageValidators.cs`,
   `EmbedValidation.cs`, `FakeDiscordState.Messages.cs`, `errors.md`, `rest.md` et les tests.
 - **Réponse** : _(à remplir)_
@@ -286,6 +307,65 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   script échoue si la spec change de forme, pour retirer l'erratum le moment venu.
 - **Action possible** : signaler l'écart en amont (issue `discord/discord-api-spec`) — action
   externe, laissée à ton initiative.
+- **Réponse** : _(à remplir)_
+
+### UR-014 — Réactions : codes et règles d'emoji (`test-manuel`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-REST-04 (`912b344`) ; roadmap `PAR-ERR-05`
+- **Concerne** : `rest.md` `PUT`/`DELETE …/reactions/{emoji_name}/@me`, `DELETE …/reactions/{emoji_name}/{user_id}`, `GET`/`DELETE …/reactions/{emoji_name}`, `DELETE …/reactions` ; `errors.md` `10014`, `30010`, `50035` ; tests `AddReactionTests`, `RemoveReactionTests`, `ClearReactionsTests`, `ListReactionsTests`
+- **Hypothèse** :
+  1. `DELETE …/@me`, `…/{user_id}` et `…/{emoji_name}` d'une réaction absente ⇒ 404 `10014` (fauxcord : 204) ; `DELETE …/reactions` sans réaction ⇒ 204.
+  2. `GET …/{emoji_name}` d'un emoji que personne n'a utilisé ⇒ `[]`.
+  3. Tout emoji personnalisé `name:id` bien formé est accepté, même sans guilde qui le porte (emojis de guilde en M4-REST-04) ; l'alternative serait `10014`.
+  4. 21ᵉ emoji distinct ⇒ 400 `30010` ; un emoji déjà présent reste accepté.
+  5. `type` hors `{0,1}` ⇒ `50035` `BASE_TYPE_CHOICES`.
+  6. « Emoji unicode » = au moins un caractère non ASCII, sans lettre ASCII ni blanc : `é` ou `日本` sont acceptés ; `❤` et `❤️` (sélecteur de variante) comptent comme deux emojis.
+  7. Ordre : `50035` d'ID, puis `10014` (emoji mal formé), puis `10003`/`50001`/`10008`.
+- **Procédure** (G1, `$CH1`, un message `$M` du bot) :
+  1. `DELETE /channels/$CH1/messages/$M/reactions/%F0%9F%91%8D/@me` sans avoir réagi ; idem `…/{user_id}` et `…/reactions/%F0%9F%91%8D` ; puis `DELETE …/reactions`.
+  2. `GET …/reactions/%F0%9F%94%A5`.
+  3. `PUT …/reactions/wave:1234/@me` (emoji inexistant).
+  4. Poser 21 emojis distincts, puis reposer le 1ᵉʳ.
+  5. `GET …/reactions/%F0%9F%91%8D?type=2`.
+  6. `PUT …/reactions/%C3%A9/@me` (`é`), puis `❤` puis `❤️` ; `GET` du message : une ou deux réactions ?
+  7. `PUT /channels/1/messages/$M/reactions/x/@me` (salon inexistant, emoji mal formé).
+- **Résultat attendu** : 1 ⇒ 404 `10014` ×3, puis 204 ; 2 ⇒ `[]` ; 3 ⇒ 204 ; 4 ⇒ 400 `30010`, puis 204 ; 5 ⇒ 400 `50035` ; 6 ⇒ 204, deux réactions ; 7 ⇒ 400 `10014`.
+- **Si différent** : corriger `State/Reactions.cs` (parseur), `FakeDiscordState.Reactions.cs`, `ReactionValidators.cs`, `errors.md`, `rest.md` et les tests.
+- **Réponse** : _(à remplir)_
+
+### UR-015 — Seed des réactions (`décision`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-REST-04
+- **Concerne** : API publique `SeededTextChannel.Reaction(messageId, emoji, userId, burst = false)` (et `SeededVoiceChannel.Reaction`)
+- **Décision** : une méthode sur la poignée de salon, à côté de `Message`, pour semer la réaction d'un autre utilisateur (seul moyen de tester `DELETE …/{user_id}` et le listing) ; `burst: true` sème une super réaction, que le `PUT` du bot ne crée jamais (la spec n'a pas de `type` sur le `PUT`). Alternative écartée : une poignée de message (`channel.Message(...)` rendrait un `SeededMessage` portant `Reaction`), qui changerait le type de retour de `Message` (un ID aujourd'hui).
+- **Réponse** : _(à remplir)_
+
+### UR-016 — Réglages de guilde : salons désignés et champs synthétiques (`test-manuel`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-REST-06 (`06be6cb`)
+- **Concerne** : `rest.md` `GET`/`PATCH /guilds/{guild_id}`, `DELETE /channels/{channel_id}` ; `errors.md` `50035` ; `gateway.md` `GUILD_UPDATE`, `CHANNEL_DELETE` ; tests `tests/Enx.NetCord.Testing.Tests/Rest/Guilds/*`, `State/GuildStateTests.cs`
+- **Hypothèse** :
+  1. Un réglage qui désigne un salon (`afk_channel_id`, `system_channel_id`, `rules_channel_id`,
+     `public_updates_channel_id`, `safety_alerts_channel_id`) exige un salon de la guilde du bon
+     type, sinon 400 `50035` avec un code de champ **inventé** `GUILD_CHANNEL_INVALID` ; un seul
+     refus est rendu.
+  2. Supprimer le salon désigné efface le réglage dans le même commit : `CHANNEL_DELETE` puis
+     `GUILD_UPDATE`.
+  3. `owner_id` d'une guilde sans propriétaire dans l'état = ID du bot ; `region` = `"deprecated"` ;
+     `approximate_presence_count` = 0 ; limites d'une guilde sans boost.
+- **Procédure** (G1, bot `MANAGE_GUILD`, connecté avec l'intent `GUILDS`) :
+  1. `PATCH /guilds/$G1` `{"afk_channel_id":"$CH1"}` (salon texte), puis
+     `{"system_channel_id":"<salon vocal>"}`, puis les deux à la fois.
+  2. `PATCH {"system_channel_id":"$CH1"}`, supprimer `$CH1`, relire la guilde ; noter les dispatchs et leur ordre.
+  3. `GET /guilds/$G1?with_counts=true` : copier `owner_id`, `region`, `approximate_*`.
+- **Résultat attendu** : 1 ⇒ 400 `50035`, noter le code et le message de champ (et si les deux
+  champs sont signalés ensemble) ; 2 ⇒ `system_channel_id: null`, `CHANNEL_DELETE` puis
+  `GUILD_UPDATE` ; 3 ⇒ comparer au JSON du fake.
+- **Si différent** : corriger `GuildValidators.cs`, `FakeDiscordState.Guilds.cs`/`Channels.cs`,
+  `GuildWire.cs`, `errors.md`, `rest.md` et les tests.
 - **Réponse** : _(à remplir)_
 
 ## Traités

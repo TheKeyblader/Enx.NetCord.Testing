@@ -45,6 +45,16 @@ internal sealed partial class FakeDiscordState
                 return access.Failure;
             }
 
+            if (!ChannelTraits.Of(channel.Kind).IsMessageable)
+            {
+                // A category has no chat (50008); a forum or media channel takes posts, which are threads (40058). Whoever asks, seed included.
+                return new StateFailure(
+                    channel.Kind is ChannelKind.GuildForum or ChannelKind.GuildMedia
+                        ? StateFailureKind.CannotSendInForumChannel
+                        : StateFailureKind.CannotSendInNonTextChannel,
+                    channel.Id);
+            }
+
             if (!_users.TryGetValue(input.AuthorId, out var author))
             {
                 return new StateFailure(StateFailureKind.UnknownUser, input.AuthorId);
@@ -170,6 +180,12 @@ internal sealed partial class FakeDiscordState
             if (!access.TryGetValue(out var channel))
             {
                 return access.Failure;
+            }
+
+            if (!ChannelTraits.Of(channel.Kind).IsMessageable)
+            {
+                // Hypothesis (UR-011): no message can exist there, and Discord refuses to list them rather than answering [].
+                return new StateFailure(StateFailureKind.CannotExecuteOnChannelType, channel.Id);
             }
 
             IEnumerable<ulong> ids;
@@ -366,6 +382,11 @@ internal sealed partial class FakeDiscordState
                 return new StateFailure(StateFailureKind.CannotExecuteInDm, channel.Id);
             }
 
+            if (!ChannelTraits.Of(channel.Kind).IsMessageable)
+            {
+                return new StateFailure(StateFailureKind.CannotExecuteOnChannelType, channel.Id);
+            }
+
             var now = ReadClock();
             foreach (var id in messageIds)
             {
@@ -396,7 +417,8 @@ internal sealed partial class FakeDiscordState
 
     /// <summary>
     /// Publishes a message of an announcement channel: sets <c>CROSSPOSTED</c> and commits a <see cref="MessageEdited"/> (Discord fires
-    /// <c>MESSAGE_UPDATE</c>). The fake has no channel to follow, so nothing else happens. Any other channel type is refused.
+    /// <c>MESSAGE_UPDATE</c>). The fake has no channel to follow, so nothing else happens. Any other channel type is refused, and so is
+    /// a second crosspost of the same message (<see cref="StateFailureKind.MessageAlreadyCrossposted"/>, nothing committed).
     /// </summary>
     internal StateResult<MessageSnapshot> CrosspostMessage(StateCaller caller, ulong channelId, ulong messageId)
     {
@@ -417,6 +439,12 @@ internal sealed partial class FakeDiscordState
                 return new StateFailure(StateFailureKind.CannotExecuteOnChannelType, channel.Id);
             }
 
+            if ((message.Flags & CrosspostedFlag) != 0)
+            {
+                // Nothing is committed: no second MESSAGE_UPDATE.
+                return new StateFailure(StateFailureKind.MessageAlreadyCrossposted, message.Id);
+            }
+
             message.Flags |= CrosspostedFlag;
             var snapshot = Snapshot(message, channel.GuildId);
             Publish(new MessageEdited(
@@ -433,8 +461,9 @@ internal sealed partial class FakeDiscordState
         message.ToSnapshot(
             guildId,
             message.Reference is { } reference && _messages.TryGetValue(reference.MessageId, out var referenced)
-                ? referenced.ToSnapshot(guildId)
-                : null);
+                ? referenced.ToSnapshot(guildId, viewerId: _botId)
+                : null,
+            _botId);
 
     private List<AttachmentValue> AllocateAttachments(IReadOnlyList<NewAttachment>? files, DateTimeOffset now)
     {

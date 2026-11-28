@@ -44,7 +44,7 @@ internal enum ChannelSortGroup
 /// <param name="Family">The family of fields.</param>
 /// <param name="SortGroup">The group <c>position</c> is counted in.</param>
 /// <param name="CanHaveParent">Whether the channel can sit in a category.</param>
-/// <param name="IsMessageable">Whether messages can be sent to the channel (enforced by M1-REST-03B).</param>
+/// <param name="IsMessageable">Whether messages can be sent to the channel (enforced by the message operations of the state).</param>
 /// <param name="TopicMaxLength">The maximum topic length, or 0 when the kind has no topic.</param>
 /// <param name="HasNsfw">Whether the kind has the <c>nsfw</c> flag.</param>
 /// <param name="HasSlowmode">Whether the kind has <c>rate_limit_per_user</c>.</param>
@@ -229,6 +229,9 @@ internal sealed record MessageSnapshot(
 
     /// <summary>Gets the nonce sent by the client, if any.</summary>
     internal string? Nonce { get; init; }
+
+    /// <summary>Gets the reactions, in the order of the first reaction with each emoji.</summary>
+    internal ImmutableArray<ReactionSnapshot> Reactions { get; init; } = [];
 }
 
 /// <summary>

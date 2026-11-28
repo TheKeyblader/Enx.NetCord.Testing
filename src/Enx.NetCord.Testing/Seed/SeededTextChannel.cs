@@ -37,4 +37,19 @@ public sealed class SeededTextChannel
 
         return SeedGuard.Unwrap(_fake.State.CreateMessage(StateCaller.Fixture, new CreateMessageInput(Id, authorId, content, id))).Id;
     }
+
+    /// <summary>
+    /// Makes a user react to a message of this channel, as a user other than the bot would (the bot reacts through REST). Idempotent
+    /// like the route: the same user reacting again with the same emoji changes nothing. The state publishes the same change as the REST route.
+    /// </summary>
+    /// <param name="messageId">The ID of a message of this channel.</param>
+    /// <param name="emoji">A unicode emoji (<c>"👍"</c>) or a custom one written <c>name:id</c>; a custom emoji need not exist.</param>
+    /// <param name="userId">The ID of a user of this fake.</param>
+    /// <param name="burst"><see langword="true"/> for a super reaction (counted in <c>count_details.burst</c>, listed with <c>type=1</c>).</param>
+    /// <exception cref="ArgumentNullException"><paramref name="emoji"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="emoji"/> is neither a unicode emoji nor <c>name:id</c>.</exception>
+    /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
+    /// <exception cref="InvalidOperationException">The message or the user does not exist in this fake, or the message already has 20 other emojis.</exception>
+    public void Reaction(ulong messageId, string emoji, ulong userId, bool burst = false)
+        => SeedGuard.AddReaction(_fake, Id, messageId, emoji, userId, burst);
 }
