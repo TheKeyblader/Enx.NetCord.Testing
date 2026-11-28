@@ -8,7 +8,7 @@ benchmarks publiés (sources en bas de page).
 | Provider opencode | Type | Modèles pertinents |
 | --- | --- | --- |
 | `claude-agent` | abonnement Claude (quota) | Fable 5.2 (`fable`), Opus 5.5 (`opus`), Sonnet 5.5 (`sonnet`), Haiku 5.5 (`haiku`) |
-| `openai` | abonnement ChatGPT/Codex (quota) | GPT-6.2 Astra, GPT-6.2 Sol, GPT-6.1 Terra, GPT-6 Luna |
+| ~~`openai`~~ | ~~abonnement ChatGPT/Codex~~ — **plus disponible depuis le 2026-11-28** | (GPT-6.2 Astra, GPT-6.2 Sol, GPT-6.1 Terra, GPT-6 Luna : chiffres gardés pour comparaison) |
 | `opencode` (Zen) | **payé au token — non utilisé** | Gemini 4 Neon ($3/$15), et les mêmes Claude/GPT au prix API |
 | `opencode-go` | abonnement Go (modèles ouverts surtout) | Gemini 4 Argon, Kimi K3.1 Pro, Qwen4 Max, DeepSeek V4.1 Flash… |
 
@@ -54,12 +54,12 @@ fichiers `.opencode/agents/*.md` et `.opencode/commands/**.md` fait foi** ; ce t
 | `reviewer` | `claude-agent/opus#high` | filet de sécurité : relit tout le code produit |
 | `test-engineer` | `claude-agent/sonnet#high` | tests transverses, samples |
 | `parity-auditor` | `claude-agent/sonnet#medium` | lecture/comparaison de corpus, requêtes `jq`/`rg` |
-| `parity-status` (agent de `/parity/status`) | `openai/gpt-6-luna#low` | simple comptage |
+| `parity-status` (agent de `/parity/status`) | `claude-agent/haiku#low` | simple comptage |
 | `docs-writer` | `claude-agent/sonnet#medium` | rédaction |
-| `/bootstrap` | `openai/gpt-6.2-sol#medium` | scaffolding .NET simple |
+| `/bootstrap` | `claude-agent/sonnet#medium` | scaffolding .NET simple (M0 terminé, rarement relancé) |
 | défaut du projet | `claude-agent/opus` | sessions sans agent explicite |
 
-Répartition : 9 agents sur Claude, `parity-status` et `/bootstrap` sur ChatGPT. Aucun modèle
+Répartition : tous les agents et commandes sur Claude ; `opencode-go` sert de repli. Aucun modèle
 facturé au token. Un sous-agent lancé par l'outil `subagent` prend le modèle de **son fichier
 d'agent**, pas celui d'une commande : c'est pourquoi `/parity/status` a son propre agent.
 
@@ -69,9 +69,10 @@ d'agent**, pas celui d'une commande : c'est pourquoi `/parity/status` a son prop
   Gemini 4 Neon serait le meilleur auditeur (SWE-Atlas-QnA 67.7) mais n'est disponible que sur Zen.
 - L'auditeur interroge la spec avec `jq`/`rg` plutôt que de la lire en entier (≈ 300 k tokens),
   pour ménager le quota.
-- Quota Claude atteint : reviewer → `openai/gpt-6.2-astra#high`, architecte → `openai/gpt-6.2-astra#high`,
-  implementers → `openai/gpt-6.2-sol#high`, orchestrateur → `opencode-go/glm-5.3#high`.
-- Quota ChatGPT atteint : `parity-status` → `claude-agent/haiku#low`.
+- Quota Claude atteint (repli sur `opencode-go`) : reviewer et architecte →
+  `opencode-go/gemini-4-argon#high`, implementers → `opencode-go/deepseek-v4.1-flash#high`,
+  orchestrateur → `opencode-go/glm-5.3#high`, `parity-status` → `opencode-go/deepseek-v4.1-flash#low`.
+  Vérifier les ID exacts avec la liste des modèles d'opencode avant de basculer.
 - À réévaluer à chaque sortie de modèle : le classement bouge environ tous les dix jours.
 
 ## Modifier

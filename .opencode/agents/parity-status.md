@@ -1,6 +1,6 @@
 ---
 description: Tableau de bord de parité en lecture seule (comptage des statuts des matrices docs/parity/*.md, âge des SHA épinglés). Utilisé par /parity/status et par l'orchestrateur ; ne modifie rien.
-model: openai/gpt-6-luna#low
+model: claude-agent/haiku#low
 mode: subagent
 color: "#2ECC71"
 permissions:

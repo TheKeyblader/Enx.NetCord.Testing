@@ -1,7 +1,7 @@
 ---
 description: Jalon M0 — crée le squelette de solution .NET (slnx, Directory.*.props, projets src/tests/samples, CI) conformément à AGENTS.md et aux ADR
 agent: build
-model: openai/gpt-6.2-sol#medium
+model: claude-agent/sonnet#medium
 ---
 
 Réalise les tâches `M0-*` de `docs/roadmap.md` qui ne sont pas encore cochées.

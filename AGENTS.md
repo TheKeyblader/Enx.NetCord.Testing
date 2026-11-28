@@ -143,7 +143,7 @@ Agents (`.opencode/agents/`) :
 
 Modèles affectés à chaque agent : voir `docs/models.md` (comparatif et sources dans ce fichier).
 Ne jamais choisir un modèle du provider `opencode` (Zen, payé au token) : abonnements uniquement
-(`claude-agent`, `openai`, `opencode-go`).
+(`claude-agent`, `opencode-go`). Le provider `openai` n'est plus disponible (2026-11-28).
 
 Règles de coordination :
 
