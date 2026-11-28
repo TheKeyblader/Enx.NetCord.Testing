@@ -166,16 +166,28 @@ public sealed class MessageChannelTypeTests
         Assert.Equal(50035, exception.Error!.Code);
     }
 
+    private static ulong NonMessageableChannel(FakeDiscord discord, string kind)
+    {
+        var guild = discord.Seed.Guild("Test");
+        return kind switch
+        {
+            "category" => guild.Category("Lobby").Id,
+            "forum" => guild.ForumChannel("ideas").Id,
+            "media" => CreateMedia(discord, guild.Id),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        };
+    }
+
     [Theory]
     [InlineData("category")]
     [InlineData("forum")]
+    [InlineData("media")]
     [Parity("GET /channels/{channel_id}/messages")]
     [Parity("50024")]
-    public async Task GetMessagesAsync_CategoryOrForum_Returns400CannotExecuteOnThisChannelType(string kind)
+    public async Task GetMessagesAsync_CategoryForumOrMedia_Returns400CannotExecuteOnThisChannelType(string kind)
     {
         await using var discord = FakeDiscord.Create();
-        var guild = discord.Seed.Guild("Test");
-        var channelId = kind == "category" ? guild.Category("Lobby").Id : guild.ForumChannel("ideas").Id;
+        var channelId = NonMessageableChannel(discord, kind);
         using var rest = discord.CreateRestClient();
 
         var exception = await Assert.ThrowsAsync<RestException>(async () => await rest.GetMessagesAsync(channelId).ToListAsync(Ct));
@@ -186,13 +198,13 @@ public sealed class MessageChannelTypeTests
     [Theory]
     [InlineData("category")]
     [InlineData("forum")]
+    [InlineData("media")]
     [Parity("POST /channels/{channel_id}/messages/bulk-delete")]
     [Parity("50024")]
-    public async Task DeleteMessagesAsync_CategoryOrForum_Returns400CannotExecuteOnThisChannelType(string kind)
+    public async Task DeleteMessagesAsync_CategoryForumOrMedia_Returns400CannotExecuteOnThisChannelType(string kind)
     {
         await using var discord = FakeDiscord.Create();
-        var guild = discord.Seed.Guild("Test");
-        var channelId = kind == "category" ? guild.Category("Lobby").Id : guild.ForumChannel("ideas").Id;
+        var channelId = NonMessageableChannel(discord, kind);
         using var rest = discord.CreateRestClient();
 
         var exception = await Assert.ThrowsAsync<RestException>(() => rest.DeleteMessagesAsync(channelId, [IdAt(Start, 1), IdAt(Start, 2)], cancellationToken: Ct));
@@ -200,20 +212,23 @@ public sealed class MessageChannelTypeTests
         AssertError(exception, HttpStatusCode.BadRequest, 50024);
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("category")]
+    [InlineData("forum")]
+    [InlineData("media")]
     [Parity("GET /channels/{channel_id}/messages/{message_id}")]
     [Parity("PATCH /channels/{channel_id}/messages/{message_id}")]
     [Parity("DELETE /channels/{channel_id}/messages/{message_id}")]
     [Parity("10008")]
-    public async Task MessageRoutes_ForAMessageThatCannotExistInACategory_Return404UnknownMessage()
+    public async Task MessageRoutes_ForAMessageThatCannotExistInThisChannelType_Return404UnknownMessage(string kind)
     {
         await using var discord = FakeDiscord.Create();
-        var lobby = discord.Seed.Guild("Test").Category("Lobby");
+        var channelId = NonMessageableChannel(discord, kind);
         using var rest = discord.CreateRestClient();
 
-        var get = await Assert.ThrowsAsync<RestException>(() => rest.GetMessageAsync(lobby.Id, 424242, cancellationToken: Ct));
-        var edit = await Assert.ThrowsAsync<RestException>(() => rest.ModifyMessageAsync(lobby.Id, 424242, m => m.Content = "x", cancellationToken: Ct));
-        var delete = await Assert.ThrowsAsync<RestException>(() => rest.DeleteMessageAsync(lobby.Id, 424242, cancellationToken: Ct));
+        var get = await Assert.ThrowsAsync<RestException>(() => rest.GetMessageAsync(channelId, 424242, cancellationToken: Ct));
+        var edit = await Assert.ThrowsAsync<RestException>(() => rest.ModifyMessageAsync(channelId, 424242, m => m.Content = "x", cancellationToken: Ct));
+        var delete = await Assert.ThrowsAsync<RestException>(() => rest.DeleteMessageAsync(channelId, 424242, cancellationToken: Ct));
 
         AssertError(get, HttpStatusCode.NotFound, 10008);
         AssertError(edit, HttpStatusCode.NotFound, 10008);
@@ -244,16 +259,19 @@ public sealed class MessageChannelTypeTests
         Assert.True((await rest.GetMessageAsync(news.Id, messageId, cancellationToken: Ct)).Flags.HasFlag(MessageFlags.Crossposted));
     }
 
-    [Fact]
+    [Theory]
+    [InlineData("category")]
+    [InlineData("forum")]
+    [InlineData("media")]
     [Parity("POST /channels/{channel_id}/messages/{message_id}/crosspost")]
     [Parity("10008")]
-    public async Task CrosspostMessageAsync_CategoryHasNoMessage_Returns404UnknownMessage()
+    public async Task CrosspostMessageAsync_ChannelTypeWithoutMessages_Returns404UnknownMessage(string kind)
     {
         await using var discord = FakeDiscord.Create();
-        var lobby = discord.Seed.Guild("Test").Category("Lobby");
+        var channelId = NonMessageableChannel(discord, kind);
         using var rest = discord.CreateRestClient();
 
-        var exception = await Assert.ThrowsAsync<RestException>(() => rest.CrosspostMessageAsync(lobby.Id, 424242, cancellationToken: Ct));
+        var exception = await Assert.ThrowsAsync<RestException>(() => rest.CrosspostMessageAsync(channelId, 424242, cancellationToken: Ct));
 
         AssertError(exception, HttpStatusCode.NotFound, 10008);
     }
