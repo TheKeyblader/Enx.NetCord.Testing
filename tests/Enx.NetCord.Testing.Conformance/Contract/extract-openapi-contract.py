@@ -1,23 +1,22 @@
 #!/usr/bin/env python3
-"""Extracts the response contract of the operations covered by the conformance tests from the pinned Discord OpenAPI spec.
+"""Extracts the response contract of every operation of the pinned Discord OpenAPI spec.
 
 Usage:
     python3 -I tests/Enx.NetCord.Testing.Conformance/Contract/extract-openapi-contract.py \
         <path/to/discord-api-spec/specs/openapi.json> <spec-commit-sha> \
-        [tests/Enx.NetCord.Testing.Conformance/Contract/contract-operations.txt] \
         [tests/Enx.NetCord.Testing.Conformance/Contract/openapi-contract.json]
 
 The tool runs offline, outside the build, and its output is checked in and embedded in the test assembly: CI never
-needs a checkout of discord-api-spec. For every operation listed in contract-operations.txt ("METHOD /template", one
-per line, '#' comments allowed) it keeps the 2xx response schemas (null when the response has no JSON body), plus the
-transitive closure of the "#/components/schemas/*" references and the Discord error envelope (ErrorResponse).
+needs a checkout of discord-api-spec. For every operation of the spec ("METHOD /template") it keeps the 2xx response
+schemas (null when the response has no body; the media type string when it is not JSON), plus the transitive closure of the "#/components/schemas/*"
+references and the Discord error envelope (ErrorResponse). Extracting every operation (not only the implemented ones)
+means adding a fake handler never requires regenerating the extract.
 
-Known inaccuracies of the spec are corrected by explicit, guarded errata (see apply_errata); each one is also listed in
-the report of the task that introduced it and must be dropped once the spec is fixed.
+Known inaccuracies of the spec are corrected by explicit, guarded errata (see apply_errata); each one must be dropped
+once the spec is fixed (the guard fails when the spec no longer has the expected broken shape).
 
-The SHA must be the one pinned in docs/parity/sources.md; the ContractSourceTests test fails otherwise. Re-run this tool
-during /parity/sync (after advancing the pin) and review the diff: it is the contract drift. Adding an operation to the
-conformance tests means adding its key to contract-operations.txt and re-running this tool.
+The SHA must be the one pinned in docs/parity/sources.md; ContractInfrastructureTests fails otherwise. Re-run this tool
+during /parity/sync (after advancing the pin) and review the diff: it is the contract drift.
 """
 
 import json
@@ -70,30 +69,15 @@ def apply_errata(closure):
     inner["properties"]["_errors"]["items"] = {"$ref": SCHEMA_PREFIX + "FieldError"}
 
 
-def read_operation_keys(path):
-    keys = []
-    with open(path, encoding="utf-8") as handle:
-        for line in handle:
-            line = line.split("#", 1)[0].strip()
-            if line:
-                keys.append(line)
-    return keys
-
-
 def main():
     if len(sys.argv) < 3:
         raise SystemExit(__doc__)
 
     here = os.path.dirname(os.path.abspath(__file__))
     spec_path, commit = sys.argv[1], sys.argv[2]
-    operations_path = (
+    output_path = (
         sys.argv[3]
         if len(sys.argv) > 3
-        else os.path.join(here, "contract-operations.txt")
-    )
-    output_path = (
-        sys.argv[4]
-        if len(sys.argv) > 4
         else os.path.join(here, "openapi-contract.json")
     )
 
@@ -107,32 +91,37 @@ def main():
     operations = {}
     roots = set(ALWAYS_INCLUDED)
 
-    for key in read_operation_keys(operations_path):
-        method, _, template = key.partition(" ")
-        item = spec["paths"].get(template)
-        if item is None or method.lower() not in item or method.lower() not in METHODS:
-            raise SystemExit(f"{key}: not an operation of the spec")
-        responses = {}
-        for status, response in item[method.lower()]["responses"].items():
-            if not status.startswith("2"):
+    for template, item in spec["paths"].items():
+        for method in METHODS:
+            if method not in item:
                 continue
-            content = response.get("content", {})
-            if not content:
-                responses[status] = None
-                continue
-            if list(content) != ["application/json"]:
-                raise SystemExit(
-                    f"{key} {status}: unexpected media types {list(content)}"
-                )
-            schema = content["application/json"]["schema"]
-            collect_refs(schema, roots)
-            responses[status] = schema
-        if not responses:
-            raise SystemExit(f"{key}: no 2xx response")
-        operations[key] = {
-            "operationId": item[method.lower()]["operationId"],
-            "responses": responses,
-        }
+            key = f"{method.upper()} {template}"
+            operation = item[method]
+            responses = {}
+            for status, response in operation["responses"].items():
+                if not status.startswith("2"):
+                    continue
+                content = response.get("content", {})
+                if not content:
+                    responses[status] = None
+                    continue
+                if list(content) != ["application/json"]:
+                    # A non-JSON body (an image, for instance) is recorded by media type and not validated.
+                    if len(content) != 1:
+                        raise SystemExit(
+                            f"{key} {status}: unexpected media types {list(content)}"
+                        )
+                    responses[status] = next(iter(content))
+                    continue
+                schema = content["application/json"]["schema"]
+                collect_refs(schema, roots)
+                responses[status] = schema
+            if not responses:
+                raise SystemExit(f"{key}: no 2xx response")
+            operations[key] = {
+                "operationId": operation["operationId"],
+                "responses": responses,
+            }
 
     closure = {}
     pending = sorted(roots)

@@ -1,5 +1,5 @@
-using System.Reflection;
 using System.Text.Json;
+using Enx.NetCord.Testing.Rest;
 
 namespace Enx.NetCord.Testing.Conformance.Contract;
 
@@ -69,7 +69,10 @@ internal sealed class OpenApiContract
 
         if (!_document.RootElement.GetProperty("operations").TryGetProperty(key, out var operation))
         {
-            return [$"{key}: the operation is not in the contract extract"];
+            // A route NetCord calls but the spec does not document has no contract to check.
+            return RouteTable.Default.TryGetEntry(key, out var entry) && !entry.Operation.InSpecification
+                ? []
+                : [$"{key}: the operation is not in the contract extract"];
         }
 
         var responses = operation.GetProperty("responses");
@@ -78,6 +81,11 @@ internal sealed class OpenApiContract
         {
             var documented = string.Join(", ", responses.EnumerateObject().Select(static p => p.Name));
             return [$"{key}: status {statusText} is not documented (spec: {documented})"];
+        }
+
+        if (schema.ValueKind == JsonValueKind.String)
+        {
+            return []; // A non-JSON body (an image): only the status is part of the contract.
         }
 
         if (schema.ValueKind == JsonValueKind.Null)

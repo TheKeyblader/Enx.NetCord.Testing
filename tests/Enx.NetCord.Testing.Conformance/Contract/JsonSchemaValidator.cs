@@ -58,6 +58,80 @@ internal sealed class JsonSchemaValidator(IReadOnlyDictionary<string, JsonElemen
         return errors;
     }
 
+    /// <summary>
+    /// Walks every schema of the extract, including nested ones, and lists what the validator would reject up front:
+    /// keywords outside the supported subset, types it does not know, and <c>$ref</c>s that point nowhere.
+    /// </summary>
+    /// <returns>One line per problem; empty when the whole extract can be validated.</returns>
+    public IReadOnlyList<string> FindUnsupported()
+    {
+        var problems = new List<string>();
+        foreach (var (name, schema) in schemas)
+        {
+            Scan(schema, name, problems);
+        }
+
+        return problems;
+    }
+
+    private void Scan(JsonElement schema, string path, List<string> problems)
+    {
+        if (schema.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        foreach (var keyword in schema.EnumerateObject())
+        {
+            var here = $"{path}.{keyword.Name}";
+            switch (keyword.Name)
+            {
+                case "properties":
+                    foreach (var property in keyword.Value.EnumerateObject())
+                    {
+                        Scan(property.Value, $"{path}.{property.Name}", problems);
+                    }
+
+                    break;
+                case "items" or "additionalProperties":
+                    Scan(keyword.Value, here, problems);
+                    break;
+                case "allOf" or "oneOf" or "anyOf":
+                    foreach (var branch in keyword.Value.EnumerateArray())
+                    {
+                        Scan(branch, here, problems);
+                    }
+
+                    break;
+                case "$ref":
+                    var target = keyword.Value.GetString()!;
+                    if (!target.StartsWith(SchemaPrefix, StringComparison.Ordinal) || !schemas.ContainsKey(target[SchemaPrefix.Length..]))
+                    {
+                        problems.Add($"{here}: unresolved reference '{target}'");
+                    }
+
+                    break;
+                case "type":
+                    var types = keyword.Value.ValueKind == JsonValueKind.Array
+                        ? keyword.Value.EnumerateArray().Select(static t => t.GetString()!)
+                        : [keyword.Value.GetString()!];
+                    foreach (var type in types.Where(static t => t is not ("object" or "array" or "string" or "boolean" or "null" or "number" or "integer")))
+                    {
+                        problems.Add($"{here}: unsupported type '{type}'");
+                    }
+
+                    break;
+                default:
+                    if (!Supported.Contains(keyword.Name) && !Annotations.Contains(keyword.Name))
+                    {
+                        problems.Add($"{here}: unsupported keyword '{keyword.Name}'");
+                    }
+
+                    break;
+            }
+        }
+    }
+
     private static string Describe(JsonElement instance)
     {
         var raw = instance.GetRawText();

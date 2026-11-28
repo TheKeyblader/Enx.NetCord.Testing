@@ -16,15 +16,27 @@ public sealed class ContractInfrastructureTests
     }
 
     [Fact]
-    public void Contract_Extract_CoversEveryOperationTheFakeImplements()
+    public void Contract_Extract_AndRouteInventory_DescribeTheSameSpecOperations()
     {
-        var implemented = RouteTable.Default.Entries.Where(static e => e.Handler is not null).Select(static e => e.Operation.Key);
+        var inventory = RouteTable.Default.Entries.Where(static e => e.Operation.InSpecification).Select(static e => e.Operation.Key).ToHashSet(StringComparer.Ordinal);
+        var extract = OpenApiContract.Current.OperationKeys.ToHashSet(StringComparer.Ordinal);
 
-        var missing = implemented.Where(key => !OpenApiContract.Current.Covers(key)).Order(StringComparer.Ordinal).ToList();
+        var notExtracted = inventory.Except(extract).Order(StringComparer.Ordinal).ToList();
+        var notInventoried = extract.Except(inventory).Order(StringComparer.Ordinal).ToList();
 
         Assert.True(
-            missing.Count == 0,
-            "Add these operations to Contract/contract-operations.txt and re-run extract-openapi-contract.py: " + string.Join(", ", missing));
+            notExtracted.Count == 0 && notInventoried.Count == 0,
+            "The inventory and the contract extract are out of sync (after a /parity/sync, re-run tools/generate-route-inventory.py and "
+            + "Contract/extract-openapi-contract.py). Not extracted: " + string.Join(", ", notExtracted)
+            + ". Not inventoried: " + string.Join(", ", notInventoried));
+    }
+
+    [Fact]
+    public void Contract_Extract_UsesOnlyKeywordsTheValidatorSupports()
+    {
+        var problems = OpenApiContract.Current.Validator.FindUnsupported();
+
+        Assert.True(problems.Count == 0, "Extend JsonSchemaValidator or document the strategy for: " + string.Join("; ", problems.Take(20)));
     }
 
     [Fact]
