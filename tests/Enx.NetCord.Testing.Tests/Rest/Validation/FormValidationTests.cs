@@ -19,8 +19,8 @@ public sealed class FormValidationTests
 
     private static JsonElement ErrorTree(DiscordError error)
     {
-        var document = JsonDocument.Parse(error.ToJson());
-        return document.RootElement.GetProperty("errors");
+        using var document = JsonDocument.Parse(error.ToJson());
+        return document.RootElement.GetProperty("errors").Clone();
     }
 
     private static string FirstCode(JsonElement tree, params string[] path)
@@ -172,7 +172,7 @@ public sealed class FormValidationTests
     [InlineData("abcd", false)]
     [InlineData("😀😀", true)]
     [InlineData("😀", false)]
-    public void CheckLength_CountsCodePointsAgainstTheInclusiveBounds(string value, bool expected)
+    public void CheckLength_ValueAroundBounds_CountsCodePointsInclusively(string value, bool expected)
     {
         var errors = new FormErrors();
 
@@ -220,14 +220,25 @@ public sealed class FormValidationTests
     }
 
     [Fact]
-    public void AddBadTypeAndAddRequired_AddTheDiscordCodesAndMessages()
+    public void AddBadType_NestedPath_AddsBaseTypeBadType()
     {
         var errors = new FormErrors();
         FormValidation.AddBadType(errors, "tags.0", "array");
-        FormValidation.AddRequired(errors, "name");
 
         var tree = ErrorTree(DiscordError.InvalidFormBody(errors));
         Assert.Equal("BASE_TYPE_BAD_TYPE", FirstCode(tree, "tags", "0"));
+        Assert.Equal(
+            "Value must be of type array.",
+            tree.GetProperty("tags").GetProperty("0").GetProperty("_errors")[0].GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public void AddRequired_Field_AddsBaseTypeRequired()
+    {
+        var errors = new FormErrors();
+        FormValidation.AddRequired(errors, "name");
+
+        var tree = ErrorTree(DiscordError.InvalidFormBody(errors));
         Assert.Equal("BASE_TYPE_REQUIRED", FirstCode(tree, "name"));
         Assert.Equal(
             "This field is required",

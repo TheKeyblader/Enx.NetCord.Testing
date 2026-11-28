@@ -12,7 +12,7 @@ namespace Enx.NetCord.Testing.Rest;
 /// </summary>
 /// <remarks>
 /// Typical validator: <see cref="TryReadJsonObject"/> (disposing the document), read each field with the
-/// <c>Read*</c> helpers while collecting errors in one <see cref="FormErrors"/>, then return
+/// <c>Read*</c>/<c>TryRead*</c> helpers while collecting errors in one <see cref="FormErrors"/>, then return
 /// <see cref="RestValidation.Valid(object?)"/> with a detached record, or
 /// <see cref="DiscordError.InvalidFormBody(FormErrors)"/> when <see cref="FormErrors.IsEmpty"/> is false.
 /// A route that only needs a snowflake in its path uses <see cref="ValidateRouteSnowflake"/>.
@@ -111,6 +111,7 @@ internal static class FormValidation
     /// <returns>The value, or <see langword="null"/> when absent or of the wrong type (an error was then added).</returns>
     public static string? ReadOptionalString(JsonElement root, string name, FormErrors errors)
     {
+        ArgumentNullException.ThrowIfNull(errors);
         if (!root.TryGetProperty(name, out var element))
         {
             return null;
