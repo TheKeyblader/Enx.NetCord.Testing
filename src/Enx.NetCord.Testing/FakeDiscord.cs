@@ -116,8 +116,9 @@ public sealed class FakeDiscord : IAsyncDisposable
     /// <summary>Creates a caller-owned NetCord gateway client whose REST client targets this fake.</summary>
     /// <remarks>
     /// <para>
-    /// The client cannot be started until the in-memory Gateway is available: <see cref="GatewayClient.StartAsync"/>
-    /// throws <see cref="NotSupportedException"/> before any socket is created, and nothing reaches the network. Use it
+    /// The client cannot be started until the in-memory Gateway is available: while the fake is alive,
+    /// <see cref="GatewayClient.StartAsync"/> throws <see cref="NotSupportedException"/> before any socket is created,
+    /// and nothing reaches the network. Use it
     /// where NetCord requires a <see cref="GatewayClient"/>, such as a gateway interaction context, and call this fake
     /// through <see cref="GatewayClient.Rest"/>.
     /// </para>
@@ -125,7 +126,8 @@ public sealed class FakeDiscord : IAsyncDisposable
     /// <see cref="GatewayClient.Rest"/> is wired like a client from <see cref="CreateRestClient"/>: its own in-memory
     /// handler and rate limit manager, the bot token, this fake's state and journal. Gateway compression is disabled and
     /// its cache starts empty. Disposing the client also disposes its REST client, without closing the fake; disposing
-    /// the fake makes later requests through it throw <see cref="ObjectDisposedException"/>.
+    /// the fake makes later requests and <see cref="GatewayClient.StartAsync"/> through it throw
+    /// <see cref="ObjectDisposedException"/>.
     /// </para>
     /// </remarks>
     /// <returns>A new <see cref="GatewayClient"/>; the caller disposes it.</returns>
