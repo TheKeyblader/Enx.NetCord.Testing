@@ -22,6 +22,8 @@ public sealed class DiscordErrorTests
         Assert.Equal("{\"message\":\"405: Method Not Allowed\",\"code\":0}", Json(DiscordError.MethodNotAllowed()));
         Assert.Equal("{\"message\":\"Unknown Channel\",\"code\":10003}", Json(DiscordError.UnknownChannel()));
         Assert.Equal("{\"message\":\"Unknown Message\",\"code\":10008}", Json(DiscordError.UnknownMessage()));
+        Assert.Equal("{\"message\":\"Unknown User\",\"code\":10013}", Json(DiscordError.UnknownUser()));
+        Assert.Equal("{\"message\":\"Invalid OAuth2 access token provided\",\"code\":50025}", Json(DiscordError.InvalidOAuth2AccessToken()));
         Assert.Equal("{\"message\":\"Missing Permissions\",\"code\":50013}", Json(DiscordError.MissingPermissions()));
         Assert.Equal("{\"message\":\"The request body contains invalid JSON.\",\"code\":50109}", Json(DiscordError.InvalidJson()));
     }
@@ -70,6 +72,8 @@ public sealed class DiscordErrorTests
     [InlineData(HttpStatusCode.NotFound, 0)]
     [InlineData(HttpStatusCode.NotFound, 10003)]
     [InlineData(HttpStatusCode.NotFound, 10008)]
+    [InlineData(HttpStatusCode.NotFound, 10013)]
+    [InlineData(HttpStatusCode.Forbidden, 50025)]
     [InlineData(HttpStatusCode.InternalServerError, 0)]
     [InlineData(HttpStatusCode.BadGateway, 0)]
     public void TryCreateSimple_CatalogPair_ReturnsMatchingError(HttpStatusCode status, int code)

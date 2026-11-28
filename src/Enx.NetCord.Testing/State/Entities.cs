@@ -12,10 +12,11 @@ internal sealed class UserEntity(ulong id, string username, long ordinal)
     internal string Username { get; set; } = username;
     internal string? GlobalName { get; set; }
     internal string? AvatarHash { get; set; }
+    internal string? BannerHash { get; set; }
     internal bool IsBot { get; set; }
 
     internal UserSnapshot ToSnapshot() =>
-        new(Id, Username, GlobalName, AvatarHash, IsBot, Snowflake.CreatedAt(Id), Ordinal);
+        new(Id, Username, GlobalName, AvatarHash, BannerHash, IsBot, Snowflake.CreatedAt(Id), Ordinal);
 }
 
 internal sealed class ApplicationEntity(ulong id, string name, long ordinal)

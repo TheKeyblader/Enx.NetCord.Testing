@@ -50,6 +50,18 @@ internal sealed class DiscordError
     /// <returns>The error.</returns>
     public static DiscordError UnknownMessage() => new(HttpStatusCode.NotFound, 10008, "Unknown Message");
 
+    /// <summary>404 with code 10013.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError UnknownUser() => new(HttpStatusCode.NotFound, 10013, "Unknown User");
+
+    /// <summary>
+    /// 403 with code 50025: an OAuth2 access token (group DM creation) is not one the fake knows. Discord documents
+    /// <c>50025</c> with HTTP 403 for an invalid <c>external_auth_token</c> (provisional accounts, merging accounts); the same
+    /// status is assumed for group DM creation, which is not documented (see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError InvalidOAuth2AccessToken() => new(HttpStatusCode.Forbidden, 50025, "Invalid OAuth2 access token provided");
+
     /// <summary>403 with code 50013.</summary>
     /// <returns>The error.</returns>
     public static DiscordError MissingPermissions() => new(HttpStatusCode.Forbidden, 50013, "Missing Permissions");
@@ -95,6 +107,8 @@ internal sealed class DiscordError
             (HttpStatusCode.NotFound, 0) => NotFound(),
             (HttpStatusCode.NotFound, 10003) => UnknownChannel(),
             (HttpStatusCode.NotFound, 10008) => UnknownMessage(),
+            (HttpStatusCode.NotFound, 10013) => UnknownUser(),
+            (HttpStatusCode.Forbidden, 50025) => InvalidOAuth2AccessToken(),
             (HttpStatusCode.InternalServerError, 0) => InternalServerError(),
             (HttpStatusCode.BadGateway, 0) => BadGateway(),
             _ => null,

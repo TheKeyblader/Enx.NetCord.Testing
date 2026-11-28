@@ -14,7 +14,7 @@ public sealed class FakeDiscordRestTests
     [Parity("0")]
     public async Task CreateRestClient_UnimplementedRouteInExplicitLenientMode_ReturnsDiscord404WithCodeZero()
     {
-        await using var discord = FakeDiscord.Create(new FakeDiscordOptions { UnimplementedRoutes = UnimplementedRouteMode.Lenient });
+        await using var discord = FacadeTestSupport.CreateWithoutHandlers(new FakeDiscordOptions { UnimplementedRoutes = UnimplementedRouteMode.Lenient });
         using var rest = discord.CreateRestClient();
 
         var exception = await Assert.ThrowsAsync<RestException>(() => rest.GetCurrentUserAsync(cancellationToken: Ct));
@@ -29,7 +29,7 @@ public sealed class FakeDiscordRestTests
     [Fact]
     public async Task CreateRestClient_DefaultOptions_IsLenient()
     {
-        await using var discord = FakeDiscord.Create();
+        await using var discord = FacadeTestSupport.CreateWithoutHandlers();
         using var rest = discord.CreateRestClient();
 
         var exception = await Assert.ThrowsAsync<RestException>(() => rest.GetCurrentUserAsync(cancellationToken: Ct));
@@ -56,7 +56,7 @@ public sealed class FakeDiscordRestTests
     [Fact]
     public async Task CreateRestClient_UnimplementedRouteInStrictMode_ThrowsNotSupportedExceptionAndRecordsTheAttempt()
     {
-        await using var discord = FakeDiscord.Create(new FakeDiscordOptions { UnimplementedRoutes = UnimplementedRouteMode.Strict });
+        await using var discord = FacadeTestSupport.CreateWithoutHandlers(new FakeDiscordOptions { UnimplementedRoutes = UnimplementedRouteMode.Strict });
         using var rest = discord.CreateRestClient();
 
         var exception = await Assert.ThrowsAsync<NotSupportedException>(() => rest.GetCurrentUserAsync(cancellationToken: Ct));
@@ -107,9 +107,9 @@ public sealed class FakeDiscordRestTests
     }
 
     [Fact]
-    public async Task Intercept_RouteWithoutHandlerInTheDefaultTable_ThrowsArgumentException()
+    public async Task Intercept_RouteWithoutHandler_ThrowsArgumentException()
     {
-        await using var discord = FakeDiscord.Create();
+        await using var discord = FacadeTestSupport.CreateWithoutHandlers();
 
         Assert.Throws<ArgumentException>(() => discord.Rest.Intercept(FacadeTestSupport.MeKey, RestEffect.Delay(TimeSpan.Zero)));
     }

@@ -68,7 +68,7 @@ public sealed class RecordedRequestsTests
     [Fact]
     public async Task Requests_UnimplementedRouteInLenientMode_RecordsThe404WithCodeZero()
     {
-        await using var discord = FakeDiscord.Create();
+        await using var discord = Facade.FacadeTestSupport.CreateWithoutHandlers();
         using var rest = discord.CreateRestClient();
 
         await Assert.ThrowsAsync<RestException>(() => rest.GetCurrentUserAsync(cancellationToken: Ct));
@@ -82,7 +82,7 @@ public sealed class RecordedRequestsTests
     [Fact]
     public async Task Requests_UnimplementedRouteInStrictMode_RecordsNoStatusAndNoResponse()
     {
-        await using var discord = FakeDiscord.Create(new FakeDiscordOptions { UnimplementedRoutes = UnimplementedRouteMode.Strict });
+        await using var discord = Facade.FacadeTestSupport.CreateWithoutHandlers(new FakeDiscordOptions { UnimplementedRoutes = UnimplementedRouteMode.Strict });
         using var rest = discord.CreateRestClient();
 
         await Assert.ThrowsAsync<NotSupportedException>(() => rest.GetCurrentUserAsync(cancellationToken: Ct));
@@ -324,7 +324,7 @@ public sealed class RecordedRequestsTests
     [Fact]
     public async Task Requests_UnimplementedRouteWithABody_HasNoRequestBodyBecauseItWasNeverRead()
     {
-        await using var discord = FakeDiscord.Create();
+        await using var discord = Facade.FacadeTestSupport.CreateWithoutHandlers();
         using var rest = discord.CreateRestClient();
 
         await Assert.ThrowsAsync<RestException>(

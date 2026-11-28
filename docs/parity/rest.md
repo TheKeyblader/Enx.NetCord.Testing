@@ -4,7 +4,7 @@
 
 Opérations de la spec : **250** · exposées par `RestClient` NetCord : **189** · routes NetCord hors spec : **8**
 
-Progression `Fake` (hors ➖) : ✅ **0** · 🟡 **0** · ⬜ **197** · ⛔ **0** — ➖ **61**
+Progression `Fake` (hors ➖) : ✅ **2** · 🟡 **2** · ⬜ **193** · ⛔ **0** — ➖ **61**
 
 Légende — `NetCord` : méthode(s) de `RestClient` (vide ⇒ non exposé ⇒ ➖ sauf besoin justifié). `Fake` : ⬜ à faire · 🟡 partiel · ✅ fait · ➖ hors périmètre · ⛔ bloqué. `Tests` : ⬜ / ✅ (test `[Parity("METHOD /path")]`). `Notes` : ce qui manque, liens ADR/tâches.
 
@@ -529,18 +529,18 @@ Légende — `NetCord` : méthode(s) de `RestClient` (vide ⇒ non exposé ⇒ �
 
 | Method | Path | operationId | NetCord | Fake | Tests | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| GET | `/users/@me` | get_my_user | `GetCurrentUserAsync` | ⬜ | ⬜ | |
-| PATCH | `/users/@me` | update_my_user | `ModifyCurrentUserAsync` | ⬜ | ⬜ | |
+| GET | `/users/@me` | get_my_user | `GetCurrentUserAsync` | ✅ | ✅ | Forme `UserPIIResponse` (`discriminator` `"0"`, `mfa_enabled` false, `locale` `en-US`, `verified` true, `email` null). Pas d'identité OAuth2/Bearer (la sécurité `OAuth2` de l'opération ne correspond jamais) ; `flags`, `public_flags`, `accent_color`, `avatar_decoration_data`, `collectibles`, `primary_guild` toujours vides (M1-REST-01) |
+| PATCH | `/users/@me` | update_my_user | `ModifyCurrentUserAsync` | 🟡 | ✅ | `username` (2–32 caractères, `BASE_TYPE_BAD_LENGTH`), `avatar`/`banner` (data URI base64 png/jpeg/gif et, écart toléré, webp : la doc `reference.mdx` (Image Data) ne liste que JPG, GIF et PNG mais aucune erreur Discord documentée ne permettrait de refuser webp, `null` retire ; hash déterministe dérivé des octets, `a_` pour un GIF) ; fait `UserUpdated` publié (aucun dispatch `USER_UPDATE` avant M3), seulement si une valeur change. Tous les champs optionnels (docs), alors que la spec marque `username` requis (écart documenté, NetCord n'envoie que les champs renseignés). Manque : contenu de l'image non décodé (signature PNG/JPEG… non vérifiée), mots interdits du username (`discord`, `everyone`…), limite de changements de username, discriminator (M1-REST-01) |
 | GET | `/users/@me/applications/{application_id}/entitlements` | get_current_user_application_entitlements |  | ➖ | ➖ | Non exposé par NetCord @bb5f4e13 |
 | DELETE | `/users/@me/applications/{application_id}/role-connection` | delete_application_user_role_connection |  | ➖ | ➖ | Non exposé par NetCord @bb5f4e13 |
 | GET | `/users/@me/applications/{application_id}/role-connection` | get_application_user_role_connection | `GetCurrentUserApplicationRoleConnectionAsync` | ⬜ | ⬜ | |
 | PUT | `/users/@me/applications/{application_id}/role-connection` | update_application_user_role_connection | `UpdateCurrentUserApplicationRoleConnectionAsync` | ⬜ | ⬜ | |
-| POST | `/users/@me/channels` | create_dm | `CreateGroupDMChannelAsync`, `GetDMChannelAsync` | ⬜ | ⬜ | |
+| POST | `/users/@me/channels` | create_dm | `CreateGroupDMChannelAsync`, `GetDMChannelAsync` | 🟡 | ✅ | DM 1:1 : get-or-create (même salon au 2e appel, fait `ChannelCreated` publié une seule fois — aucun dispatch avant M3 ; Discord n'envoie pas `CHANNEL_CREATE` pour un DM, `events/gateway-events.mdx` « Sent when a new guild channel is created » : M3 devra ignorer le `ChannelCreated` d'un DM), `recipient_id` accepté en nombre (NetCord) ou en chaîne, `10013` si `recipient_id` inconnu (comportement fauxcord, non vérifié sur Discord), `50035` (`BASE_TYPE_REQUIRED`/`NUMBER_TYPE_COERCE`). Group DM non simulé : le fake n'a aucun grant OAuth2 (`gdm.join`), donc tout `access_tokens` non vide est refusé avec `50025` (HTTP 403 : documenté pour `50025` dans `merging-accounts.mdx:347`, non vérifié pour un group DM) ; `access_tokens: []` est traité comme absent. Manque : DM vers soi-même/un autre bot (`50007`, erreur exacte non vérifiée), option de seed « DM refusé » (M1-REST-01) |
 | GET | `/users/@me/connections` | list_my_connections | `GetCurrentUserConnectionsAsync` | ⬜ | ⬜ | |
 | GET | `/users/@me/guilds` | list_my_guilds | `GetCurrentUserGuildsAsync` | ⬜ | ⬜ | |
 | DELETE | `/users/@me/guilds/{guild_id}` | leave_guild | `LeaveGuildAsync` | ⬜ | ⬜ | |
 | GET | `/users/@me/guilds/{guild_id}/member` | get_my_guild_member | `GetCurrentUserGuildUserAsync` | ⬜ | ⬜ | |
-| GET | `/users/{user_id}` | get_user | `GetUserAsync` | ⬜ | ⬜ | |
+| GET | `/users/{user_id}` | get_user | `GetUserAsync` | ✅ | ✅ | Forme `UserResponse` (`bot` omis pour un humain, pas de champs de compte) ; `10013` si l'utilisateur n'existe pas dans l'état (seed ou identité du bot), `50035` `NUMBER_TYPE_COERCE` (`Value "abc" is not snowflake.`) si `user_id` n'est pas un snowflake. Champs de profil riches toujours vides (M1-REST-01) |
 
 ## /voice
 
