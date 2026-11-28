@@ -24,6 +24,11 @@ précoce (tâche `PAR-SEAM-*`).
 python3 tools/generate-route-inventory.py <chemin>/discord-api-spec/specs/openapi.json <SHA-complet-du-commit>
 ```
 
+Le même fichier embarque aussi `RouteInventory.SnowflakeParameters` : les noms de paramètres de chemin que la spec type `SnowflakeType`
+(26 noms @ SHA épinglé), utilisés par les assertions `ShouldHaveRequested…` ([ADR 0012](../adr/0012-agnostic-assertions.md)) pour valider les
+valeurs d'un motif de route. Cette liste est régénérée par le même script, donc à chaque `/parity/sync` ; le script échoue si un même nom
+est Snowflake sur un chemin et autre chose sur un autre, car il ne pourrait plus le classer.
+
 Le test `SourcesPinTests` échoue si `RouteInventory.SpecificationCommit` ne correspond plus au SHA épinglé ici. Les routes NetCord hors spec
 (`Rest/NetCordOnlyRoutes.cs`) se contrôlent à part, contre `NetCord/Rest/RestClient.*.cs` et la section « Routes NetCord hors spec publique » de `rest.md`.
 
