@@ -119,7 +119,7 @@ commit (`InvalidOperationException`), sans modification ni notification.
 > n'ont pas encore de méthode enfant, et les méthodes de salon acceptent un
 > `SeededChannelOptions` facultatif. `TextChannel(name, id)` reste valable tel quel.
 
-> **Étendue par l'[ADR 0014](0014-private-channels-dm-and-group-dm.md), § 3 (proposée, 2026-11-28).**
+> **Étendue par l'[ADR 0014](0014-private-channels-dm-and-group-dm.md), § 3 (acceptée, 2026-11-28).**
 > Le seed crée aussi les salons privés : `Seed.DMChannel(userId)` ouvre le DM du bot avec un
 > utilisateur, `Seed.GroupDMChannel(recipients, name)` crée un group DM dont le bot est
 > propriétaire. Les deux rendent une poignée `SeededDMChannel` (messages et réactions).

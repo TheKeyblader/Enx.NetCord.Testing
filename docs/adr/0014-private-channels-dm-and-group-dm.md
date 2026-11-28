@@ -1,6 +1,6 @@
 # 0014 — Salons privés : DM et group DM dans l'état et le seed
 
-- **Statut** : Proposée
+- **Statut** : Acceptée
 - **Date** : 2026-11-28
 - **Auteur** : agent `architect`
 - **Tâches liées** : M1-ADR-04C, M1-REST-01, M1-REST-02, M1-REST-02C, M1-REST-04B, M1-REST-05,

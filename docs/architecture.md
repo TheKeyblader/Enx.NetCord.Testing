@@ -62,7 +62,7 @@
   `VoiceChannel`, `StageChannel` et `ForumChannel`. Un `SeededChannelOptions` facultatif porte
   `Topic`, `Nsfw`, `Slowmode` et `Position` ; une option sans objet pour le type demandé lève
   `ArgumentException` si sa valeur diffère du défaut.
-- [ADR 0014 — Salons privés](adr/0014-private-channels-dm-and-group-dm.md), § 3 (**proposée**) :
+- [ADR 0014 — Salons privés](adr/0014-private-channels-dm-and-group-dm.md), § 3 (**acceptée**) :
   `discord.Seed.DMChannel(alice)` ouvre ou retrouve le DM du bot avec un utilisateur ;
   `discord.Seed.GroupDMChannel([alice, bob], name)` crée un group DM dont le bot est
   propriétaire. Les deux rendent une `SeededDMChannel` (`Id`, `Message`, `Reaction`), où seuls
@@ -92,7 +92,7 @@
     suivante du groupe de tri (textuel, vocal, catégorie). Le listing d'une guilde est rendu par
     ID croissant.
   - Seule conversion de type : texte ↔ annonces.
-- [ADR 0014 — Salons privés](adr/0014-private-channels-dm-and-group-dm.md) (**proposée**) : le
+- [ADR 0014 — Salons privés](adr/0014-private-channels-dm-and-group-dm.md) (**acceptée**) : le
   group DM (type 3) est une ligne de la table de traits, de la même famille que le DM, avec un
   bloc `Group` (propriétaire, icône, application, `managed`).
   - `RecipientIds` liste les participants autres que le bot. Tout salon privé de l'état contient
@@ -132,7 +132,7 @@
   d'interaction ou de webhook, résolue par le jeton : elles ne passent ni par le helper ni par
   `StateCaller`, et ne contrôlent pas l'adhésion.
 - Salons privés ([ADR 0014](adr/0014-private-channels-dm-and-group-dm.md), § 4 et § 6,
-  **proposée**) : un group DM répond comme un DM 1:1 partout où l'état teste « salon sans
+  **acceptée**) : un group DM répond comme un DM 1:1 partout où l'état teste « salon sans
   guilde ». S'y ajoutent `PATCH /channels/{channel_id}` (`name`, `icon`), `DELETE` (le bot quitte
   le groupe, ensuite 404 `10003`) et `DELETE …/recipients/{user_id}`. Créer un group DM ou y
   ajouter un destinataire reste refusé (403 `50025`) : le fake n'a aucun grant OAuth2.
@@ -157,7 +157,7 @@
   `READY.guilds` ne liste que les guildes dont le bot est membre ; son arrivée ou son départ
   devient `GUILD_CREATE` ou `GUILD_DELETE` (amendement 04B de l'ADR 0004, **accepté** ; détail
   à M3-ADR-09).
-- Group DM ([ADR 0014](adr/0014-private-channels-dm-and-group-dm.md), § 5, **proposée**) :
+- Group DM ([ADR 0014](adr/0014-private-channels-dm-and-group-dm.md), § 5, **acceptée**) :
   `CHANNEL_CREATE`, `CHANNEL_UPDATE` et `CHANNEL_DELETE` sans `guild_id`, shard 0, sous l'intent
   `GUILDS` comme le disent les docs (à confirmer, UR-022). Le `ChannelCreated` d'un DM 1:1 reste
   sans dispatch.
