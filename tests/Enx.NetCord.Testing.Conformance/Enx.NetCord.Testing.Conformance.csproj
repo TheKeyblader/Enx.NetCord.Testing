@@ -6,4 +6,8 @@
     <ProjectReference Include="../../src/Enx.NetCord.Testing.Services/Enx.NetCord.Testing.Services.csproj" />
     <ProjectReference Include="../../src/Enx.NetCord.Testing.Hosting/Enx.NetCord.Testing.Hosting.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Extract of the pinned discord-api-spec (see Contract/extract-openapi-contract.py); CI has no checkout of the spec. -->
+    <EmbeddedResource Include="Contract/openapi-contract.json" LogicalName="Enx.NetCord.Testing.Conformance.openapi-contract.json" />
+  </ItemGroup>
 </Project>
