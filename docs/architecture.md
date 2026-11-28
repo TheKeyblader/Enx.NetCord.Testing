@@ -50,6 +50,10 @@
 - `var channel = discord.Seed.Guild("Test").TextChannel("general")` crée les deux ressources
   immédiatement. La guilde et le salon sont des poignées avec `Id` ; les feuilles renvoient
   des IDs (`Member` renvoie celui de l'utilisateur). Pas de `out`, de `Build()` ni de faux POST.
+- [Amendement 04B de l'ADR 0004](adr/0004-fake-discord-public-api.md#amendement-04b--adhésion-du-bot-aux-guildes-seedées)
+  (**proposé**) : `Seed.Guild("Test")` inscrit aussi le bot, dans le même commit ;
+  `Seed.Guild("Elsewhere", withBot: false)` crée une guilde que le bot ne voit pas, et
+  `guild.Member(discord.ApplicationId)` l'y fait entrer plus tard. L'adhésion n'alloue aucun ID.
 - Le seed accepte un ID explicite non nul, jamais attribué dans ce fake. Sa milliseconde
   encodée fixe la date de création sans faire reculer l'horloge ni avancer le générateur.
 
@@ -86,6 +90,10 @@
   `FakeDiscordOptions.UnimplementedRoutes` choisit `Lenient` (défaut : 404, code `0`) ou
   `Strict` (journalise puis lève `NotSupportedException`). Ce choix ne modifie aucune réponse
   d'un handler : un salon inconnu reste un 404, code `10003`.
+- Visibilité (amendement 04B de l'ADR 0004, **proposé**) : un helper d'état unique (`GuildAccess`,
+  nom indicatif) résout guilde et salon sous le verrou pour tout appelant REST. Hors d'une
+  guilde du bot : 404 `10004` pour la guilde elle-même, 403 `50001` pour ses sous-ressources,
+  ses salons et ses commandes ; les routes à jeton ne contrôlent pas l'adhésion.
 - `discord.Rest.Intercept(route, effect)` applique un `RestEffect` à la prochaine tentative
   éligible, avant toute mutation : erreur du catalogue, délai virtuel via `TimeProvider` avant
   le traitement normal, ou 429 par utilisateur.
@@ -99,7 +107,10 @@
 - `FakeWebSocketConnectionProvider` → `FakeWebSocketConnection` (paires de `Channel<byte[]>`).
 - `FakeGatewaySession` : machine à états (Hello → Identified → Ready ↔ Resuming → Closed),
   séquence, intents, shard, file d'envoi, rejouage pour RESUME.
-- Traduction `StateChange` → dispatch(s), filtrée par intents et shard.
+- Traduction `StateChange` → dispatch(s), filtrée par adhésion du bot, intents et shard.
+  `READY.guilds` ne liste que les guildes dont le bot est membre ; son arrivée ou son départ
+  devient `GUILD_CREATE` ou `GUILD_DELETE` (amendement 04B de l'ADR 0004, **proposé** ; détail
+  à M3-ADR-09).
 - Commandes de test : `DispatchAsync(...)`, `DisconnectAsync(closeCode)`, `RequestReconnectAsync()`,
   `InvalidateSessionAsync(resumable)`, `FlushAsync()`, `WaitForReadyAsync(client)`.
 - Heartbeat & timeouts pilotés par `TimeProvider`.
