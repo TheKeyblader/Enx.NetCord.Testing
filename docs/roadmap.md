@@ -36,7 +36,8 @@ Implémentation :
 - [~] (architect) M1-ADR-12 — Assertions agnostiques : `FakeDiscordAssertionException`, `ShouldHaveRequested(...)` et premières assertions sur `Recorded` (ADR 0002 n'en fixe que l'exception, ADR 0004 les exclut) — architect — M1-04
 - [ ] M1-04B — Assertions de base selon M1-ADR-12 — rest-implementer — M1-ADR-12
 - [x] M1-REST-01 — Users : `GET/PATCH /users/@me`, `GET /users/{user_id}`, `POST /users/@me/channels` (DM) — rest-implementer — M1-03 — [`Routes/Users/`](../src/Enx.NetCord.Testing/Rest/Routes/Users/) (`e4a2df8`, `0bd0dba`, `f669901`), review APPROVE ; PATCH et DM 🟡 (group DM, `50007`)
-- [~] (rest-implementer) M1-DEBT-03 — Factoriser les aides de validation locales à `Routes/Users/UserValidators.cs` (snowflake de route/corps, corps objet, `MODEL_TYPE_CONVERT`) dans `Rest/` pour toutes les familles — rest-implementer — M1-REST-01
+- [x] M1-DEBT-03 — Factoriser les aides de validation locales à `Routes/Users/UserValidators.cs` (snowflake de route/corps, corps objet, `MODEL_TYPE_CONVERT`) dans `Rest/` pour toutes les familles — rest-implementer — M1-REST-01 — [`Rest/FormValidation.cs`](../src/Enx.NetCord.Testing/Rest/FormValidation.cs) (`2b84902`, `b75b511`, `edc847f`, merge `8cf44d8`), review APPROVE ; skill `fake-rest-endpoint` § 3 à jour
+- [ ] M1-DEBT-04 — Compléter `FormValidation` au besoin des familles M1-REST-02+ : entiers et bornes numériques, booléens, tableaux typés (à faire dans la première tâche qui en a besoin, pas en lot) — rest-implementer — M1-DEBT-03
 - [ ] M1-REST-02 — Channels : `GET/PATCH/DELETE /channels/{channel_id}` — rest-implementer — M1-03, M1-05
 - [ ] M1-REST-03 — Messages : list/get/create/edit/delete/bulk-delete/crosspost (JSON + multipart) — rest-implementer — M1-REST-02
 - [ ] M1-REST-04 — Réactions : put/delete @me, delete user, list, delete all, delete emoji — rest-implementer — M1-REST-03
