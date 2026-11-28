@@ -113,11 +113,23 @@ internal sealed class MemberEntity(ulong guildId, ulong userId, DateTimeOffset j
     internal bool Deaf { get; set; }
     internal bool Mute { get; set; }
 
+    // The guild-specific profile (PATCH /guilds/{guild_id}/members/{user_id} and /@me).
+    internal string? AvatarHash { get; set; }
+    internal string? BannerHash { get; set; }
+    internal DateTimeOffset? CommunicationDisabledUntil { get; set; }
+    internal int Flags { get; set; }
+
     // Excludes the implicit @everyone role, as the Discord `roles` member field does.
     internal List<ulong> RoleIds { get; } = [];
 
     internal MemberSnapshot ToSnapshot() =>
-        new(GuildId, UserId, Nick, [.. RoleIds], JoinedAt, Deaf, Mute, Ordinal);
+        new(GuildId, UserId, Nick, [.. RoleIds], JoinedAt, Deaf, Mute, Ordinal)
+        {
+            AvatarHash = AvatarHash,
+            BannerHash = BannerHash,
+            CommunicationDisabledUntil = CommunicationDisabledUntil,
+            Flags = Flags,
+        };
 }
 
 internal sealed class MessageEntity(ulong id, ulong channelId, ulong authorId, long ordinal)

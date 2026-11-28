@@ -39,6 +39,12 @@ internal sealed record RoleCreated(long Number, RoleSnapshot Role) : StateChange
 
 internal sealed record MemberAdded(long Number, MemberSnapshot Member, UserSnapshot User) : StateChange(Number);
 
+/// <summary>A membership changed (nickname, roles, timeout…); the snapshot is the member after the change (the Gateway turns it into <c>GUILD_MEMBER_UPDATE</c>).</summary>
+internal sealed record MemberUpdated(long Number, MemberSnapshot Member, UserSnapshot User) : StateChange(Number);
+
+/// <summary>A member left or was removed; the snapshot is the member as it was (the Gateway turns it into <c>GUILD_MEMBER_REMOVE</c>).</summary>
+internal sealed record MemberRemoved(long Number, MemberSnapshot Member, UserSnapshot User) : StateChange(Number);
+
 internal sealed record MessageCreated(
     long Number,
     MessageSnapshot Message,

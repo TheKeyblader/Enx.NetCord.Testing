@@ -398,7 +398,8 @@ internal static class GuildValidators
     }
 
     // An image: absent leaves it, null removes it, a base64 data URI sets it, anything else is IMAGE_INVALID (like the user's avatar).
-    private static Change<string> ReadImage(JsonElement root, string name, FormErrors errors)
+    // Internal: the member routes (the guild avatar and banner of a member) read images the same way.
+    internal static Change<string> ReadImage(JsonElement root, string name, FormErrors errors)
     {
         if (!root.TryGetProperty(name, out var element))
         {

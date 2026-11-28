@@ -201,6 +201,26 @@ internal sealed class DiscordError
     public static DiscordError InvalidChannelUserLimit(int limit)
         => InvalidFormBody(new FormErrors().Add("user_limit", "NUMBER_TYPE_MAX", $"int value should be less than or equal to {limit.ToString(CultureInfo.InvariantCulture)}."));
 
+    /// <summary>404 with code 10007: the user is not a member of the guild (or does not exist).</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError UnknownMember() => new(HttpStatusCode.NotFound, 10007, "Unknown Member");
+
+    /// <summary>404 with code 10011: the role does not exist in the guild.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError UnknownRole() => new(HttpStatusCode.NotFound, 10011, "Unknown Role");
+
+    /// <summary>
+    /// 400 with code 50028: the role cannot be given to or taken from a member (<c>@everyone</c>). The code and message are documented;
+    /// the status is not (hypothesis, see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError InvalidRole() => new(HttpStatusCode.BadRequest, 50028, "Invalid Role");
+
+    /// <summary>400 <c>50035</c> on <c>communication_disabled_until</c>: the timeout ends more than 28 days from now. The field code and message are hypotheses.</summary>
+    /// <returns>The error.</returns>
+    public static DiscordError InvalidMemberTimeout()
+        => InvalidFormBody(new FormErrors().Add("communication_disabled_until", "GUILD_MEMBER_TIMEOUT_TOO_LONG", "A timeout cannot last more than 28 days."));
+
     /// <summary>403 with code 50013.</summary>
     /// <returns>The error.</returns>
     public static DiscordError MissingPermissions() => new(HttpStatusCode.Forbidden, 50013, "Missing Permissions");
@@ -246,6 +266,11 @@ internal sealed class DiscordError
             StateFailureKind.UnknownChannel => UnknownChannel(),
             StateFailureKind.UnknownMessage => UnknownMessage(),
             StateFailureKind.UnknownUser => UnknownUser(),
+            StateFailureKind.UnknownMember => UnknownMember(),
+            StateFailureKind.UnknownRole => UnknownRole(),
+            StateFailureKind.InvalidRole => InvalidRole(),
+            StateFailureKind.MissingPermissions => MissingPermissions(),
+            StateFailureKind.InvalidMemberTimeout => InvalidMemberTimeout(),
             StateFailureKind.MissingAccess => MissingAccess(),
             StateFailureKind.CannotEditOtherAuthor => CannotEditOtherAuthor(),
             StateFailureKind.EmptyMessage => EmptyMessage(),
@@ -293,6 +318,9 @@ internal sealed class DiscordError
             (HttpStatusCode.NotFound, 10003) => UnknownChannel(),
             (HttpStatusCode.NotFound, 10004) => UnknownGuild(),
             (HttpStatusCode.Forbidden, 50001) => MissingAccess(),
+            (HttpStatusCode.NotFound, 10007) => UnknownMember(),
+            (HttpStatusCode.NotFound, 10011) => UnknownRole(),
+            (HttpStatusCode.BadRequest, 50028) => InvalidRole(),
             (HttpStatusCode.NotFound, 10008) => UnknownMessage(),
             (HttpStatusCode.Forbidden, 50003) => CannotExecuteOnDm(),
             (HttpStatusCode.Forbidden, 50005) => CannotEditOtherAuthor(),
