@@ -34,7 +34,8 @@ Implémentation :
 - [x] M1-04 — `Recorded.Requests` (`DiscordRecording`, `RecordedRestRequest`, `FakeDiscord.Recorded`, ADR 0004/0005) ; les assertions sont déplacées en M1-04B — rest-implementer — M1-03 — [`Recording/`](../src/Enx.NetCord.Testing/Recording/) (`e3ffa9b`, `56e67e8`), review APPROVE
 - [ ] M1-ADR-12 — Assertions agnostiques : `FakeDiscordAssertionException`, `ShouldHaveRequested(...)` et premières assertions sur `Recorded` (ADR 0002 n'en fixe que l'exception, ADR 0004 les exclut) — architect — M1-04
 - [ ] M1-04B — Assertions de base selon M1-ADR-12 — rest-implementer — M1-ADR-12
-- [~] (rest-implementer) M1-REST-01 — Users : `GET/PATCH /users/@me`, `GET /users/{user_id}`, `POST /users/@me/channels` (DM) — rest-implementer — M1-03
+- [x] M1-REST-01 — Users : `GET/PATCH /users/@me`, `GET /users/{user_id}`, `POST /users/@me/channels` (DM) — rest-implementer — M1-03 — [`Routes/Users/`](../src/Enx.NetCord.Testing/Rest/Routes/Users/) (`e4a2df8`, `0bd0dba`, `f669901`), review APPROVE ; PATCH et DM 🟡 (group DM, `50007`)
+- [ ] M1-DEBT-03 — Factoriser les aides de validation locales à `Routes/Users/UserValidators.cs` (snowflake de route/corps, corps objet, `MODEL_TYPE_CONVERT`) dans `Rest/` pour toutes les familles — rest-implementer — M1-REST-01
 - [ ] M1-REST-02 — Channels : `GET/PATCH/DELETE /channels/{channel_id}` — rest-implementer — M1-03
 - [ ] M1-REST-03 — Messages : list/get/create/edit/delete/bulk-delete/crosspost (JSON + multipart) — rest-implementer — M1-REST-02
 - [ ] M1-REST-04 — Réactions : put/delete @me, delete user, list, delete all, delete emoji — rest-implementer — M1-REST-03
@@ -70,7 +71,7 @@ Implémentation :
 - [ ] M3-ADR-09 — Gateway fake : connexion mémoire, barrières (`FlushAsync`), commandes de test, sharding — architect — M1-ADR-03
 - [ ] M3-01 — `FakeWebSocketConnection(Provider)` + HELLO/IDENTIFY/READY/HEARTBEAT(ACK) — gateway-implementer — M3-ADR-09
 - [ ] M3-02 — GUILD_CREATE initial complet (cache NetCord rempli) — gateway-implementer — M3-01
-- [ ] M3-03 — Traduction `StateChange` → dispatch : messages, réactions, channels, threads, guild, members, roles, bans — gateway-implementer — M3-02
+- [ ] M3-03 — Traduction `StateChange` → dispatch : messages, réactions, channels, threads, guild, members, roles, bans, `UserUpdated` → `USER_UPDATE` ; ignorer `ChannelCreated` d'un DM (Discord n'envoie `CHANNEL_CREATE` que pour un salon de guilde) — gateway-implementer — M3-02
 - [ ] M3-04 — Intents (dont privilégiés, MESSAGE_CONTENT) — gateway-implementer — M3-03
 - [ ] M3-05 — RESUME/RESUMED, RECONNECT, INVALID_SESSION, close codes 4000–4014 — gateway-implementer — M3-01
 - [ ] M3-06 — Sharding (`ShardedGatewayClient`), routage par shard — gateway-implementer — M3-03
@@ -118,4 +119,5 @@ Implémentation :
 - [ ] PAR-INT-01 — `interactions.md` selon ADR 0007 : ajouter `rule:callback-type`, `rule:followup-after-defer`, `rule:unacked-token`, `rule:rejected-callbacks`, `harness:direct-http-transport` ; corriger `rule:3s-deadline`, `rule:original-response`, `rule:followups`, note `interaction:2/primary_entry_point` ; lier `rule:token-15min`/`rule:ephemeral` à l'ADR — parity-auditor — M2-ADR-07
 - [ ] PAR-ERR-01 — Confirmer contre Discord (hypothèses ADR 0007) : statuts/libellés `40060`, `10062`, `10015`, `50027`, `10008` ; jeton jamais émis (401/50027 vs 404/10015 fauxcord) ; followup avant réponse initiale ; type de callback interdit ; règles autocomplete ; type 12 ; paramètres de followup ignorés ; non-dispatch des éphémères — parity-auditor — M2-ADR-07
 - [ ] PAR-INT-02 — `interactions.md` selon ADR 0008 : `services:register-commands` (`RegisterCommandsAsync`, deux `PUT`) ; `services:minimal-api` (builders NetCord.Services vs `host.AddSlashCommand` M5) ; `services:text-commands` dépend de M3 ; ajouter `services:execution-result`, `services:scoped-services`, `services:custom-context` — parity-auditor — M2-ADR-08
+- [ ] PAR-REST-01 — Confirmer contre Discord (hypothèses M1-REST-01) : statut 403 de `50025` pour un group DM ; `10013` pour un `recipient_id` inconnu (fauxcord) ; `50007` pour un DM vers soi-même ou un bot ; refus éventuel de WebP pour avatar/banner ; `verified`/`email`/`locale` de `GET /users/@me` pour un bot — parity-auditor — M1-REST-01
 - [ ] PAR-SEAM-01 — Réaligner skill `fake-interaction` (l. 44 `CreateCommandsAsync` → `RegisterCommandsAsync`), `AGENTS.md:94` (`ExecuteSlashCommandAsync` → `bot.ExecuteAsync(request)`) ; corriger `AddModule&lt;T&gt;` échappé dans `docs/architecture.md` § Services — orchestrator — M2-ADR-08
