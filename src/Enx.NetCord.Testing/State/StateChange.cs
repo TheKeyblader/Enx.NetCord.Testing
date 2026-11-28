@@ -24,6 +24,9 @@ internal sealed record UserUpdated(long Number, UserSnapshot User) : StateChange
 internal sealed record GuildCreated(long Number, GuildSnapshot Guild, RoleSnapshot Everyone, MemberSnapshot? BotMember)
     : StateChange(Number);
 
+/// <summary>A guild changed (name, description, settings…); the snapshot is the guild after the change (the Gateway turns it into <c>GUILD_UPDATE</c>).</summary>
+internal sealed record GuildUpdated(long Number, GuildSnapshot Guild) : StateChange(Number);
+
 internal sealed record ChannelCreated(long Number, ChannelSnapshot Channel) : StateChange(Number);
 
 /// <summary>A guild channel changed; the snapshot is the channel after the change (the Gateway turns it into <c>CHANNEL_UPDATE</c>).</summary>

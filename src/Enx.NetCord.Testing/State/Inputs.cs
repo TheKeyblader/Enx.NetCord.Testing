@@ -39,7 +39,9 @@ internal sealed record CreateGuildChannelInput(
     bool Nsfw = false,
     int RateLimitPerUser = 0,
     VoiceSettings? Voice = null,
-    ForumSettings? Forum = null);
+    ForumSettings? Forum = null,
+    int? DefaultAutoArchiveDuration = null,
+    int DefaultThreadRateLimitPerUser = 0);
 
 internal sealed record CreateDmChannelInput(ulong RecipientId, ulong? Id = null);
 

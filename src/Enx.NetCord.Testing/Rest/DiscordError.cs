@@ -99,6 +99,29 @@ internal sealed class DiscordError
     /// <returns>The error.</returns>
     public static DiscordError BitrateTooHigh() => new(HttpStatusCode.BadRequest, 30052, "Bitrate is too high for channel of this type");
 
+    /// <summary>
+    /// 400 with code 30013: the guild already has 500 channels. The code and message are documented
+    /// (<c>opcodes-and-status-codes.mdx</c>); the HTTP status is not (hypothesis, see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError MaxGuildChannels() => new(HttpStatusCode.BadRequest, 30013, "Maximum number of guild channels reached (500)");
+
+    /// <summary>
+    /// 400 with code 40009: more than one channel of a <c>PATCH /guilds/{guild_id}/channels</c> changes its parent. The code and message
+    /// are documented; the HTTP status is not (hypothesis, see <c>docs/parity/errors.md</c>).
+    /// </summary>
+    /// <returns>The error.</returns>
+    public static DiscordError OnlyOneParentChange() => new(HttpStatusCode.BadRequest, 40009, "Only one channel can have a parent_id modified at a time");
+
+    /// <summary>400 <c>50035</c> on a guild setting that names a channel: it is not a channel of the guild, or of the wrong type. The field code and message are hypotheses.</summary>
+    /// <param name="field">The wire field, such as <c>afk_channel_id</c>.</param>
+    /// <returns>The error.</returns>
+    public static DiscordError InvalidGuildChannelReference(string field)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(field);
+        return InvalidFormBody(new FormErrors().Add(field, "GUILD_CHANNEL_INVALID", "Invalid channel for this setting."));
+    }
+
     /// <summary>400 <c>50035</c> on <c>type</c>: a guild channel cannot become the requested type (only text and announcement convert). The field code is a hypothesis.</summary>
     /// <returns>The error.</returns>
     public static DiscordError InvalidChannelType()
@@ -197,6 +220,10 @@ internal sealed class DiscordError
             StateFailureKind.InvalidChannelTopic => InvalidChannelTopic(),
             StateFailureKind.InvalidChannelUserLimit => InvalidChannelUserLimit(failure.Limit),
             StateFailureKind.ChannelBitrateTooHigh => BitrateTooHigh(),
+            StateFailureKind.MaxGuildChannels => MaxGuildChannels(),
+            StateFailureKind.TooManyParentChanges => OnlyOneParentChange(),
+            StateFailureKind.InvalidGuildChannelReference => InvalidGuildChannelReference(
+                failure.Field ?? throw new InvalidOperationException("An InvalidGuildChannelReference failure carries its field.")),
 
             // Hypothesis (docs/parity/errors.md): the code of the field error of a reply to a message that does not exist.
             StateFailureKind.UnknownMessageReference => InvalidFormBody(new FormErrors().Add("message_reference", "MESSAGE_REFERENCE_UNKNOWN_MESSAGE", "Unknown message")),
@@ -225,6 +252,8 @@ internal sealed class DiscordError
             (HttpStatusCode.BadRequest, 50024) => CannotExecuteOnChannelType(),
             (HttpStatusCode.BadRequest, 50034) => MessageTooOldToBulkDelete(),
             (HttpStatusCode.BadRequest, 30052) => BitrateTooHigh(),
+            (HttpStatusCode.BadRequest, 30013) => MaxGuildChannels(),
+            (HttpStatusCode.BadRequest, 40009) => OnlyOneParentChange(),
             (HttpStatusCode.NotFound, 10013) => UnknownUser(),
             (HttpStatusCode.Forbidden, 50025) => InvalidOAuth2AccessToken(),
             (HttpStatusCode.InternalServerError, 0) => InternalServerError(),

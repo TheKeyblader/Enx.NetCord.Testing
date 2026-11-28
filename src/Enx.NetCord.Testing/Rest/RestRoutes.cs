@@ -1,4 +1,5 @@
 using Enx.NetCord.Testing.Rest.Routes.Channels;
+using Enx.NetCord.Testing.Rest.Routes.Guilds;
 using Enx.NetCord.Testing.Rest.Routes.Messages;
 using Enx.NetCord.Testing.Rest.Routes.Users;
 
@@ -15,6 +16,7 @@ internal static class RestRoutes
     [
         .. UserRoutes.Bindings,
         .. ChannelRoutes.Bindings,
+        .. GuildRoutes.Bindings,
         .. MessageRoutes.Bindings,
     ];
 }

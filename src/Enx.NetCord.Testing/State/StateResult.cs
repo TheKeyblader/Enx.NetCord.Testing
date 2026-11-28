@@ -46,6 +46,16 @@ internal enum StateFailureKind
     /// <summary>The user limit exceeds what the voice or stage channel allows, carried by <see cref="StateFailure.Limit"/> (ADR 0013, § 1): 400 <c>50035</c> on <c>user_limit</c> (form is a hypothesis).</summary>
     InvalidChannelUserLimit,
 
+    /// <summary>More than one channel of a <c>PATCH /guilds/{guild_id}/channels</c> would change its parent (ADR 0013, § 4): 400 <c>40009</c> (status is a hypothesis).</summary>
+    TooManyParentChanges,
+
+    /// <summary>
+    /// A guild setting points to a channel that is not in the guild or is of the wrong type (an AFK channel is a voice channel, the
+    /// system, rules, public updates and safety alerts channels are text or announcement channels), carried by
+    /// <see cref="StateFailure.Field"/>: 400 <c>50035</c> on that field (code and message are hypotheses).
+    /// </summary>
+    InvalidGuildChannelReference,
+
     /// <summary>The bot edits the content, embeds or attachments of another user's message: 403 <c>50005</c>.</summary>
     CannotEditOtherAuthor,
 
@@ -69,9 +79,16 @@ internal enum StateFailureKind
 /// <param name="Kind">The reason.</param>
 /// <param name="ResourceId">The ID of the resource the refusal concerns.</param>
 /// <param name="Limit">The bound the request exceeded when the message needs it (a user limit), otherwise 0.</param>
-internal readonly record struct StateFailure(StateFailureKind Kind, ulong ResourceId, int Limit = 0)
+/// <param name="Field">The wire field the refusal concerns when the kind covers several (a guild setting that names a channel), otherwise <see langword="null"/>.</param>
+internal readonly record struct StateFailure(StateFailureKind Kind, ulong ResourceId, int Limit = 0, string? Field = null)
 {
-    public override string ToString() => Limit == 0 ? $"{Kind} ({ResourceId})" : $"{Kind} ({ResourceId}, limit {Limit})";
+    public override string ToString()
+        => (Limit, Field) switch
+        {
+            (0, null) => $"{Kind} ({ResourceId})",
+            (0, _) => $"{Kind} ({ResourceId}, field {Field})",
+            _ => $"{Kind} ({ResourceId}, limit {Limit})",
+        };
 }
 
 /// <summary>

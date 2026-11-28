@@ -4,7 +4,7 @@
 
 Opérations de la spec : **250** · exposées par `RestClient` NetCord : **189** · routes NetCord hors spec : **8**
 
-Progression `Fake` (hors ➖) : ✅ **2** · 🟡 **12** · ⬜ **183** · ⛔ **0** — ➖ **61**
+Progression `Fake` (hors ➖) : ✅ **2** · 🟡 **18** · ⬜ **177** · ⛔ **0** — ➖ **61**
 
 Légende — `NetCord` : méthode(s) de `RestClient` (vide ⇒ non exposé ⇒ ➖ sauf besoin justifié). `Fake` : ⬜ à faire · 🟡 partiel · ✅ fait · ➖ hors périmètre · ⛔ bloqué. `Tests` : ⬜ / ✅ (test `[Parity("METHOD /path")]`). `Notes` : ce qui manque, liens ADR/tâches.
 
@@ -183,8 +183,8 @@ Légende — `NetCord` : méthode(s) de `RestClient` (vide ⇒ non exposé ⇒ �
 | Method | Path | operationId | NetCord | Fake | Tests | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | GET | `/guilds/templates/{code}` | get_guild_template | `GetGuildTemplateAsync` | ⬜ | ⬜ | |
-| GET | `/guilds/{guild_id}` | get_guild | `GetGuildAsync` | ⬜ | ⬜ | |
-| PATCH | `/guilds/{guild_id}` | update_guild | `ModifyGuildAsync` | ⬜ | ⬜ | |
+| GET | `/guilds/{guild_id}` | get_guild | `GetGuildAsync` | 🟡 | ✅ | M1-REST-06 : `GuildResponse` complet (toutes les propriétés requises du schéma, vérifiées en mode strict : `roles` réels avec `@everyone`, réglages, images), `?with_counts` (`True`/`False` de NetCord, `1`/`0`, sinon `50035` `BOOLEAN_TYPE_COERCE`) ajoute `approximate_member_count` (membres réels) et `approximate_presence_count` (**toujours 0** : aucune présence modélisée). Guilde inconnue **ou sans le bot** ⇒ 404 `10004` (à confirmer, UR-001). **Manque** : `features` toujours vide (M4-REST-10), `emojis`/`stickers` vides (familles Emojis et Stickers), pas de `vanity_url_code`, palier de boost ni widget (constantes) ; `owner_id` d'une guilde sans propriétaire dans l'état = le bot (hypothèse) ; `region` = `deprecated` (hypothèse) ; limites `max_members` 500000 / vidéo 25 / stage 50 = guilde sans boost |
+| PATCH | `/guilds/{guild_id}` | update_guild | `ModifyGuildAsync` | 🟡 | ✅ | M1-REST-06 : `name` (2-100), `description` (0-300, `null` l'efface), images `icon`/`splash`/`banner`/`discovery_splash`/`home_header` (hash dérivé des octets ; `null` supprime ; un JPEG `data:image/jpg` de NetCord est accepté), `verification_level`, `default_message_notifications`, `explicit_content_filter`, `preferred_locale`, `afk_timeout`, `system_channel_flags`, `premium_progress_bar_enabled`, et les salons `afk_channel_id` (voix) / `system_channel_id`, `rules_channel_id`, `public_updates_channel_id`, `safety_alerts_channel_id` (texte ou annonces de **cette** guilde, sinon `50035` de champ `GUILD_CHANNEL_INVALID` : **code et message hypothèses**) ; énumérations de la spec en `BASE_TYPE_CHOICES`. Un `GuildUpdated` n'est publié que si une valeur change ; supprimer un salon désigné par un réglage l'efface (hypothèse : `GuildUpdated` après le `ChannelDeleted`). Guilde hors du bot ⇒ 404 `10004` (à confirmer, UR-001). **Manque** : `features`, `region` (déprécié) et `owner_id` (absent de la spec) validés puis ignorés ; `MANAGE_GUILD` non calculé (M4-REST-05) ; les prérequis de fonctionnalités (bannière, splash, salon de règles en guilde Community) ne sont pas contrôlés ; refus multiples non réunis dans un seul arbre `errors` (UR-004, point 5) |
 
 ## /guilds/{id}/audit-logs
 
@@ -221,9 +221,9 @@ Légende — `NetCord` : méthode(s) de `RestClient` (vide ⇒ non exposé ⇒ �
 
 | Method | Path | operationId | NetCord | Fake | Tests | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| GET | `/guilds/{guild_id}/channels` | list_guild_channels | `GetGuildChannelsAsync` | ⬜ | ⬜ | |
-| PATCH | `/guilds/{guild_id}/channels` | bulk_update_guild_channels | `ModifyGuildChannelPositionsAsync` | ⬜ | ⬜ | |
-| POST | `/guilds/{guild_id}/channels` | create_guild_channel | `CreateGuildChannelAsync` | ⬜ | ⬜ | |
+| GET | `/guilds/{guild_id}/channels` | list_guild_channels | `GetGuildChannelsAsync` | 🟡 | ✅ | M1-REST-06 : tableau des salons de la guilde (DTO par famille, écrit par un `JsonConverter` fermé : ADR 0006 règle 5 ; chaque élément conforme à une branche du `oneOf` de la spec), par **ID croissant** (pas par position : hypothèse, UR-009), sans threads ni DM ; guilde inconnue ⇒ 404 `10004`, guilde du fake sans le bot ⇒ 403 `50001` (à confirmer, UR-001). **Manque** : filtrage par `VIEW_CHANNEL` (M4-REST-05) ; threads (M4-REST-01) ; `permission_overwrites` toujours `[]` |
+| PATCH | `/guilds/{guild_id}/channels` | bulk_update_guild_channels | `ModifyGuildChannelPositionsAsync` | 🟡 | ✅ | M1-REST-06 (ADR 0013 § 4) : tableau `{id, position?, parent_id?, lock_permissions?}` validé en entier (erreurs par indice `0.id`) puis appliqué en un commit, 204 ; `position` seule valeur écrite, **aucun voisin renuméroté** ; `parent_id` à trois états (absent, `null` sort de la catégorie, ID déplace) avec les quatre invariants de parent ; **plusieurs** salons dont le parent change réellement ⇒ 400 `40009` (un parent identique au courant ne compte pas ; un salon cité deux fois compte une fois) ; un `ChannelUpdated` par salon réellement changé, dans l'ordre du tableau (un fait par salon, état final) ; ID inconnu ou d'une autre guilde ⇒ 404 `10003` sans rien écrire. Tout cela est **hypothèse** (UR-009) ; `id` obligatoire (`BASE_TYPE_REQUIRED`) est un choix du fake (la spec n'exige rien). **Manque** : `lock_permissions` validé sans effet (M4-REST-05) ; statut HTTP de `40009` non documenté (hypothèse) |
+| POST | `/guilds/{guild_id}/channels` | create_guild_channel | `CreateGuildChannelAsync` | 🟡 | ✅ | M1-REST-06 : 201 avec le salon, créé par `CreateGuildChannel` (les invariants du seed y sont : parent, 50 par catégorie, 500 par guilde, position par défaut du groupe de tri, un refus n'alloue aucun ID) pour les types 0, 2, 4, 5, 13, 15 et 16 (media : accepté malgré la spec, ADR 0013 § 1, **non couvert par la conformité** car la spec n'énumère pas 16) ; `name` obligatoire 1-100 (`BASE_TYPE_REQUIRED`/`BASE_TYPE_BAD_LENGTH`), `type` hors énumération de la spec ⇒ `BASE_TYPE_CHOICES`, 14 ⇒ `CHANNEL_TYPE_INVALID` ; bornes par type : topic 1024 (4096 forum), bitrate (`30052`), `user_limit` ; 500 salons ⇒ 400 `30013` (**statut non documenté**, UR-010). Un champ sans objet pour le type est validé puis ignoré. **Manque** : `permission_overwrites` vérifié (type, 100 max) mais non appliqué, ni la reprise des permissions de la catégorie (M4-REST-05) ; `available_tags`, `default_reaction_emoji`, `default_tag_setting` validés et ignorés (M4-REST-01) ; ni `NEWS` ni Community exigés (M4-REST-10) ; codes de champ de parent hypothèses (UR-004, lot A) |
 
 ## /guilds/{id}/emojis
 
@@ -298,7 +298,7 @@ Légende — `NetCord` : méthode(s) de `RestClient` (vide ⇒ non exposé ⇒ �
 
 | Method | Path | operationId | NetCord | Fake | Tests | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
-| GET | `/guilds/{guild_id}/preview` | get_guild_preview | `GetGuildPreviewAsync` | ⬜ | ⬜ | |
+| GET | `/guilds/{guild_id}/preview` | get_guild_preview | `GetGuildPreviewAsync` | 🟡 | ✅ | M1-REST-06 : `GuildPreviewResponse` conforme (mode strict), `approximate_member_count` réel, `approximate_presence_count` toujours 0. Même visibilité que `GET /guilds/{guild_id}` : guilde sans le bot ⇒ 404 `10004` — **à confirmer (UR-001)** : Discord rend la preview d'une guilde publique (Discovery) à un non-membre, que le fake ne modélise pas (aucune notion de guilde publique). **Manque** : `features`, `emojis`, `stickers` vides |
 
 ## /guilds/{id}/prune
 

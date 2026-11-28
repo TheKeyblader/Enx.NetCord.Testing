@@ -135,7 +135,11 @@ internal sealed record GuildSnapshot(
     string? IconHash,
     string? Description,
     DateTimeOffset CreatedAt,
-    long Ordinal);
+    long Ordinal)
+{
+    /// <summary>Gets the settings a guild update changes (verification level, channels it points to, images…).</summary>
+    internal GuildSettings Settings { get; init; } = GuildSettings.Default;
+}
 
 internal sealed record ChannelSnapshot(
     ulong Id,

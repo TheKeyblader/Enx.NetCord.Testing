@@ -31,6 +31,7 @@ internal static class SeedChannels
         SeededChannelOptions? options)
     {
         ArgumentNullException.ThrowIfNull(name);
+        ValidateName(name);
         SeedGuard.ValidateId(id);
         var traits = ChannelTraits.Of(kind);
         Validate(options, traits, kind);
@@ -47,6 +48,17 @@ internal static class SeedChannels
             options?.Nsfw ?? false,
             options?.Slowmode ?? 0);
         return SeedGuard.Unwrap(fake.State.CreateGuildChannel(StateCaller.Fixture, input));
+    }
+
+    // M1-DEBT-06: a channel name has 1 to 100 code points, as Discord requires (the state checks it again for any caller).
+    private static void ValidateName(string name)
+    {
+        var length = name.EnumerateRunes().Count();
+        if (length is < 1 or > FakeDiscordState.MaxChannelNameLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(name), length, $"A channel name is between 1 and {FakeDiscordState.MaxChannelNameLength} characters long.");
+        }
     }
 
     private static void Validate(SeededChannelOptions? options, ChannelTraits traits, ChannelKind kind)

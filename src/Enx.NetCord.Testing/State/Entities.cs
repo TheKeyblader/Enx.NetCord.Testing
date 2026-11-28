@@ -39,13 +39,16 @@ internal sealed class GuildEntity(ulong id, string name, long ordinal)
     internal string? IconHash { get; set; }
     internal string? Description { get; set; }
 
+    // The settings PATCH /guilds/{guild_id} changes: replaced as a whole (the record is immutable).
+    internal GuildSettings Settings { get; set; } = GuildSettings.Default;
+
     // Children in creation order.
     internal List<ulong> ChannelIds { get; } = [];
     internal List<ulong> RoleIds { get; } = [];
     internal List<ulong> MemberUserIds { get; } = [];
 
     internal GuildSnapshot ToSnapshot() =>
-        new(Id, Name, OwnerId, IconHash, Description, Snowflake.CreatedAt(Id), Ordinal);
+        new(Id, Name, OwnerId, IconHash, Description, Snowflake.CreatedAt(Id), Ordinal) { Settings = Settings };
 }
 
 internal sealed class ChannelEntity(ulong id, ChannelKind kind, long ordinal)
