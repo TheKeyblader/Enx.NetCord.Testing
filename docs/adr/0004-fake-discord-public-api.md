@@ -113,6 +113,12 @@ commit (`InvalidOperationException`), sans modification ni notification.
 > **Amendement 04B (accepté, 2026-11-28).** `Guild` inscrit aussi le bot du fake, dans le même
 > commit, sauf `withBot: false`. Voir [la section en fin de document](#amendement-04b--adhésion-du-bot-aux-guildes-seedées).
 
+> **Étendue par l'[ADR 0013](0013-channel-hierarchy-and-types.md), § 6 (2026-11-28).** Le seed
+> crée aussi des catégories (`guild.Category("Lobby")`, puis `lobby.TextChannel("general")`) et
+> des salons d'annonces, vocaux, stage et forum. Tout salon rend une poignée, y compris ceux qui
+> n'ont pas encore de méthode enfant, et les méthodes de salon acceptent un
+> `SeededChannelOptions` facultatif. `TextChannel(name, id)` reste valable tel quel.
+
 **Fixtures historiques : un ID facultatif, pas deux sources de temps.** Pour toute création
 d'entité, `id: null` suit l'allocation normale. Un `id` explicite doit être non nul
 (`ArgumentOutOfRangeException` sinon) ; sa milliseconde UTC encodée donne la date de création
