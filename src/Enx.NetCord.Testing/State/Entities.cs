@@ -117,8 +117,26 @@ internal sealed class MessageEntity(ulong id, ulong channelId, ulong authorId, l
     internal bool Pinned { get; set; }
     internal int Type { get; set; }
     internal int Flags { get; set; }
+    internal List<EmbedValue> Embeds { get; } = [];
+    internal List<AttachmentValue> Attachments { get; } = [];
+    internal List<ulong> MentionUserIds { get; } = [];
+    internal List<ulong> MentionRoleIds { get; } = [];
+    internal bool MentionEveryone { get; set; }
+    internal MessageReferenceValue? Reference { get; set; }
+    internal string? Nonce { get; set; }
 
-    internal MessageSnapshot ToSnapshot(ulong? guildId) =>
+    /// <summary>Projects the message; <paramref name="referenced"/> is the message it replies to, already detached.</summary>
+    internal MessageSnapshot ToSnapshot(ulong? guildId, MessageSnapshot? referenced = null) =>
         new(Id, ChannelId, guildId, AuthorId, Content, Snowflake.CreatedAt(Id), EditedTimestamp,
-            Tts, Pinned, Type, Flags, Ordinal);
+            Tts, Pinned, Type, Flags, Ordinal)
+        {
+            Embeds = [.. Embeds],
+            Attachments = [.. Attachments],
+            MentionUserIds = [.. MentionUserIds],
+            MentionRoleIds = [.. MentionRoleIds],
+            MentionEveryone = MentionEveryone,
+            Reference = Reference,
+            ReferencedMessage = referenced,
+            Nonce = Nonce,
+        };
 }

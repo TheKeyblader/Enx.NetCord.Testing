@@ -24,6 +24,24 @@ internal enum StateFailureKind
 
     /// <summary>A guild channel name must not be empty: 400 <c>50035</c> on <c>name</c> (a DM accepts an empty one).</summary>
     InvalidChannelName,
+
+    /// <summary>The bot edits the content, embeds or attachments of another user's message: 403 <c>50005</c>.</summary>
+    CannotEditOtherAuthor,
+
+    /// <summary>A message would have neither content, embed nor attachment: 400 <c>50006</c>.</summary>
+    EmptyMessage,
+
+    /// <summary>A bulk delete names a message older than two weeks: 400 <c>50034</c>.</summary>
+    MessageTooOldForBulkDelete,
+
+    /// <summary>The replied-to message does not exist and the reply must fail: 400 <c>50035</c> on <c>message_reference</c>.</summary>
+    UnknownMessageReference,
+
+    /// <summary>The action is for guild channels only and the channel is a DM: 403 <c>50003</c>.</summary>
+    CannotExecuteInDm,
+
+    /// <summary>The action does not apply to this type of channel: 400 <c>50024</c>.</summary>
+    CannotExecuteOnChannelType,
 }
 
 /// <summary>A refused operation: the reason and the ID of the resource it concerns. No HTTP here.</summary>
