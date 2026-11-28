@@ -16,11 +16,19 @@ public sealed class DiscordRecording
     // An attempt never changes once recorded, so its projection is computed once and shared by every snapshot.
     private readonly List<RecordedRestRequest> _projected = [];
 
-    internal DiscordRecording(FakeDiscord discord, RestJournal journal)
+    internal DiscordRecording(FakeDiscord discord, RestJournal journal, RouteTable routes)
     {
         _discord = discord;
         _journal = journal;
+        Routes = routes;
     }
+
+    /// <summary>Gets the route table of the fake, which resolves the route patterns of the assertions.</summary>
+    internal RouteTable Routes { get; }
+
+    /// <summary>Throws when the fake has been disposed.</summary>
+    /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
+    internal void ThrowIfDisposed() => _discord.ThrowIfDisposed();
 
     /// <summary>Gets a detached snapshot of completed REST attempts in recording order.</summary>
     /// <remarks>

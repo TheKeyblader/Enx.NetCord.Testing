@@ -77,6 +77,17 @@ public async Task SendMessageAsync_ValidContent_CreatesMessageAndDispatchesMessa
 }
 ```
 
+Pour affirmer qu'une requête a (ou n'a pas) été tentée, utiliser les assertions de l'ADR 0012 sur
+le journal plutôt que du LINQ sur `Recorded.Requests` : `discord.Recorded.ShouldHaveRequestedOnce($"POST /channels/{channel.Id}/messages")`
+(aussi `ShouldHaveRequested`, `ShouldNotHaveRequested`, et sur une suite : `Requests.Skip(n).Should…`).
+Le motif est la clé `METHOD /template` où un paramètre peut être une valeur **décodée** ; interpoler
+l'`Id` (jamais la poignée du seed). Un motif inconnu lève `ArgumentException`. Elles comptent des
+tentatives, erreurs comprises. Pour émettre une requête de test avec une route qu'aucun
+endpoint n'implémente encore, `RestClient.SendRequestAsync(method, content, $"/channels/{id}/…")` prend un
+`FormattableString` (les arguments sont encodés par NetCord) : écrire un littéral interpolé, pas une variable `string`.
+Si la spec change (`/parity/sync`), régénérer l'inventaire : la liste `RouteInventory.SnowflakeParameters`
+(paramètres typés `SnowflakeType`) en fait partie.
+
 Minimum : nominal, relecture d'état, `Unknown *` 404, validation 50035, (401 si token
 invalide modélisé), event Gateway émis (ou non). Les API exactes (`Seed`, `CreateRestClient`,
 assertions) sont celles fixées par les ADR — adapter l'exemple.

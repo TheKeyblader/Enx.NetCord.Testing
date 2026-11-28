@@ -29,7 +29,7 @@ public sealed class FakeDiscord : IAsyncDisposable
         Token = token;
         Seed = new DiscordSeed(this);
         Rest = new FakeDiscordRest(context.Interceptions);
-        Recorded = new DiscordRecording(this, journal);
+        Recorded = new DiscordRecording(this, journal, context.Routes);
     }
 
     /// <summary>Gets the ID shared by the bot user and its application.</summary>
