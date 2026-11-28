@@ -195,17 +195,18 @@
   statut et réponse JSON). Le seed n'y écrit pas. Les réponses d'interaction se lisent dans
   `InteractionResult`, qui renvoie aussi aux requêtes du journal et aux réponses refusées
   (ADR 0007) ; les frames Gateway relèvent de M3.
-- **Assertions** ([ADR 0012 — Assertions agnostiques](adr/0012-agnostic-assertions.md),
-  **proposée**) : méthodes d'extension `Should…` sans dépendance à un framework, vérifiées
-  tout de suite sur une photographie, qui rendent ce qu'elles ont trouvé pour que le test
-  poursuive avec sa bibliothèque. Lot 1 : `ShouldHaveRequested`, `ShouldHaveRequestedOnce` et
+- **Assertions** ([ADR 0012 — Assertions agnostiques](adr/0012-agnostic-assertions.md)) :
+  méthodes d'extension `Should…` sans dépendance à un framework, vérifiées tout de suite sur
+  une photographie, qui rendent ce qu'elles ont trouvé pour que le test poursuive avec sa
+  bibliothèque. Lot 1 : `ShouldHaveRequested`, `ShouldHaveRequestedOnce` et
   `ShouldNotHaveRequested`, sur `discord.Recorded` ou sur une suite de `RecordedRestRequest`.
   - L'argument est un motif de route : la clé `METHOD /template` de l'ADR 0005, où un paramètre
     peut être remplacé par une valeur, ex.
     `discord.Recorded.ShouldHaveRequestedOnce($"POST /channels/{welcome.Id}/messages")`.
     Elles comptent des tentatives, erreurs comprises.
   - Un écart lève `FakeDiscordAssertionException`, dont le message liste les requêtes
-    enregistrées ; un motif que la table de routes ne résout pas lève `ArgumentException`.
+    enregistrées ; un motif que la table de routes ne résout pas, ou dont une valeur est mal
+    formée, lève `ArgumentException`. Une valeur bien formée mais fausse n'est pas détectable.
   - Les assertions sur `InteractionResult` (M2-14) et sur la Gateway (M3-10) suivront par
     amendement de l'ADR 0012.
 - **Options** : `FakeDiscordOptions` fixe l'identité (`BotToken`, `ApplicationId`), l'horloge

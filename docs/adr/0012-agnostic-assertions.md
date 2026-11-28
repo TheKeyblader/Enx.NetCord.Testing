@@ -1,10 +1,12 @@
 # 0012 — Assertions agnostiques sur le journal REST
 
-- **Statut** : Proposée
+- **Statut** : Acceptée
 - **Date** : 2026-11-28
 - **Auteur** : agent `architect`
 - **Tâches liées** : M1-ADR-12, M1-04, M1-04B, M2-03, M2-T-01, M3-ADR-09, M6-01 ; à créer :
   M2-14, M3-10
+- **Revue** : `reviewer`, APPROVE (2026-11-28) ; trois choix d'ergonomie confirmés par
+  l'utilisateur le même jour ([Décisions de l'utilisateur](#décisions-de-lutilisateur))
 
 > Les numéros 0009 à 0011 sont réservés par `M3-ADR-09`, `M5-ADR-10` et `M7-ADR-11`
 > ([ADR 0004](0004-fake-discord-public-api.md), amendement 04B) : le saut de 0008 à 0012 est voulu.
@@ -56,8 +58,8 @@ Côté runners, toute exception non gérée fait échouer le test. xUnit v3 (`xu
 `Directory.Packages.props`) distingue en plus la **cause** : une exception qui implémente une
 interface nommée `IAssertionException`, dans n'importe quel namespace, est rapportée comme un
 échec d'assertion, sans dépendance vers xUnit
-([What's New in v3](https://xunit.net/docs/getting-started/v3/whats-new), consulté le
-2026-11-28, non épinglé). NUnit classe une exception qui n'est pas la sienne en « Error » plutôt
+([What's New in v3](https://xunit.net/docs/getting-started/v3/whats-new), section *Third party
+assertion library extension points*, consulté le 2026-11-28, non épinglé). NUnit classe une exception qui n'est pas la sienne en « Error » plutôt
 qu'en « Failure » : le test échoue dans les deux cas.
 
 Inspiration : `shardix/packages/testing` (@ `main`) n'a aucune assertion propre. Son README
@@ -116,8 +118,15 @@ au test, sur les valeurs rendues.
   rattrape jamais.
 - **Indice pour xUnit v3.** Elle implémente une interface **interne**, vide, nommée
   `IAssertionException`. xUnit v3 la reconnaît par son nom et rapporte un échec d'assertion ;
-  les autres runners l'ignorent. C'est un indice, pas un contrat : si un trimmer retire
-  l'interface, le test échoue quand même, avec la cause « exception ».
+  les autres runners l'ignorent.
+  - Une interface `internal` suffit. `GetFailureCause`
+    (`src/xunit.v3.common/Utility/ExceptionUtility_reflection.cs`, dépôt `xunit/xunit`, branche
+    `main` lue le 2026-11-28, non épinglée) teste
+    `ex.GetType().GetInterfaces().Any(i => i.Name == "IAssertionException")` : `GetInterfaces()`
+    ne filtre pas la visibilité, et seul le nom simple est comparé.
+  - C'est un indice, pas un contrat : si un trimmer retire l'interface ou si xUnit change sa
+    détection, le test échoue quand même, avec la cause « exception ». M1-04B vérifie par un
+    test que l'exception implémente bien une interface de ce nom.
 
 ### 2. Forme des assertions
 
@@ -188,12 +197,44 @@ paramétré est soit son nom entre accolades, soit une valeur concrète.
   `RouteParameters`. Le motif n'est pas décodé : on y écrit `👍`, pas `%F0%9F%91%8D`.
 - Un `ulong` interpolé donne ses chiffres ASCII quelle que soit la culture courante.
 - **Table utilisée.** Récepteur `DiscordRecording` : la table de son fake, celle du pipeline et
-  de `Intercept`. Récepteur suite : `RouteTable.Default`. Pour tout fake créé par l'API
-  publique, c'est la même.
+  de `Intercept`. Récepteur suite : `RouteTable.Default`. La résolution d'un motif ne dépend
+  que de l'**inventaire** (méthodes et templates), jamais des handlers liés : les deux tables
+  donnent donc le même résultat pour toute table bâtie sur `RouteInventory.All`, ce qui est le
+  cas de tout fake créé par l'API publique.
 
 Un motif que la table ne sait pas résoudre est une **erreur de programmation** :
 `ArgumentException` (paramètre `route`), jamais un échec d'assertion ni un succès silencieux.
-C'est ce qui empêche `ShouldNotHaveRequested` de réussir sur une faute de frappe.
+C'est ce qui empêche `ShouldNotHaveRequested` de réussir sur une faute de frappe **dans le
+template**.
+
+**Valeurs concrètes : ce qui est vérifié, et ce qui ne peut pas l'être.** Une valeur n'a pas
+de table où être cherchée. Quatre gardes de forme rejettent les erreurs reconnaissables :
+
+- **Segment encodé.** Un segment qui contient `%` suivi de deux chiffres hexadécimaux est
+  refusé, à toute position : le motif n'est pas décodé, et `%40me` ne correspondrait jamais à
+  la valeur journalisée `@me`.
+- **Snowflake.** Pour un paramètre que la spec épinglée type `SnowflakeType`, la valeur doit
+  être l'écriture décimale canonique d'un `ulong` : chiffres ASCII, sans signe, espace ni zéro
+  de tête. Le garde arrête l'erreur la plus probable avec le seed, interpoler la poignée au
+  lieu de son ID : `{welcome}` rend le nom du type `SeededTextChannel`, alors que `{alice}`,
+  un `ulong`, est correct.
+  - La liste de ces paramètres est **générée** avec l'inventaire, depuis la même spec
+    (`tools/generate-route-inventory.py` → `RouteInventory.g.cs`), et régénérée à chaque
+    `/parity/sync`. Les routes NetCord hors spec reprennent les noms de la spec
+    (`Rest/NetCordOnlyRoutes.cs`).
+  - *Rejeté :* se fier au suffixe `_id`. Dans la spec @ `65423001`, `instance_id` est une
+    chaîne libre et `answer_id` un `int32` ; une règle sur le nom refuserait à tort le premier.
+- **Jeton.** Un paramètre de jeton n'accepte aucune valeur concrète, puisque le journal le
+  masque : on écrit son nom entre accolades. Le critère est `RestRedaction.IsTokenName` (nom
+  qui finit par `token`), celui qui décide du masquage : une seule source de vérité.
+- **Masque.** La valeur littérale `[redacted]` (`RestRedaction.Mask`) est refusée à toute
+  position : un motif désigne des requêtes, pas le masque du journal.
+
+Les autres paramètres (`code`, `emoji_name`, `instance_id`) sont des chaînes libres. Et aucun
+garde ne peut savoir quel ID le test **voulait** écrire : un ID bien formé mais faux (un autre
+salon, deux variables inversées) ne correspond à aucune tentative, et `ShouldNotHaveRequested`
+réussit. Une absence affirmée sur une valeur concrète vaut ce que vaut cette valeur ; l'affirmer
+sur le template seul, quand le test le permet, écarte ce risque.
 
 | Motif refusé | Raison donnée dans le message |
 | --- | --- |
@@ -202,14 +243,19 @@ C'est ce qui empêche `ShouldNotHaveRequested` de réussir sur une faute de frap
 | `"GET /nowhere"` | aucune opération connue pour ce chemin |
 | `"PUT /users/@me"` | méthode absente pour ce chemin ; le message liste celles de l'inventaire |
 | `"GET /channels/{id}"`, `"GET /channels/{channel.Id}"` | `{…}` n'est pas le paramètre attendu `{channel_id}` ; rappel du `$` oublié |
+| `"GET /users/%40me"`, `"PUT /channels/1/messages/2/reactions/%F0%9F%91%8D/@me"` | segment encodé : le motif n'est pas décodé, écrire `@me`, `👍` |
+| `"GET /channels/general"`, `$"GET /channels/{welcome}"` (poignée du seed), `"GET /channels/007"` | `channel_id` est un Snowflake : écriture décimale canonique d'un `ulong` attendue ; rappel de `.Id` |
 | `$"POST /webhooks/{id}/{token}"` | un paramètre de jeton est masqué dans le journal : écrire `{webhook_token}` |
+| `"GET /invites/[redacted]"` | `[redacted]` est le masque du journal, pas une valeur |
 
 - L'opération doit être **inventoriée**, pas implémentée : en mode `Lenient`, une tentative sur
   une route sans handler est journalisée avec son template, et affirmer que le bot l'a tentée,
   ou ne l'a pas tentée, est légitime. `Intercept` reste plus strict, car il doit agir.
 - Deux cas restent hors des assertions et se lisent par LINQ sur `Recorded.Requests` : une
   tentative sans template (chemin inconnu) et un 405, dont la méthode n'est pas inventoriée.
-  Une valeur de paramètre qui contient `/` (segment `%2F`) se filtre par le prédicat.
+- Une valeur que les gardes refusent, mais que le bot a pu envoyer, se filtre par le prédicat
+  sur `RouteParameters` : un ID mal formé (`abc`, `007`), une valeur qui contient `/` (segment
+  `%2F`) ou la suite littérale `%41`.
 
 *Rejeté :* la seule clé de template, les valeurs passant par le prédicat. Le cas le plus courant
 (« dans **ce** salon ») s'écrirait
@@ -229,6 +275,11 @@ par famille de routes.
 
 Dans cet ordre, qui est celui de `Rest.Intercept` : arguments nuls, fake fermé, motif, puis
 examen.
+
+Pour le récepteur suite, le motif est validé **avant** toute énumération : une suite paresseuse
+(`Where`, `Skip`) n'est pas consommée si l'appel est incorrect. L'`ArgumentException` d'un
+élément `null` (paramètre `requests`) survient, elle, pendant l'examen, quand l'énumération
+atteint cet élément.
 
 ### 5. Message d'échec
 
@@ -456,7 +507,12 @@ public async Task SendMessage_RateLimitedOnce_IsTwoAttempts()
 [Fact]
 public async Task React_AfterReply_ComesSecond()
 {
-    // … the bot replies, then reacts to its own message
+    await using var discord = FakeDiscord.Create();
+    var channel = discord.Seed.Guild("Test").TextChannel("general");
+    using var rest = discord.CreateRestClient();
+
+    await new Greeter(rest).ReplyThenReactAsync(channel.Id);   // replies, then reacts to its own message
+
     var reply = discord.Recorded.ShouldHaveRequestedOnce($"POST /channels/{channel.Id}/messages");
     var react = discord.Recorded.ShouldHaveRequestedOnce(
         $"PUT /channels/{channel.Id}/messages/{{message_id}}/reactions/👍/@me");
@@ -467,17 +523,24 @@ public async Task React_AfterReply_ComesSecond()
 }
 
 [Fact]
-public async Task ShouldNotHaveRequested_MisspelledRoute_IsAProgrammingError()
+public async Task ShouldNotHaveRequested_UnresolvablePattern_IsAProgrammingError()
 {
     await using var discord = FakeDiscord.Create();
 
     Assert.Throws<ArgumentException>(() => discord.Recorded.ShouldNotHaveRequested("POST /channel/{channel_id}/messages"));
     Assert.Throws<ArgumentException>(() => discord.Recorded.ShouldNotHaveRequested("POST /channels/{id}/messages"));
     Assert.Throws<ArgumentException>(() => discord.Recorded.ShouldNotHaveRequested("PUT /users/@me"));
+
+    // Concrete values are checked for shape only: an encoded segment or a seed handle is refused…
+    var channel = discord.Seed.Guild("Test").TextChannel("general");
+    Assert.Throws<ArgumentException>(() => discord.Recorded.ShouldNotHaveRequested("GET /users/%40me"));
+    Assert.Throws<ArgumentException>(() => discord.Recorded.ShouldNotHaveRequested($"GET /channels/{channel}"));
+    // …but a well-formed ID nobody requested simply matches nothing.
+    discord.Recorded.ShouldNotHaveRequested($"GET /channels/{channel.Id + 1}");
 }
 ```
 
-Avec d'autres bibliothèques, et une assertion écrite par le test :
+Avec d'autres bibliothèques :
 
 ```csharp
 // Shouldly
@@ -487,15 +550,24 @@ discord.Recorded.ShouldHaveRequested(route).Should().HaveCount(2);
 // NUnit
 Assert.That(discord.Recorded.ShouldHaveRequestedOnce(route).StatusCode, Is.EqualTo(HttpStatusCode.OK));
 
-// A test's own Discord-level assertion, failing the same way.
-static RecordedRestRequest ShouldHaveSentMessage(this DiscordRecording recorded, ulong channelId, string content)
-    => recorded.ShouldHaveRequested($"POST /channels/{channelId}/messages")
-        .FirstOrDefault(p => p.RequestBody is { } body
-            && body.TryGetProperty("content", out var sent) && sent.GetString() == content)
-       ?? throw new FakeDiscordAssertionException($"No message '{content}' was sent to channel {channelId}.");
-
 // M2 (ADR 0007): the same methods on the requests attached to one interaction.
 result.Requests.ShouldHaveRequestedOnce("PATCH /webhooks/{webhook_id}/{webhook_token}/messages/@original");
+```
+
+Une assertion écrite par le test, qui échoue de la même façon (classe statique de premier
+niveau, comme toute méthode d'extension) :
+
+```csharp
+internal static class TestAssertions
+{
+    public static RecordedRestRequest ShouldHaveSentMessage(
+        this DiscordRecording recorded, ulong channelId, string content)
+        => recorded.ShouldHaveRequested($"POST /channels/{channelId}/messages")
+            .FirstOrDefault(p => p.RequestBody is { } body
+                && body.TryGetProperty("content", out var sent) && sent.GetString() == content)
+           ?? throw new FakeDiscordAssertionException(
+               $"No message '{content}' was sent to channel {channelId}.");
+}
 ```
 
 ## Conséquences
@@ -510,6 +582,12 @@ result.Requests.ShouldHaveRequestedOnce("PATCH /webhooks/{webhook_id}/{webhook_t
   prédicat ou par l'état. C'est la distinction de l'ADR 0004 ; elle est rappelée dans la XML doc.
 - `DiscordRecording` doit donner à l'assembly un accès **interne** à la table de son fake ;
   aucun membre public n'y est ajouté, et `RecordedRestRequest` ne change pas.
+- L'inventaire généré gagne la liste des paramètres de chemin typés `SnowflakeType` : le
+  générateur `tools/generate-route-inventory.py` et `Rest/RouteInventory.g.cs` changent, sans
+  toucher aux opérations ni au routage. Le générateur échoue si un même nom est Snowflake sur
+  un chemin et ne l'est pas sur un autre (aucun cas @ `65423001`).
+- La protection contre les fautes de frappe est complète pour le template et **de forme
+  seulement** pour les valeurs : un ID bien formé mais faux n'est pas détecté (§ 3).
 - Le dossier `Assertions/` de `architecture.md` reçoit : l'exception, `RecordedRequestAssertions`,
   le motif de route et le formateur (internes).
 - Ni dépendance, ni réflexion, ni type NetCord dans les signatures : une évolution de NetCord ne
@@ -522,13 +600,18 @@ result.Requests.ShouldHaveRequestedOnce("PATCH /webhooks/{webhook_id}/{webhook_t
 
 - **M1-04B** (à préciser) : `FakeDiscordAssertionException` (+ interface interne
   `IAssertionException`), `RecordedRequestAssertions` (six méthodes), motif de route résolu par
-  `RouteTable`, message d'échec du § 5, accès interne de `DiscordRecording` à la table. Tests :
-  les trois méthodes sur les deux récepteurs, chaque ligne des tableaux des § 3 et § 4, route
-  inventoriée sans handler, prédicat qui lève, fake fermé et liste détachée, retry après 429,
-  éléments du message et plafonds. Fichiers : `src/Enx.NetCord.Testing/Assertions/**`,
-  `Recording/DiscordRecording.cs`, `tests/Enx.NetCord.Testing.Tests/Assertions/**`. Dépend de
-  M1-ADR-12 et M1-04 ; les tests peuvent lier des handlers de test à des clés de l'inventaire
-  (comme `RecordedRequestsTests.CreateFake`), sans attendre M1-REST-03.
+  `RouteTable` avec les quatre gardes de valeur du § 3, liste générée des paramètres Snowflake,
+  message d'échec du § 5, accès interne de `DiscordRecording` à la table.
+  - Tests : les trois méthodes sur les deux récepteurs ; chaque ligne des tableaux des § 3 et
+    § 4 ; route inventoriée sans handler ; prédicat qui lève ; fake fermé et liste détachée ;
+    suite paresseuse non énumérée quand le motif est refusé, élément `null` ; retry après 429 ;
+    éléments du message et plafonds ; `instance_id` accepté comme chaîne libre ; l'exception
+    implémente une interface nommée `IAssertionException` (réflexion admise côté test).
+  - Fichiers : `src/Enx.NetCord.Testing/Assertions/**`, `Recording/DiscordRecording.cs`,
+    `Rest/RouteInventory.g.cs` (régénéré), `tools/generate-route-inventory.py`,
+    `tests/Enx.NetCord.Testing.Tests/Assertions/**`.
+  - Dépend de M1-ADR-12 et M1-04 ; les tests peuvent lier des handlers de test à des clés de
+    l'inventaire (comme `RecordedRequestsTests.CreateFake`), sans attendre M1-REST-03.
 - **M2-03** : `InteractionResult.Requests` rend les instances du journal, pour que les méthodes
   du récepteur suite et l'identité de référence s'y appliquent.
 - **M2-T-01** : le sample utilise ces assertions.
@@ -544,13 +627,17 @@ result.Requests.ShouldHaveRequestedOnce("PATCH /webhooks/{webhook_id}/{webhook_t
   l'ADR 0012 puis implémentation — architect, puis gateway-implementer — M3-ADR-09, M3-03,
   M1-04B.
 
-## Questions ouvertes
+## Décisions de l'utilisateur
 
-Aucune ne bloque M1-04B. Trois choix d'ergonomie sont à confirmer à la revue, avant le passage
-en « Acceptée » :
+Trois choix d'ergonomie, laissés ouverts à la proposition, ont été tranchés par l'utilisateur le
+2026-11-28. Il ne reste aucune question ouverte.
 
-1. Le motif de route accepte des valeurs concrètes (§ 3). L'alternative est la clé de template
+1. **Le motif de route accepte des valeurs concrètes** (§ 3). Écartée : la clé de template
    seule, plus simple à expliquer et plus verbeuse à l'usage.
-2. `ShouldHaveRequestedOnce` plutôt qu'un paramètre de comptage (§ 2).
-3. L'interface interne `IAssertionException` pour xUnit v3 (§ 1) : un indice reconnu par son
-   nom, sans dépendance, que l'on peut retirer sans changer l'API.
+2. **`ShouldHaveRequestedOnce`, sans paramètre de comptage** (§ 2).
+3. **`FakeDiscordAssertionException` implémente l'interface interne `IAssertionException`**
+   (§ 1), indice reconnu par xUnit v3 sans dépendance.
+
+Décidé par l'architecte à la revue, sur une option laissée à son appréciation : les paramètres
+Snowflake exigent un `ulong` canonique, d'après une liste générée depuis la spec plutôt que
+d'après le suffixe `_id` (§ 3).
