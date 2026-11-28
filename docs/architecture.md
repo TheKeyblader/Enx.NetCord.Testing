@@ -51,7 +51,7 @@
   immédiatement. La guilde et le salon sont des poignées avec `Id` ; les feuilles renvoient
   des IDs (`Member` renvoie celui de l'utilisateur). Pas de `out`, de `Build()` ni de faux POST.
 - [Amendement 04B de l'ADR 0004](adr/0004-fake-discord-public-api.md#amendement-04b--adhésion-du-bot-aux-guildes-seedées)
-  (**proposé**) : `Seed.Guild("Test")` inscrit aussi le bot, dans le même commit ;
+  (**accepté**) : `Seed.Guild("Test")` inscrit aussi le bot, dans le même commit ;
   `Seed.Guild("Elsewhere", withBot: false)` crée une guilde que le bot ne voit pas, et
   `guild.Member(discord.ApplicationId)` l'y fait entrer plus tard. L'adhésion n'alloue aucun ID.
 - Le seed accepte un ID explicite non nul, jamais attribué dans ce fake. Sa milliseconde
@@ -90,7 +90,7 @@
   `FakeDiscordOptions.UnimplementedRoutes` choisit `Lenient` (défaut : 404, code `0`) ou
   `Strict` (journalise puis lève `NotSupportedException`). Ce choix ne modifie aucune réponse
   d'un handler : un salon inconnu reste un 404, code `10003`.
-- Visibilité (amendement 04B de l'ADR 0004, **proposé**) : un helper d'état unique (`GuildAccess`,
+- Visibilité (amendement 04B de l'ADR 0004, **accepté**) : un helper d'état unique (`GuildAccess`,
   nom indicatif) résout guilde et salon sous le verrou, pour toute opération qui reçoit un ID de
   guilde ou de salon. Appelant interne obligatoire (`StateCaller`) : `Bot`, seule valeur passée
   par `Rest/`, applique le tableau ; `Fixture` (seed, commandes de test) n'est pas contrôlé.
@@ -113,7 +113,7 @@
   séquence, intents, shard, file d'envoi, rejouage pour RESUME.
 - Traduction `StateChange` → dispatch(s), filtrée par adhésion du bot, intents et shard.
   `READY.guilds` ne liste que les guildes dont le bot est membre ; son arrivée ou son départ
-  devient `GUILD_CREATE` ou `GUILD_DELETE` (amendement 04B de l'ADR 0004, **proposé** ; détail
+  devient `GUILD_CREATE` ou `GUILD_DELETE` (amendement 04B de l'ADR 0004, **accepté** ; détail
   à M3-ADR-09).
 - Commandes de test : `DispatchAsync(...)`, `DisconnectAsync(closeCode)`, `RequestReconnectAsync()`,
   `InvalidateSessionAsync(resumable)`, `FlushAsync()`, `WaitForReadyAsync(client)`.

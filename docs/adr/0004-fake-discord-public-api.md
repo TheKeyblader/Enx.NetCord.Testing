@@ -5,9 +5,9 @@
 - **Auteur** : agent `architect`
 - **Tâches liées** : M1-ADR-04, M1-ADR-03, M1-02, M1-04, M2-ADR-07, M3-ADR-09, M5-ADR-10 ;
   amendement 04B : M1-ADR-04B, M1-REST-02 à M1-REST-09, M2-01, M2-07, M2-08, M2-10, M2-11,
-  M3-ADR-09, M3-02, M3-03, M3-06 ; proposées : M1-05, M1-REST-10, M2-13, PAR-ERR-02, PAR-GW-01
+  M3-ADR-09, M3-02, M3-03, M3-06 ; ajoutées à la roadmap : M1-05, M1-REST-10, M2-13, PAR-ERR-02, PAR-GW-01
 - **Amendements** : [04B — Adhésion du bot aux guildes seedées](#amendement-04b--adhésion-du-bot-aux-guildes-seedées)
-  (**Proposé**, 2026-11-28)
+  (**Accepté**, 2026-11-28)
 
 ## Contexte
 
@@ -327,7 +327,7 @@ async Task SendMessage_TwoClients_ShareStateAndRecording()
 
 ## Amendement 04B — Adhésion du bot aux guildes seedées
 
-- **Statut** : Proposé
+- **Statut** : Accepté
 - **Date** : 2026-11-28
 - **Auteur** : agent `architect`
 - **Tâche** : M1-ADR-04B
