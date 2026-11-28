@@ -28,6 +28,7 @@ public sealed class FakeDiscord : IAsyncDisposable
         Token = token;
         Seed = new DiscordSeed(this);
         Rest = new FakeDiscordRest(context.Interceptions);
+        Recorded = new DiscordRecording(this, journal);
     }
 
     /// <summary>Gets the fixture builder bound to this fake.</summary>
@@ -35,6 +36,9 @@ public sealed class FakeDiscord : IAsyncDisposable
 
     /// <summary>Gets the REST controls bound to this fake.</summary>
     public FakeDiscordRest Rest { get; }
+
+    /// <summary>Gets the observations collected by this fake.</summary>
+    public DiscordRecording Recorded { get; }
 
     /// <summary>Gets the state shared by every transport of this fake.</summary>
     internal FakeDiscordState State { get; }
