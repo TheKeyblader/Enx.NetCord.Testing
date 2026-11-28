@@ -59,13 +59,17 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   - **Lot validé en entier puis appliqué** (`PATCH /guilds/{id}/channels`) : contrôler tous les éléments (existence), puis la règle de lot (`40009`),
     puis les invariants par élément, **puis** écrire dans l'ordre du tableau ; publier un fait par objet **réellement** différent après le lot
     (comparer l'état avant/après, premier passage dans l'ordre du tableau), pas un fait par entrée.
+  - **Refus d'un lot indexé** : un refus d'état qui vise l'entrée N d'un corps tableau porte l'indice (`StateFailure.Index`, posé par l'état : `failure with { Index = i }`) et la
+    fabrique `DiscordError` correspondante prend `int? index` pour écrire `N.parent_id` (même chemin que les erreurs structurelles `N.id`).
+  - **Valeur que tout lecteur doit rendre pareil** (REST, futur `GUILD_CREATE`) : la résoudre **dans l'état**, pas dans le `*Wire` (ex. `GuildSnapshot.EffectiveOwnerId` =
+    propriétaire stocké, sinon le bot) ; toute projection d'une guilde passe par `SnapshotOf(guild)` sous le verrou, jamais `guild.ToSnapshot()` directement.
   - **Corps racine tableau** : `request.Body.TryParseJson` (`50109`), racine non tableau ⇒ `BASE_TYPE_BAD_TYPE` à la racine (`AddBadType(errors, "", "array")`),
     puis une `errors.Scope("<indice>")` par élément pour que les chemins soient `0.id`, `1.position`.
   - **Liste de DTO de familles différentes** : une classe-union (`GuildChannelUnion`, une propriété par variante, exactement une renseignée) avec
     `[JsonConverter]` fermé qui écrit la variante avec `FakeDiscordJsonContext.Default.<Variante>` ; ne pas passer par `object`.
   - **Réponse 201** : `RestResult.Json(HttpStatusCode.Created, dto, typeInfo)` (`RestResult.Ok` est 200) ; `ChannelWire.ToText/ToVoice/ToCategory/ToForum` sont publics, réutilisables.
   - **Pièges NetCord** : `GetGuildAsync` écrit la query `?with_counts=True`/`False` (texte de `bool`), pas `true` : lire sans tenir compte de la casse ; un JPEG part en
-    `data:image/jpg;base64,` (pas `jpeg`) : normaliser avant `ImageData.TryGetHash` ; `GuildOptions`/`GuildChannelProperties` n'envoient jamais `null` (tester les
+    `data:image/jpg;base64,` (pas `jpeg`) : `ImageData.TryGetHash` accepte les deux, ne rien normaliser dans un validateur ; `GuildOptions`/`GuildChannelProperties` n'envoient jamais `null` (tester les
     `null` par `SendRequestAsync` + corps à la main) ; `ForumLayoutType` NetCord : `NotSet`=0, `ListView`=1, `GalleryView`=2.
   - **Conformité stricte** : une propriété requise nullable de la spec (`icon`, `description`, `incidents_data`…) s'écrit `null` (pas `WhenWritingNull`) ; seules les propriétés
     facultatives (`approximate_member_count`) s'omettent. Le type de salon 16 (media) n'est pas dans l'énumération de la spec : un scénario de conformité ne peut pas le

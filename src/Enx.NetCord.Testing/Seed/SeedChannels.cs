@@ -17,7 +17,7 @@ internal static class SeedChannels
     /// <param name="options">The options, or <see langword="null"/>.</param>
     /// <returns>The detached channel.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of bounds.</exception>
     /// <exception cref="ArgumentException">An option has no object for this channel type.</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The guild or the category no longer exists, the category or the guild is full, or the ID was already assigned.</exception>

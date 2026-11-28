@@ -27,7 +27,7 @@ public sealed class SeededGuild
     /// <param name="options">The options, or <see langword="null"/> for the defaults.</param>
     /// <returns>A handle on the category.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of Discord's bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of Discord's bounds.</exception>
     /// <exception cref="ArgumentException">An option has no object for a category (a topic, nsfw or a slowmode).</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The guild no longer exists, it already has 500 channels, or the ID was already assigned in this fake.</exception>
@@ -40,7 +40,7 @@ public sealed class SeededGuild
     /// <param name="options">The options, or <see langword="null"/> for the defaults.</param>
     /// <returns>A handle on the channel.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of Discord's bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of Discord's bounds.</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The guild no longer exists, it already has 500 channels, or the ID was already assigned in this fake.</exception>
     public SeededTextChannel TextChannel(string name, ulong? id = null, SeededChannelOptions? options = null)
@@ -53,7 +53,7 @@ public sealed class SeededGuild
     /// <param name="options">The options, or <see langword="null"/> for the defaults.</param>
     /// <returns>A handle on the channel.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of Discord's bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of Discord's bounds.</exception>
     /// <exception cref="ArgumentException">An option has no object for an announcement channel.</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The guild no longer exists, it already has 500 channels, or the ID was already assigned in this fake.</exception>
@@ -67,7 +67,7 @@ public sealed class SeededGuild
     /// <param name="options">The options, or <see langword="null"/> for the defaults.</param>
     /// <returns>A handle on the channel.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of Discord's bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of Discord's bounds.</exception>
     /// <exception cref="ArgumentException">An option has no object for a voice channel.</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The guild no longer exists, it already has 500 channels, or the ID was already assigned in this fake.</exception>
@@ -81,7 +81,7 @@ public sealed class SeededGuild
     /// <param name="options">The options, or <see langword="null"/> for the defaults.</param>
     /// <returns>A handle on the channel.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of Discord's bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of Discord's bounds.</exception>
     /// <exception cref="ArgumentException">An option has no object for a stage channel.</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The guild no longer exists, it already has 500 channels, or the ID was already assigned in this fake.</exception>
@@ -95,7 +95,7 @@ public sealed class SeededGuild
     /// <param name="options">The options, or <see langword="null"/> for the defaults.</param>
     /// <returns>A handle on the channel.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of Discord's bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of Discord's bounds.</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The guild no longer exists, it already has 500 channels, or the ID was already assigned in this fake.</exception>
     public SeededForumChannel ForumChannel(string name, ulong? id = null, SeededChannelOptions? options = null)

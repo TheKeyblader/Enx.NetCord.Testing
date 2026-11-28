@@ -142,8 +142,9 @@ internal sealed class DiscordError
     public static DiscordError MaxGuildChannels() => new(HttpStatusCode.BadRequest, 30013, "Maximum number of guild channels reached (500)");
 
     /// <summary>
-    /// 400 with code 40009: more than one channel of a <c>PATCH /guilds/{guild_id}/channels</c> changes its parent. The code and message
-    /// are documented; the HTTP status is not (hypothesis, see <c>docs/parity/errors.md</c>).
+    /// 400 with code 40009: more than one channel of a <c>PATCH /guilds/{guild_id}/channels</c> changes its parent. The code, the message
+    /// and the status are documented (<c>guild.mdx</c>: "fails with a <c>400</c> response and error code <c>40009</c>"); only what counts as
+    /// "changing" the parent is a hypothesis (see <c>docs/parity/errors.md</c>).
     /// </summary>
     /// <returns>The error.</returns>
     public static DiscordError OnlyOneParentChange() => new(HttpStatusCode.BadRequest, 40009, "Only one channel can have a parent_id modified at a time");
@@ -163,24 +164,31 @@ internal sealed class DiscordError
         => InvalidFormBody(new FormErrors().Add("type", "CHANNEL_TYPE_INVALID", "Invalid channel type."));
 
     /// <summary>400 <c>50035</c> on <c>parent_id</c>: the parent does not exist in the guild. The field code and message are hypotheses (the message is reported by a third party).</summary>
+    /// <param name="index">The index of the offending entry of a batch (<c>PATCH /guilds/{guild_id}/channels</c>), or <see langword="null"/> for a single channel.</param>
     /// <returns>The error.</returns>
-    public static DiscordError InvalidChannelParent()
-        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID", "Category does not exist"));
+    public static DiscordError InvalidChannelParent(int? index = null)
+        => InvalidFormBody(new FormErrors().Add(ParentPath(index), "CHANNEL_PARENT_INVALID", "Category does not exist"));
 
     /// <summary>400 <c>50035</c> on <c>parent_id</c>: the parent exists but is not a category. The field code and message are hypotheses.</summary>
+    /// <param name="index">The index of the offending entry of a batch, or <see langword="null"/> for a single channel.</param>
     /// <returns>The error.</returns>
-    public static DiscordError ChannelParentNotCategory()
-        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID_TYPE", "Not a category"));
+    public static DiscordError ChannelParentNotCategory(int? index = null)
+        => InvalidFormBody(new FormErrors().Add(ParentPath(index), "CHANNEL_PARENT_INVALID_TYPE", "Not a category"));
 
     /// <summary>400 <c>50035</c> on <c>parent_id</c>: the channel is a category, which cannot have a parent. The field code and message are hypotheses.</summary>
+    /// <param name="index">The index of the offending entry of a batch, or <see langword="null"/> for a single channel.</param>
     /// <returns>The error.</returns>
-    public static DiscordError ChannelCannotHaveParent()
-        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_INVALID", "Categories cannot have subcategories"));
+    public static DiscordError ChannelCannotHaveParent(int? index = null)
+        => InvalidFormBody(new FormErrors().Add(ParentPath(index), "CHANNEL_PARENT_INVALID", "Categories cannot have subcategories"));
 
     /// <summary>400 <c>50035</c> on <c>parent_id</c>: the category already holds 50 channels (documented limit; field code and message are hypotheses).</summary>
+    /// <param name="index">The index of the offending entry of a batch, or <see langword="null"/> for a single channel.</param>
     /// <returns>The error.</returns>
-    public static DiscordError ChannelParentFull()
-        => InvalidFormBody(new FormErrors().Add("parent_id", "CHANNEL_PARENT_MAX_CHANNELS", "Maximum number of channels in category reached (50)"));
+    public static DiscordError ChannelParentFull(int? index = null)
+        => InvalidFormBody(new FormErrors().Add(ParentPath(index), "CHANNEL_PARENT_MAX_CHANNELS", "Maximum number of channels in category reached (50)"));
+
+    // `parent_id`, or `N.parent_id` for entry N of a batch body (the path the structural validator uses for `N.id`).
+    private static string ParentPath(int? index) => index is { } entry ? $"{entry.ToString(CultureInfo.InvariantCulture)}.parent_id" : "parent_id";
 
     /// <summary>400 <c>50035</c> on <c>topic</c>: longer than the 1024 characters of a channel that is not a forum or media channel. The form is a hypothesis.</summary>
     /// <returns>The error.</returns>
@@ -252,10 +260,10 @@ internal sealed class DiscordError
 
             // Hypotheses, see docs/parity/errors.md: the codes of these field errors are not documented by Discord.
             StateFailureKind.InvalidChannelType => InvalidChannelType(),
-            StateFailureKind.InvalidChannelParent => InvalidChannelParent(),
-            StateFailureKind.ChannelParentNotCategory => ChannelParentNotCategory(),
-            StateFailureKind.ChannelCannotHaveParent => ChannelCannotHaveParent(),
-            StateFailureKind.ChannelParentFull => ChannelParentFull(),
+            StateFailureKind.InvalidChannelParent => InvalidChannelParent(failure.Index),
+            StateFailureKind.ChannelParentNotCategory => ChannelParentNotCategory(failure.Index),
+            StateFailureKind.ChannelCannotHaveParent => ChannelCannotHaveParent(failure.Index),
+            StateFailureKind.ChannelParentFull => ChannelParentFull(failure.Index),
             StateFailureKind.InvalidChannelName => InvalidFormBody(new FormErrors().Add("name", "BASE_TYPE_BAD_LENGTH", "Must be between 1 and 100 in length.")),
             StateFailureKind.InvalidChannelTopic => InvalidChannelTopic(),
             StateFailureKind.InvalidChannelUserLimit => InvalidChannelUserLimit(failure.Limit),

@@ -19,10 +19,9 @@ internal static class GuildWire
 
     /// <summary>Projects a guild to <c>GuildResponse</c>, or to <c>GuildWithCountsResponse</c> when <paramref name="withCounts"/> is set.</summary>
     /// <param name="details">The guild with its roles and member count.</param>
-    /// <param name="fallbackOwnerId">The owner reported when the guild has none in the state: the bot that reads it (a guild always has an owner).</param>
     /// <param name="withCounts">Whether the approximate counts are present.</param>
     /// <returns>The DTO.</returns>
-    public static GuildResponse ToGuild(GuildDetails details, ulong fallbackOwnerId, bool withCounts)
+    public static GuildResponse ToGuild(GuildDetails details, bool withCounts)
     {
         var guild = details.Guild;
         var settings = guild.Settings;
@@ -37,7 +36,7 @@ internal static class GuildWire
             DiscoverySplash = settings.DiscoverySplashHash,
             Features = [],
             Banner = settings.BannerHash,
-            OwnerId = Id(guild.OwnerId ?? fallbackOwnerId),
+            OwnerId = Id(guild.EffectiveOwnerId),
             ApplicationId = null,
             Region = DeprecatedRegion,
             AfkChannelId = OptionalId(settings.AfkChannelId),

@@ -27,7 +27,7 @@ internal static class GuildRoutes
         var query = request.GetPayload<GetGuildRequest>();
         var result = request.State.GetGuildDetails(StateCaller.Bot, query.GuildId);
         return result.TryGetValue(out var details)
-            ? RestResult.Ok(GuildWire.ToGuild(details, request.Caller.UserId, query.WithCounts), FakeDiscordJsonContext.Default.GuildResponse)
+            ? RestResult.Ok(GuildWire.ToGuild(details, query.WithCounts), FakeDiscordJsonContext.Default.GuildResponse)
             : DiscordError.FromStateFailure(result.Failure);
     }
 
@@ -37,7 +37,7 @@ internal static class GuildRoutes
         // (and publishes nothing) when no value changes.
         var result = request.State.UpdateGuild(StateCaller.Bot, request.GetPayload<UpdateGuildInput>());
         return result.TryGetValue(out var details)
-            ? RestResult.Ok(GuildWire.ToGuild(details, request.Caller.UserId, withCounts: false), FakeDiscordJsonContext.Default.GuildResponse)
+            ? RestResult.Ok(GuildWire.ToGuild(details, withCounts: false), FakeDiscordJsonContext.Default.GuildResponse)
             : DiscordError.FromStateFailure(result.Failure);
     }
 

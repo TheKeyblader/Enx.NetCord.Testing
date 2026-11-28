@@ -193,10 +193,31 @@ public sealed class GuildChannelPositionsTests
         var unknown = await Assert.ThrowsAsync<RestException>(
             () => rest.ModifyGuildChannelPositionsAsync(guild.Id, [new GuildChannelPositionProperties(general.Id) { ParentId = 424242 }], cancellationToken: Ct));
 
-        Assert.Equal("CHANNEL_PARENT_INVALID_TYPE", Assert.Single(FieldErrors(notCategory, "parent_id")).Code);
-        Assert.Equal("CHANNEL_PARENT_INVALID", Assert.Single(FieldErrors(unknown, "parent_id")).Code);
+        Assert.Equal("CHANNEL_PARENT_INVALID_TYPE", Assert.Single(FieldErrors(notCategory, "0", "parent_id")).Code); // keyed by the entry's index
+        Assert.Equal("CHANNEL_PARENT_INVALID", Assert.Single(FieldErrors(unknown, "0", "parent_id")).Code);
         Assert.Equal(1, (await ReadAsync(discord, general.Id)).Position); // nothing of the refused batch was written
         Assert.Empty(Drain(subscription));
+    }
+
+    [Fact]
+    [Parity("PATCH /guilds/{guild_id}/channels")]
+    [Parity("50035")]
+    public async Task ModifyGuildChannelPositionsAsync_InvalidParentOfASecondEntry_IsReportedAtItsIndex()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        var a = guild.TextChannel("a");
+        var b = guild.TextChannel("b");
+        using var rest = discord.CreateRestClient();
+
+        var exception = await Assert.ThrowsAsync<RestException>(
+            () => rest.ModifyGuildChannelPositionsAsync(
+                guild.Id,
+                [new GuildChannelPositionProperties(a.Id) { Position = 3 }, new GuildChannelPositionProperties(b.Id) { ParentId = a.Id }],
+                cancellationToken: Ct));
+
+        Assert.Equal("CHANNEL_PARENT_INVALID_TYPE", Assert.Single(FieldErrors(exception, "1", "parent_id")).Code);
+        Assert.Equal(0, (await ReadAsync(discord, a.Id)).Position); // the whole batch was refused
     }
 
     [Fact]

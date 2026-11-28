@@ -125,6 +125,26 @@ public sealed class GuildStateTests
     }
 
     [Fact]
+    public void EffectiveOwnerId_GuildWithoutStoredOwner_IsTheBotEverywhereTheGuildIsProjected()
+    {
+        var (state, guild, bot) = NewGuildWithBot();
+        var alice = state.CreateUser(new CreateUserInput("alice"));
+        var owned = state.CreateGuild(new CreateGuildInput("owned", OwnerId: alice.Id)).Value.Guild;
+        using var subscription = state.SubscribeGateway();
+
+        var update = state.UpdateGuild(StateCaller.Bot, new UpdateGuildInput(guild.Id, Name: "renamed")).Value.Guild;
+
+        Assert.Null(state.FindGuild(guild.Id)!.OwnerId); // what is stored does not change
+        Assert.Equal(bot, guild.EffectiveOwnerId);
+        Assert.Equal(bot, state.FindGuild(guild.Id)!.EffectiveOwnerId);
+        Assert.Equal(bot, state.GetGuild(StateCaller.Bot, guild.Id).Value.EffectiveOwnerId);
+        Assert.Equal(bot, update.EffectiveOwnerId);
+        Assert.Equal(bot, Assert.IsType<GuildUpdated>(Assert.Single(Drain(subscription))).Guild.EffectiveOwnerId);
+        Assert.Equal(bot, state.TakeProjection().Guilds.Single(g => g.Id == guild.Id).EffectiveOwnerId);
+        Assert.Equal(alice.Id, owned.EffectiveOwnerId);
+    }
+
+    [Fact]
     [Parity("10004")]
     public void GetGuildDetails_UnknownGuildAndGuildWithoutTheBot_AreBothUnknownForTheBotButReadableByTheFixture()
     {

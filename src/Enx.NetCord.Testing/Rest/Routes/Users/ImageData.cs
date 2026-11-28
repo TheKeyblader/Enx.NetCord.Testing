@@ -14,7 +14,7 @@ internal static class ImageData
     /// </summary>
     /// <param name="value">The value sent by the client.</param>
     /// <param name="hash">The asset hash when the value is valid.</param>
-    /// <returns><see langword="true"/> when the value is a base64 PNG, JPEG, GIF or WebP data URI.</returns>
+    /// <returns><see langword="true"/> when the value is a base64 PNG, JPEG (<c>jpeg</c> or NetCord's <c>jpg</c>), GIF or WebP data URI.</returns>
     public static bool TryGetHash(string value, out string hash)
     {
         hash = string.Empty;
@@ -30,7 +30,8 @@ internal static class ImageData
         }
 
         var format = value[Prefix.Length..marker];
-        if (format is not ("png" or "jpeg" or "gif" or "webp"))
+        // NetCord writes a JPEG as `jpg` (ImageUrl.GetFormatBytes), the docs say `jpeg`: both are accepted.
+        if (format is not ("png" or "jpeg" or "jpg" or "gif" or "webp"))
         {
             return false;
         }

@@ -29,7 +29,7 @@ public sealed class SeededCategory
     /// <param name="options">The options, or <see langword="null"/> for the defaults.</param>
     /// <returns>A handle on the channel.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of Discord's bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of Discord's bounds.</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The category or the guild no longer exists, the category or the guild is full, or the ID was already assigned.</exception>
     public SeededTextChannel TextChannel(string name, ulong? id = null, SeededChannelOptions? options = null)
@@ -41,7 +41,7 @@ public sealed class SeededCategory
     /// <param name="options">The options, or <see langword="null"/> for the defaults.</param>
     /// <returns>A handle on the channel.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of Discord's bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of Discord's bounds.</exception>
     /// <exception cref="ArgumentException">An option has no object for an announcement channel (a nonzero slowmode).</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The category or the guild no longer exists, the category or the guild is full, or the ID was already assigned.</exception>
@@ -54,7 +54,7 @@ public sealed class SeededCategory
     /// <param name="options">The options, or <see langword="null"/> for the defaults.</param>
     /// <returns>A handle on the channel.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of Discord's bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of Discord's bounds.</exception>
     /// <exception cref="ArgumentException">An option has no object for a voice channel (a topic).</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The category or the guild no longer exists, the category or the guild is full, or the ID was already assigned.</exception>
@@ -67,7 +67,7 @@ public sealed class SeededCategory
     /// <param name="options">The options, or <see langword="null"/> for the defaults.</param>
     /// <returns>A handle on the channel.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of Discord's bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of Discord's bounds.</exception>
     /// <exception cref="ArgumentException">An option has no object for a stage channel (a topic).</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The category or the guild no longer exists, the category or the guild is full, or the ID was already assigned.</exception>
@@ -80,7 +80,7 @@ public sealed class SeededCategory
     /// <param name="options">The options, or <see langword="null"/> for the defaults.</param>
     /// <returns>A handle on the channel.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="name"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, or an option is out of Discord's bounds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="id"/> is zero, <paramref name="name"/> is not 1-100 characters long, or an option is out of Discord's bounds.</exception>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The category or the guild no longer exists, the category or the guild is full, or the ID was already assigned.</exception>
     public SeededForumChannel ForumChannel(string name, ulong? id = null, SeededChannelOptions? options = null)

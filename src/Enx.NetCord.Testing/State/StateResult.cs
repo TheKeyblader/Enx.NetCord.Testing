@@ -95,13 +95,15 @@ internal enum StateFailureKind
 /// <param name="ResourceId">The ID of the resource the refusal concerns.</param>
 /// <param name="Limit">The bound the request exceeded when the message needs it (a user limit), otherwise 0.</param>
 /// <param name="Field">The wire field the refusal concerns when the kind covers several (a guild setting that names a channel), otherwise <see langword="null"/>.</param>
-internal readonly record struct StateFailure(StateFailureKind Kind, ulong ResourceId, int Limit = 0, string? Field = null)
+/// <param name="Index">The index of the entry of a batch body the refusal concerns (<c>PATCH /guilds/{guild_id}/channels</c>), otherwise <see langword="null"/>.</param>
+internal readonly record struct StateFailure(StateFailureKind Kind, ulong ResourceId, int Limit = 0, string? Field = null, int? Index = null)
 {
     public override string ToString()
-        => (Limit, Field) switch
+        => (Limit, Field, Index) switch
         {
-            (0, null) => $"{Kind} ({ResourceId})",
-            (0, _) => $"{Kind} ({ResourceId}, field {Field})",
+            (0, null, null) => $"{Kind} ({ResourceId})",
+            (0, _, null) => $"{Kind} ({ResourceId}, field {Field})",
+            (0, null, _) => $"{Kind} ({ResourceId}, entry {Index})",
             _ => $"{Kind} ({ResourceId}, limit {Limit})",
         };
 }

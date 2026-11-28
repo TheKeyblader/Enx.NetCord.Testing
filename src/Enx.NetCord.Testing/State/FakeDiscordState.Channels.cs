@@ -409,7 +409,7 @@ internal sealed partial class FakeDiscordState
             if (ClearChannelReferences(guild.Settings, channelId) is { } cleared)
             {
                 guild.Settings = cleared;
-                Publish(new GuildUpdated(NextChangeNumber(), guild.ToSnapshot()));
+                Publish(new GuildUpdated(NextChangeNumber(), SnapshotOf(guild)));
             }
 
             return snapshot;

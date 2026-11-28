@@ -22,9 +22,13 @@ internal sealed partial class FakeDiscordState
         }
     }
 
+    /// <summary>Projects a guild with the owner every reader reports (the stored owner, else the bot). Call only under the lock.</summary>
+    private GuildSnapshot SnapshotOf(GuildEntity guild)
+        => guild.ToSnapshot() with { EffectiveOwnerId = guild.OwnerId ?? _botId ?? 0 };
+
     private GuildDetails DetailsOf(GuildEntity guild)
         => new(
-            guild.ToSnapshot(),
+            SnapshotOf(guild),
             [.. guild.RoleIds.Select(id => _roles[id].ToSnapshot())],
             guild.MemberUserIds.Count);
 
@@ -108,7 +112,7 @@ internal sealed partial class FakeDiscordState
 
             if (changed)
             {
-                Publish(new GuildUpdated(NextChangeNumber(), guild.ToSnapshot()));
+                Publish(new GuildUpdated(NextChangeNumber(), SnapshotOf(guild)));
             }
 
             return DetailsOf(guild);
@@ -195,15 +199,16 @@ internal sealed partial class FakeDiscordState
                 return new StateFailure(StateFailureKind.TooManyParentChanges, guild.Id);
             }
 
-            foreach (var entry in entries)
+            for (var index = 0; index < entries.Length; index++)
             {
+                var entry = entries[index];
                 var channel = _channels[entry.ChannelId];
                 if (entry.Parent.IsSet
                     && entry.Parent.Value != channel.ParentId
                     && entry.Parent.Value is { } parentId
                     && CheckParent(guild, channel.Kind, parentId) is { } parentFailure)
                 {
-                    return parentFailure;
+                    return parentFailure with { Index = index }; // the REST layer reports it at `N.parent_id`
                 }
             }
 

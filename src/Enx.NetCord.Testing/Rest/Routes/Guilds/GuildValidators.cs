@@ -29,9 +29,6 @@ internal static class GuildValidators
     internal const int MaxPermissionOverwrites = 100;
     internal const int MaxFeatures = 1521;
 
-    private const string JpgPrefix = "data:image/jpg;";
-    private const string JpegPrefix = "data:image/jpeg;";
-
     private static readonly int[] VerificationLevels = [0, 1, 2, 3, 4];
     private static readonly int[] MessageNotificationLevels = [0, 1];
     private static readonly int[] ContentFilters = [0, 1, 2];
@@ -414,14 +411,7 @@ internal static class GuildValidators
                 return Change<string>.To(null);
 
             case JsonValueKind.String:
-                // NetCord writes a JPEG as `data:image/jpg;base64,` (ImageUrl.GetFormatBytes), which Discord accepts alongside `jpeg`.
-                var data = element.GetString()!;
-                if (data.StartsWith(JpgPrefix, StringComparison.Ordinal))
-                {
-                    data = JpegPrefix + data[JpgPrefix.Length..];
-                }
-
-                if (ImageData.TryGetHash(data, out var hash))
+                if (ImageData.TryGetHash(element.GetString()!, out var hash))
                 {
                     return Change<string>.To(hash);
                 }
