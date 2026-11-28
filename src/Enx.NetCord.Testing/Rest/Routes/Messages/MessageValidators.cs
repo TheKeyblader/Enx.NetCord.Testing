@@ -81,8 +81,8 @@ internal static class MessageValidators
     public static RestValidation ValidateMessageRoute(FakeRestRequest request)
     {
         var errors = new FormErrors();
-        var channelId = ReadRouteSnowflake(request, "channel_id", errors);
-        var messageId = ReadRouteSnowflake(request, "message_id", errors);
+        var channelId = FormValidation.ReadRouteSnowflake(request, "channel_id", errors);
+        var messageId = FormValidation.ReadRouteSnowflake(request, "message_id", errors);
         return errors.IsEmpty
             ? RestValidation.Valid(new MessageRoute(channelId, messageId))
             : DiscordError.InvalidFormBody(errors);
@@ -241,18 +241,6 @@ internal static class MessageValidators
                 ? RestValidation.Valid(new BulkDeleteRequest((ulong)channel.Payload!, ids))
                 : DiscordError.InvalidFormBody(errors);
         }
-    }
-
-    private static ulong ReadRouteSnowflake(FakeRestRequest request, string name, FormErrors errors)
-    {
-        var raw = request.RouteParameters[name];
-        if (FormValidation.TryParseSnowflake(raw, out var id))
-        {
-            return id;
-        }
-
-        errors.Add(name, "NUMBER_TYPE_COERCE", FormValidation.NotSnowflakeMessage(raw));
-        return 0;
     }
 
     private static bool HasValue(JsonElement root, string name)

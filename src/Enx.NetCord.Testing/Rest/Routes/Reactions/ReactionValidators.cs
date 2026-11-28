@@ -48,8 +48,8 @@ internal static class ReactionValidators
     public static RestValidation ValidateMessageRoute(FakeRestRequest request)
     {
         var errors = new FormErrors();
-        var channelId = ReadRouteSnowflake(request, "channel_id", errors);
-        var messageId = ReadRouteSnowflake(request, "message_id", errors);
+        var channelId = FormValidation.ReadRouteSnowflake(request, "channel_id", errors);
+        var messageId = FormValidation.ReadRouteSnowflake(request, "message_id", errors);
         return errors.IsEmpty
             ? RestValidation.Valid(new ReactionsRoute(channelId, messageId))
             : DiscordError.InvalidFormBody(errors);
@@ -61,8 +61,8 @@ internal static class ReactionValidators
     public static RestValidation ValidateEmojiRoute(FakeRestRequest request)
     {
         var errors = new FormErrors();
-        var channelId = ReadRouteSnowflake(request, "channel_id", errors);
-        var messageId = ReadRouteSnowflake(request, "message_id", errors);
+        var channelId = FormValidation.ReadRouteSnowflake(request, "channel_id", errors);
+        var messageId = FormValidation.ReadRouteSnowflake(request, "message_id", errors);
         if (!errors.IsEmpty)
         {
             return DiscordError.InvalidFormBody(errors);
@@ -79,9 +79,9 @@ internal static class ReactionValidators
     public static RestValidation ValidateUserRoute(FakeRestRequest request)
     {
         var errors = new FormErrors();
-        var channelId = ReadRouteSnowflake(request, "channel_id", errors);
-        var messageId = ReadRouteSnowflake(request, "message_id", errors);
-        var userId = ReadRouteSnowflake(request, "user_id", errors);
+        var channelId = FormValidation.ReadRouteSnowflake(request, "channel_id", errors);
+        var messageId = FormValidation.ReadRouteSnowflake(request, "message_id", errors);
+        var userId = FormValidation.ReadRouteSnowflake(request, "user_id", errors);
         if (!errors.IsEmpty)
         {
             return DiscordError.InvalidFormBody(errors);
@@ -98,8 +98,8 @@ internal static class ReactionValidators
     public static RestValidation ValidateList(FakeRestRequest request)
     {
         var errors = new FormErrors();
-        var channelId = ReadRouteSnowflake(request, "channel_id", errors);
-        var messageId = ReadRouteSnowflake(request, "message_id", errors);
+        var channelId = FormValidation.ReadRouteSnowflake(request, "channel_id", errors);
+        var messageId = FormValidation.ReadRouteSnowflake(request, "message_id", errors);
         var type = FormValidation.ReadQueryInteger(request, "type", int.MinValue, int.MaxValue, errors);
         if (type is { } value && !ReactionTypes.Contains(value))
         {
@@ -119,17 +119,5 @@ internal static class ReactionValidators
         return ReactionEmoji.TryParse(request.RouteParameters["emoji_name"], out var emoji)
             ? RestValidation.Valid(new ReactionListQuery(channelId, messageId, emoji, type == 1, after, limit ?? DefaultLimit))
             : DiscordError.UnknownEmoji();
-    }
-
-    private static ulong ReadRouteSnowflake(FakeRestRequest request, string name, FormErrors errors)
-    {
-        var raw = request.RouteParameters[name];
-        if (FormValidation.TryParseSnowflake(raw, out var id))
-        {
-            return id;
-        }
-
-        errors.Add(name, "NUMBER_TYPE_COERCE", FormValidation.NotSnowflakeMessage(raw));
-        return 0;
     }
 }

@@ -9,7 +9,7 @@ namespace Enx.NetCord.Testing.State;
 /// </summary>
 /// <param name="Name">The unicode emoji, or the name of the custom emoji.</param>
 /// <param name="Id">The custom emoji ID, or <see langword="null"/> for a unicode emoji.</param>
-internal readonly record struct ReactionEmoji(string Name, ulong? Id) : IEquatable<ReactionEmoji>
+internal readonly record struct ReactionEmoji(string Name, ulong? Id)
 {
     private const int MaxCustomNameLength = 32;
     private const char ReplacementCharacter = '�';

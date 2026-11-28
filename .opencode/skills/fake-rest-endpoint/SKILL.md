@@ -58,6 +58,7 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
 - Validation structurelle (étape 3 du pipeline, sans lire l'état) : un validateur par opération,
   lié par `RouteBinding.Of(clé, handler, validateur)`. **Réutiliser** `Rest/FormValidation.cs`
   (ne pas recopier dans la famille) : `ValidateRouteSnowflake(request, "channel_id")`,
+  `ReadRouteSnowflake(request, "message_id", errors)` (une route à plusieurs IDs : tous les `50035` d'ID dans un seul `FormErrors`),
   `TryReadJsonObject(request, out doc, out error)` (`50109` / `50035` `MODEL_TYPE_CONVERT`),
   `ReadOptionalString`, `ReadNullableString` (distingue « absent » de `null` = effacer, via `out present`),
   `ReadOptionalInteger(root, name, min, max, errors)` (entier ou chaîne numérique ; `NUMBER_TYPE_COERCE`/`MIN`/`MAX` ;

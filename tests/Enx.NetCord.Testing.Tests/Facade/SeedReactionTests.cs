@@ -23,6 +23,42 @@ public sealed class SeedReactionTests
         Assert.Equal((0, 1), (read.Reactions[1].CountDetails.Normal, read.Reactions[1].CountDetails.Burst));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Reaction_VoiceOrStageChannelChat_IsVisibleToTheBotThroughRest(bool stage)
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        var channel = stage ? guild.StageChannel("town hall") : guild.VoiceChannel("lobby");
+        var alice = guild.Member("alice");
+        var message = channel.Message("hello", alice);
+
+        channel.Reaction(message, "👍", alice);
+        channel.Reaction(message, "👍", guild.Member("bob"), burst: true);
+        channel.Reaction(message, "👍", alice);
+
+        using var rest = discord.CreateRestClient();
+        var reaction = Assert.Single((await rest.GetMessageAsync(channel.Id, message, cancellationToken: TestContext.Current.CancellationToken)).Reactions);
+        Assert.Equal((2, 1, 1), (reaction.Count, reaction.CountDetails.Normal, reaction.CountDetails.Burst));
+    }
+
+    [Fact]
+    public async Task Reaction_VoiceChannelInvalidArguments_ThrowLikeTheTextChannel()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        var lobby = guild.VoiceChannel("lobby");
+        var alice = guild.Member("alice");
+        var message = lobby.Message("hello", alice);
+
+        Assert.Throws<ArgumentNullException>(() => lobby.Reaction(message, null!, alice));
+        Assert.Equal("emoji", Assert.Throws<ArgumentException>(() => lobby.Reaction(message, "thumbsup", alice)).ParamName);
+        Assert.Throws<InvalidOperationException>(() => lobby.Reaction(424242, "👍", alice));
+        Assert.Throws<InvalidOperationException>(() => lobby.Reaction(message, "👍", 424242));
+        Assert.Empty(discord.State.FindMessage(lobby.Id, message)!.Reactions);
+    }
+
     [Fact]
     public async Task Reaction_SameUserAndEmojiTwice_IsIdempotent()
     {

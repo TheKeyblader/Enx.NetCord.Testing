@@ -51,14 +51,5 @@ public sealed class SeededTextChannel
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
     /// <exception cref="InvalidOperationException">The message or the user does not exist in this fake, or the message already has 20 other emojis.</exception>
     public void Reaction(ulong messageId, string emoji, ulong userId, bool burst = false)
-    {
-        ArgumentNullException.ThrowIfNull(emoji);
-        if (!ReactionEmoji.TryParse(emoji, out var parsed))
-        {
-            throw new ArgumentException($"'{emoji}' is neither a unicode emoji nor a custom emoji written name:id.", nameof(emoji));
-        }
-
-        _fake.ThrowIfDisposed();
-        SeedGuard.Unwrap(_fake.State.AddReaction(StateCaller.Fixture, Id, messageId, parsed, userId, burst));
-    }
+        => SeedGuard.AddReaction(_fake, Id, messageId, emoji, userId, burst);
 }
