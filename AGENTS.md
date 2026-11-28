@@ -165,8 +165,9 @@ Règles de coordination :
 6. **Permissions** : chaque agent n'édite que son périmètre (`permissions` de son fichier). On
    écrit avec `edit`/`write` ; un refus signale un fichier hors périmètre : ne jamais le
    contourner par le shell (`cat >`, `python3`, `sed -i`), mais s'arrêter et le signaler ou
-   poser une question. Le shell est en liste blanche (`opencode.jsonc`) : une commande par appel,
-   sans `;`/`&&`, chaque maillon d'un pipe autorisé.
+   poser une question. Le shell est ouvert (`opencode.jsonc`, sauf publication et opérations
+   destructives) : cette ouverture ne lève **pas** la règle précédente, une commande par appel
+   reste préférée.
 
 ### Worktrees (sous-agents)
 
