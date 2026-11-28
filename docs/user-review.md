@@ -212,11 +212,24 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   6. (ajout M1-REST-02B1) Champs sans objet pour le type : `PATCH` d'un salon d'annonces
      `{"rate_limit_per_user":5}`, d'un salon vocal `{"topic":"x"}`, d'une catégorie
      `{"nsfw":true}` ; noter statut, JSON et dispatchs.
+  7. (ajout M1-REST-02B2) `null` et refus non couverts : sur un salon vocal `{"bitrate":null}`,
+     `{"user_limit":null}`, `{"video_quality_mode":null}`, `{"rtc_region":null}` (après l'avoir
+     fixé) ; sur un forum `{"default_sort_order":null}`, `{"default_forum_layout":null}`,
+     `{"default_tag_setting":"x"}`, `{"available_tags":[{"name":"t"}]}`, `{"flags":2}` ; sur un
+     salon texte `{"type":14}`, `{"default_thread_rate_limit_per_user":null}` ; sur un forum
+     `{"type":16}`. Noter statut, JSON (le champ est-il remis à zéro, inchangé, effacé ?), code et
+     message de champ, dispatchs.
 - **Résultat attendu** : 1 ⇒ `type: 5`, slowmode 0 ou absent (noter le refus en guilde non
   Community) ; 2 ⇒ `50035` puis 200 ; 3 ⇒ `50035`, 400 `30052`, 64000 ; 4 ⇒ `40058` ; 5 ⇒ présent, 200 ;
   6 ⇒ 200, salon inchangé, aucun `CHANNEL_UPDATE` (tests
   `ModifyGuildChannelAsync_TopicAndNsfwOnACategoryOrAVoiceChannel_AreIgnoredWithoutAChange`,
-  `UpdateChannel_FieldsTheTypeHasNoUseFor_AreIgnoredWithoutAChange`).
+  `UpdateChannel_FieldsTheTypeHasNoUseFor_AreIgnoredWithoutAChange`) ; 7 ⇒ hypothèses du fake :
+  `null` laisse inchangés `bitrate`, `user_limit`, `video_quality_mode`, `default_forum_layout`,
+  `default_thread_rate_limit_per_user` ; `null` efface `rtc_region` (automatique) et
+  `default_sort_order` ; `default_tag_setting` invalide ⇒ `50035` `BASE_TYPE_CHOICES` ; tags et
+  `flags` acceptés sans effet visible ; `{"type":14}` et `{"type":16}` ⇒ `50035` `type`
+  `CHANNEL_TYPE_INVALID` (tests `Rest/Channels/ModifyChannelTypeTests.cs`,
+  `State/ChannelUpdateStateTests.cs`).
 - **Si différent** : corriger `ChannelTraits`, les refus d'état, `errors.md` ; le résultat de 1
   en guilde non Community fixe le contenu de M4-REST-10.
 - **Réponse** : _(à remplir)_
