@@ -97,6 +97,17 @@ public sealed class RestMultipartTests
     }
 
     [Fact]
+    public void TryParse_BoundaryLongerThanTheStackBuffer_ParsesTheParts()
+    {
+        var boundary = new string('b', 300);
+        var text = $"--{boundary}\r\nContent-Disposition: form-data; name=a\r\n\r\n1\r\n--{boundary}\r\nContent-Disposition: form-data; name=b\r\n\r\n2\r\n--{boundary}--\r\n";
+
+        Assert.True(RestMultipart.TryParse(Body(text), out var parts));
+
+        Assert.Equal(["1", "2"], parts.Select(p => p.Text));
+    }
+
+    [Fact]
     public void TryParse_SeveralFiles_ReturnsThemInOrderWithTheirSizes()
     {
         var text = "--b\r\nContent-Disposition: form-data; name=\"files[0]\"; filename=\"a\"\r\n\r\n12\r\n"

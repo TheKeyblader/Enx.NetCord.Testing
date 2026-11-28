@@ -74,9 +74,11 @@ internal static class RestMultipart
         }
 
         // CRLF + the first line: the only form in which a delimiter, not a part of the content, can appear after the first one.
-        var marker = new byte[lineEnd + 2];
+        // A boundary is at most 70 characters (RFC 2046), so the stack covers it; the heap is a fallback for a longer first line.
+        var markerLength = lineEnd + 2;
+        Span<byte> marker = markerLength <= 256 ? stackalloc byte[markerLength] : new byte[markerLength];
         "\r\n"u8.CopyTo(marker);
-        span[..lineEnd].CopyTo(marker.AsSpan(2));
+        span[..lineEnd].CopyTo(marker[2..]);
 
         var result = new List<MultipartPart>();
         var position = lineEnd + 2;
@@ -90,7 +92,7 @@ internal static class RestMultipart
 
             var part = span[position..end];
             int headerEnd;
-            var contentStart = 0;
+            int contentStart;
             if (part.StartsWith("\r\n"u8))
             {
                 headerEnd = 0; // no header at all
