@@ -368,6 +368,86 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   `GuildWire.cs`, `errors.md`, `rest.md` et les tests.
 - **Réponse** : _(à remplir)_
 
+### UR-017 — Pins et typing : idempotence, ordre des faits, codes (`test-manuel`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-REST-05 (`6bf22af`, `81cafda`, merge `eac5253`)
+- **Concerne** : `rest.md` `GET …/messages/pins`, `PUT`/`DELETE …/messages/pins/{message_id}`, `POST /channels/{channel_id}/typing` ; `errors.md` `30003`, `50021`, `50024`, `50035` ; `gateway.md` `CHANNEL_PINS_UPDATE`, `MESSAGE_UPDATE`, `MESSAGE_CREATE` ; tests `tests/Enx.NetCord.Testing.Tests/Rest/Pins/*`, `Rest/Typing/TriggerTypingTests.cs`
+- **Hypothèse** :
+  1. Épingler un message déjà épinglé, ou dépingler un message non épinglé ⇒ 204 sans fait (fauxcord).
+  2. Ordre des faits au pin : `MESSAGE_UPDATE` (`pinned: true`), `CHANNEL_PINS_UPDATE`, puis
+     `MESSAGE_CREATE` d'un message système type 6 (auteur : le bot, `message_reference` vers le
+     message) ; au dépin : `MESSAGE_UPDATE` puis `CHANNEL_PINS_UPDATE`, le message système reste ;
+     `last_pin_timestamp` recalculé, `null` quand le dernier pin est retiré. Supprimer un message
+     épinglé le retire des pins sans `CHANNEL_PINS_UPDATE` (docs).
+  3. `30003` (251ᵉ pin) ⇒ statut 400 ; `50021` (pin d'un message système, tout type autre que 0
+     et 19) ⇒ statut 400.
+  4. `GET …/messages/pins` et `POST …/typing` sur une catégorie ou un forum ⇒ 400 `50024`
+     (cohérent avec UR-011) ; `PUT`/`DELETE pins/{id}` ⇒ 404 `10008`.
+  5. `before` illisible ⇒ `50035`, code de champ `DATE_TYPE_PARSE`.
+- **Procédure** (G1, `$CH1`, bot connecté avec `GUILDS` + `GUILD_MESSAGES`, qui journalise les dispatchs bruts) :
+  1. `PUT /channels/$CH1/messages/pins/$M` deux fois ; `DELETE …/pins/<message jamais épinglé>`.
+  2. Épingler `$M`, noter les dispatchs et leur ordre ; dépingler le seul pin, relire `GET /channels/$CH1` (`last_pin_timestamp`).
+  3. Épingler 251 messages ; épingler le message « a épinglé un message » (type 6), puis un message de commande slash (type 20).
+  4. `GET /channels/$CAT/messages/pins`, `POST /channels/$CAT/typing`, idem sur `$FORUM`.
+  5. `GET /channels/$CH1/messages/pins?before=hier` : relever `errors.before._errors[0].code`.
+- **Résultat attendu** : 1 ⇒ 204 ×3, un seul message système ; 2 ⇒ l'ordre ci-dessus,
+  `last_pin_timestamp: null` ; 3 ⇒ 400 `30003`, 400 `50021`, et noter si le type 20 est accepté ;
+  4 ⇒ 400 `50024` ×4 ; 5 ⇒ `DATE_TYPE_PARSE`.
+- **Si différent** : corriger `FakeDiscordState.Pins.cs`, `PinValidators.cs`, `DiscordError`,
+  `errors.md`, `rest.md` et les tests ; l'ordre des faits fixe la traduction de M3-03.
+- **Réponse** : _(à remplir)_
+
+### UR-018 — `pinned_at` à la seconde, pas de seed public de pin (`décision`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-REST-05 ; roadmap `M1-REST-05C`
+- **Concerne** : `rest.md` `GET …/messages/pins` ; `State/FakeDiscordState.Pins.cs`
+- **Décision** :
+  1. `pinned_at` est tronqué à la seconde et strictement croissant par salon (un pin prend
+     `max(horloge, dernier pin + 1 s)`) : NetCord écrit le curseur `before` avec `ToString("s")`
+     (`RestClient.Channel.cs:705`), et avec l'horloge virtuelle figée, deux pins de la même seconde
+     seraient perdus à la page suivante. Conséquence : deux pins rapprochés ont des `pinned_at`
+     qui ne reflètent pas l'horloge exacte.
+  2. Pas d'API de seed publique pour épingler un message : les tests internes passent par l'état.
+     Un `Pinned` sur le seed de message est proposé en M1-REST-05C (à rattacher à UR-015).
+- **Réponse** : _(à remplir)_
+
+### UR-019 — Membres de guilde : codes, statuts et ordre (`test-manuel`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-REST-07 (`2790ada`, `762b99f`, corrections de revue en cours)
+- **Concerne** : `rest.md` `/guilds/{guild_id}/members…` (9 lignes) ; `errors.md` `10007`, `10011`, `10013`, `50013`, `50025`, `50028`, `50035` ; tests `tests/Enx.NetCord.Testing.Tests/Rest/Members/*`, `Conformance/Rest/MembersConformanceTests.cs`
+- **Hypothèse** :
+  1. `GET`/`PATCH`/`DELETE …/members/{user_id}` : utilisateur inexistant ⇒ 404 `10013`,
+     utilisateur existant non membre ⇒ 404 `10007` (correction de revue en cours).
+  2. Ordre : guilde (`10004`/`50001`) → membre (`10007`) → `@everyone` (`50028`) → rôle (`10011`) ;
+     rôle inconnu dans `roles` d'un `PATCH` ⇒ 404 `10011` (pas `50035`), rien n'est modifié.
+  3. `PUT`/`DELETE …/roles/{guild_id}` (`@everyone`) ⇒ 400 `50028` ; `@everyone` dans `roles`
+     d'un `PATCH` ignoré.
+  4. Expulser le bot lui-même ou le propriétaire ⇒ 403 `50013` (souvenir de discord.py, non documenté).
+  5. `PUT …/members/{user_id}` (OAuth2) ⇒ toujours 403 `50025` après `10004`/`50001` (pas de grants
+     modélisés) ; cas « déjà membre » (204 d'après `guild.mdx:1048`) en cours de traitement.
+  6. Timeout au-delà de 28 jours ⇒ `50035` avec un code de champ **inventé**
+     `GUILD_MEMBER_TIMEOUT_TOO_LONG` ; date illisible ⇒ `DATE_TIME_TYPE_PARSE`.
+  7. `mute`/`deaf`/`channel_id` acceptés hors vocal (Discord : 400, `40032` ?), faute de voice states.
+  8. `search` trié par ID d'utilisateur croissant (Discord : pertinence, non documenté).
+- **Procédure** (G1, bot avec `MANAGE_ROLES`, `KICK_MEMBERS`, `MODERATE_MEMBERS`, `MANAGE_NICKNAMES`) :
+  1. `GET /guilds/$G1/members/1` (inexistant), puis `GET /guilds/$G1/members/<utilisateur réel non membre>`.
+  2. `PATCH /guilds/$G1/members/$USER {"roles":["424242"]}` ; `PUT /guilds/$G1/members/<non membre>/roles/424242`.
+  3. `PUT /guilds/$G1/members/$USER/roles/$G1` ; `PATCH {"roles":["$G1"]}` puis relire le membre.
+  4. `DELETE /guilds/$G1/members/$APP`, puis sur le propriétaire.
+  5. `PUT /guilds/$G1/members/$USER {"access_token":"x"}` (membre existant), puis sur un non-membre.
+  6. `PATCH {"communication_disabled_until":"<now+29 j>"}`, puis `"tomorrow"` : relever l'arbre `errors`.
+  7. `PATCH {"mute":true}` sur un membre hors vocal.
+  8. `GET /guilds/$G1/members/search?query=a&limit=10` avec plusieurs membres en `a…`.
+- **Résultat attendu** : 1 ⇒ `10013` puis `10007` ; 2 ⇒ 404 `10011`, puis 404 `10007` ; 3 ⇒
+  400 `50028`, membre inchangé ; 4 ⇒ 403 `50013` ×2 ; 5 ⇒ 204, puis 403 `50025` ; 6 ⇒ noter codes
+  et messages ; 7 ⇒ noter statut et code ; 8 ⇒ noter l'ordre.
+- **Si différent** : corriger `FakeDiscordState.Members.cs`, `MemberValidators.cs`, `DiscordError`,
+  `errors.md`, `rest.md` et les tests.
+- **Réponse** : _(à remplir)_
+
 ## Traités
 
 ### UR-013 — Garde « un scénario de conformité par handler », sans exemption (`décision`)
