@@ -62,6 +62,31 @@ public sealed class ReplyMessageTests
     }
 
     [Fact]
+    [Parity("GET /channels/{channel_id}/messages/{message_id}")]
+    [Parity("GET /channels/{channel_id}/messages")]
+    public async Task GetMessage_ReplyToAReply_NestsOneLevelWithoutAReferencedMessageInTheReferencedOne()
+    {
+        var (discord, rest, channelId, _, originalId, replyId) = await ReplyAsync();
+        await using var disposableDiscord = discord;
+        using var disposableRest = rest;
+        var last = await rest.SendMessageAsync(
+            channelId,
+            new MessageProperties { Content = "reply to the reply", MessageReference = MessageReferenceProperties.Reply(replyId) },
+            cancellationToken: Ct);
+
+        using var single = await GetRawAsync(rest, $"/channels/{channelId}/messages/{last.Id}");
+        using var list = await GetRawAsync(rest, $"/channels/{channelId}/messages", "?limit=1");
+
+        foreach (var message in new[] { single.RootElement, list.RootElement[0] })
+        {
+            var referenced = message.GetProperty("referenced_message");
+            Assert.Equal("answer", referenced.GetProperty("content").GetString());
+            Assert.Equal(originalId.ToString(), referenced.GetProperty("message_reference").GetProperty("message_id").GetString());
+            Assert.False(referenced.TryGetProperty("referenced_message", out _));
+        }
+    }
+
+    [Fact]
     [Parity("PATCH /channels/{channel_id}/messages/{message_id}")]
     public async Task ModifyMessageAsync_ContentOfAReply_KeepsMentioningTheRepliedAuthor()
     {

@@ -16,8 +16,9 @@ internal static class MessageWire
     /// <summary>Projects a message and the users it names (author, mentions, replied-to author) with <paramref name="findUser"/>.</summary>
     /// <param name="message">The message.</param>
     /// <param name="findUser">Looks a user up in the state (<c>FindUser</c>).</param>
+    /// <param name="nested">Whether the message is itself the replied-to message of another one: its own <c>referenced_message</c> is then omitted.</param>
     /// <returns>The DTO.</returns>
-    public static MessageResponse ToResponse(MessageSnapshot message, Func<ulong, UserSnapshot?> findUser)
+    public static MessageResponse ToResponse(MessageSnapshot message, Func<ulong, UserSnapshot?> findUser, bool nested = false)
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(findUser);
@@ -51,10 +52,11 @@ internal static class MessageWire
                 }
                 : null,
 
-            // A reference whose target is gone is written as an explicit null (Discord: absent = unknown, null = deleted).
-            ReferencedMessage = message.Reference is null
+            // A reference whose target is gone is written as an explicit null (Discord: absent = unknown, null = deleted). A
+            // replied-to message is a BasicMessageResponse: it never carries its own referenced_message, whatever it replies to.
+            ReferencedMessage = nested || message.Reference is null
                 ? null
-                : new ReferencedMessageResponse(message.ReferencedMessage is { } referenced ? ToResponse(referenced, findUser) : null),
+                : new ReferencedMessageResponse(message.ReferencedMessage is { } referenced ? ToResponse(referenced, findUser, nested: true) : null),
         };
     }
 
