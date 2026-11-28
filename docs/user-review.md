@@ -300,8 +300,8 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   sinon `dotnet test` échoue. Pas de liste d'exemptions. L'extrait couvre toutes les opérations
   de la spec : ajouter un handler n'exige jamais de régénérer le contrat. Depuis M1-T-04 (merge
   `3b13a29`), le contrat est strict : les propriétés non déclarées par la spec sont rejetées.
-- **Réponse** : validé (en session, 2026-11-28). Garde maintenue telle quelle ; aucune tâche
-  à créer.
+- **Réponse** : solution proposée validée (en session, 2026-11-28) : garde stricte, sans liste
+  d'exemptions, et texte du point mis à jour pour M1-T-04. Aucune tâche à créer.
 
 ### UR-006 — API de seed des salons (`décision`)
 
