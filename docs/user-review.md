@@ -148,31 +148,6 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   callbacks et `errors.md`.
 - **Réponse** : _(à remplir)_
 
-### UR-006 — API de seed des salons (`décision`)
-
-- **Statut** : Ouvert
-- **Origine** : M1-ADR-13 ; [ADR 0013 § 6](adr/0013-channel-hierarchy-and-types.md)
-- **Concerne** : API publique `SeededGuild`, `SeededCategory`, `SeededVoiceChannel`, `SeededForumChannel`, `SeededChannelOptions` (implémentation M1-REST-02B1)
-- **Décision** : tout salon seedé rend une poignée, jamais un ID nu. Le parent se lit dans
-  l'appel (`category.TextChannel(...)`). Une seule classe d'options pour tous les types, qui
-  lève `ArgumentException` sur une option sans objet pour le type si sa valeur diffère du défaut
-  (ex. `Topic` sur un salon vocal). Pas de réglages vocaux (`bitrate`, `user_limit`) dans le
-  seed ; media et annuaire exclus. `Slowmode` y est (absorbe M1-REST-02D).
-- **Réponse** : _(à remplir)_
-
-### UR-007 — Périmètre des types de salons et des contrôles (`décision`)
-
-- **Statut** : Ouvert
-- **Origine** : M1-ADR-13 ; ADR 0013 § 1, § 4, § 5
-- **Concerne** : `rest.md` `/channels/{channel_id}`, `/guilds/{guild_id}/channels` ; tâche M4-REST-10
-- **Décision** :
-  1. Le type 16 (media) est modélisé alors que la spec OpenAPI ne le liste pas (docs et NetCord oui).
-  2. Tags de forum reportés à M4-REST-01 ; d'ici là validés puis ignorés.
-  3. Aucune guilde n'exige `NEWS` ou Community pour un salon d'annonces ou stage (contrôles en M4-REST-10).
-  4. Le listing d'une guilde est rendu par ID, pas par position.
-  5. Les limites Discord (50 salons par catégorie, 500 par guilde) s'appliquent aussi au seed.
-- **Réponse** : _(à remplir)_
-
 ### UR-008 — Lot A : parent et suppression de catégorie (`test-manuel`)
 
 - **Statut** : Ouvert
@@ -282,4 +257,32 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
 
 ## Traités
 
-_(aucun)_
+### UR-006 — API de seed des salons (`décision`)
+
+- **Statut** : Traité (2026-11-28)
+- **Origine** : M1-ADR-13 ; [ADR 0013 § 6](adr/0013-channel-hierarchy-and-types.md)
+- **Concerne** : API publique `SeededGuild`, `SeededCategory`, `SeededVoiceChannel`, `SeededForumChannel`, `SeededChannelOptions` (implémentation M1-REST-02B1)
+- **Décision** : tout salon seedé rend une poignée, jamais un ID nu. Le parent se lit dans
+  l'appel (`category.TextChannel(...)`). Une seule classe d'options pour tous les types, qui
+  lève `ArgumentException` sur une option sans objet pour le type si sa valeur diffère du défaut
+  (ex. `Topic` sur un salon vocal). Pas de réglages vocaux (`bitrate`, `user_limit`) dans le
+  seed ; media et annuaire exclus. `Slowmode` y est (absorbe M1-REST-02D).
+- **Réponse** : « ok pour la décision actuelle » (en session, 2026-11-28). ADR 0013 § 6 inchangé ;
+  M1-REST-02B1 l'implémente tel quel.
+
+### UR-007 — Périmètre des types de salons et des contrôles (`décision`)
+
+- **Statut** : Traité (2026-11-28)
+- **Origine** : M1-ADR-13 ; ADR 0013 § 1, § 4, § 5
+- **Concerne** : `rest.md` `/channels/{channel_id}`, `/guilds/{guild_id}/channels` ; tâche M4-REST-10
+- **Décision** :
+  1. Le type 16 (media) est modélisé alors que la spec OpenAPI ne le liste pas (docs et NetCord oui).
+  2. Tags de forum reportés à M4-REST-01 ; d'ici là validés puis ignorés.
+  3. Aucune guilde n'exige `NEWS` ou Community pour un salon d'annonces ou stage (contrôles en M4-REST-10).
+  4. Le listing d'une guilde est rendu par ID, pas par position.
+  5. Les limites Discord (50 salons par catégorie, 500 par guilde) s'appliquent aussi au seed.
+- **Réponse** : validé (en session, 2026-11-28) : un contrôle absent ou plus permissif que
+  Discord parce qu'il dépend d'une fonctionnalité pas encore modélisée (`features`, tags de
+  forum) est acceptable. Conséquences : les lignes concernées restent 🟡 avec la note du
+  contrôle manquant ; M4-REST-10 et M4-REST-01 ajoutent les contrôles et adaptent les tests qui
+  reposaient sur le comportement permissif.
