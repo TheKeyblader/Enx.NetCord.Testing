@@ -154,8 +154,46 @@ Minimum : nominal, relecture d'état, `Unknown *` 404, validation 50035, (401 si
 invalide modélisé), event Gateway émis (ou non). Les API exactes (`Seed`, `CreateRestClient`,
 assertions) sont celles fixées par les ADR — adapter l'exemple.
 
+### Scénario de conformité (obligatoire, en plus des tests ci-dessus)
+
+Tout handler enregistré exige **au moins un** test non ignoré `[Parity("METHOD /path")]`
+(clé exacte) dans `tests/Enx.NetCord.Testing.Conformance/Rest/` (`Conformance/Interactions/`
+pour les routes d'interactions et de webhooks) : il appelle la route par le vrai `RestClient`
+et **se termine par `ContractAssert.Conforms(discord, "METHOD /path")`**. Sans lui, la garde
+`ConformanceTests_EveryImplementedOperation_HasAScenarioTaggedWithItsKey` fait échouer
+`dotnet test` ; pas de liste d'exemptions. L'extrait OpenAPI couvre toutes les opérations :
+ajouter un handler ne demande jamais de régénérer le contrat. Style de
+`Rest/ChannelsConformanceTests.cs` (classe `[Trait("Category", "Conformance")]`,
+`Ct => TestContext.Current.CancellationToken`) :
+
+```csharp
+[Fact]
+[Parity("GET /channels/{channel_id}")]
+public async Task GetChannelAsync_SeededTextChannel_ReturnsItAndConformsToGuildChannelResponse()
+{
+    await using var discord = FakeDiscord.Create();
+    var general = discord.Seed.Guild("Test").TextChannel("general");
+    using var rest = discord.CreateRestClient();
+
+    var channel = await rest.GetChannelAsync(general.Id, cancellationToken: Ct);
+
+    Assert.Equal("general", Assert.IsType<TextGuildChannel>(channel).Name);
+    // add the set-up routes the scenario reached, if any
+    ContractAssert.Conforms(discord, "GET /channels/{channel_id}");
+}
+```
+
+`Conforms` valide **toutes** les tentatives du journal (erreurs comprises) et exige que la
+route ait été atteinte : un cas d'erreur principal (`Unknown *`, `[Parity("10003")]`) se
+termine aussi par `Conforms`. Un test de conformité n'appelle jamais `Assert.Skip()`. Un écart
+de schéma est un bug du fake (corriger `src/` ; un test `Skip` ne compte pas pour la garde).
+Détail et régénération du contrat : `dotnet-test-conventions` § Conformité.
+
 ## 5. Parité
 
 Dans `docs/parity/rest.md`, ligne `POST` `/channels/{channel_id}/messages` : `Fake` ✅ ou 🟡
 (+ Note : ce qui manque, ex. « attachments multipart non gérés »), `Tests` ✅. Recalculer
 les compteurs d'en-tête.
+
+Check-list de fin : build sans warning, tests verts, **scénario de conformité `[Parity]` +
+`ContractAssert.Conforms` ajouté** (§4), parité à jour, skill mise à jour si convention nouvelle.
