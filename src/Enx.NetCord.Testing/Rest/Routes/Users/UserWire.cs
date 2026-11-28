@@ -46,6 +46,7 @@ internal static class UserWire
         Id = Id(channel.Id),
         Type = (int)channel.Kind,
         LastMessageId = channel.LastMessageId is { } last ? Id(last) : null,
+        LastPinTimestamp = channel.LastPinTimestamp?.ToString("O", CultureInfo.InvariantCulture),
         Flags = 0,
         Recipients = [.. recipients.Select(ToUser)],
     };
