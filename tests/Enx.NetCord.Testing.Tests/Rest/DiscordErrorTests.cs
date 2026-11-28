@@ -180,7 +180,38 @@ public sealed class DiscordErrorTests
     [Fact]
     public void FromStateFailure_KindWithoutACatalogError_IsRejected()
     {
-        Assert.Throws<NotSupportedException>(() => DiscordError.FromStateFailure(new StateFailure(StateFailureKind.UnknownRole, 1)));
+        Assert.Throws<NotSupportedException>(() => DiscordError.FromStateFailure(new StateFailure(StateFailureKind.MemberAlreadyExists, 1)));
+    }
+
+    [Theory]
+    [InlineData((int)StateFailureKind.UnknownMember, HttpStatusCode.NotFound, 10007, "Unknown Member")]
+    [InlineData((int)StateFailureKind.UnknownRole, HttpStatusCode.NotFound, 10011, "Unknown Role")]
+    [InlineData((int)StateFailureKind.InvalidRole, HttpStatusCode.BadRequest, 50028, "Invalid Role")]
+    [InlineData((int)StateFailureKind.MissingPermissions, HttpStatusCode.Forbidden, 50013, "Missing Permissions")]
+    [Parity("10007")]
+    [Parity("10011")]
+    [Parity("50028")]
+    [Parity("50013")]
+    public void FromStateFailure_MemberAndRoleRefusals_MapToTheirCatalogError(int kind, HttpStatusCode status, int code, string message)
+    {
+        var error = DiscordError.FromStateFailure(new StateFailure((StateFailureKind)kind, 1));
+
+        Assert.Equal((status, code, message), (error.Status, error.Code, error.Message));
+        Assert.True(DiscordError.TryCreateSimple(status, code, out var simple));
+        Assert.Equal(code, simple.Code);
+    }
+
+    [Fact]
+    [Parity("50035")]
+    public void FromStateFailure_InvalidMemberTimeout_Maps50035OnCommunicationDisabledUntil()
+    {
+        var error = DiscordError.FromStateFailure(new StateFailure(StateFailureKind.InvalidMemberTimeout, 1));
+
+        Assert.Equal((HttpStatusCode.BadRequest, 50035), (error.Status, error.Code));
+        using var json = JsonDocument.Parse(error.ToJson());
+        Assert.Equal(
+            "GUILD_MEMBER_TIMEOUT_TOO_LONG",
+            json.RootElement.GetProperty("errors").GetProperty("communication_disabled_until").GetProperty("_errors")[0].GetProperty("code").GetString());
     }
 
     [Fact]

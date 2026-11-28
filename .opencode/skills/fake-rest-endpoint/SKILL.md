@@ -76,6 +76,28 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
     créer, le couvrir dans les tests de route.
   - **Un test qui veut une route non implémentée** ne doit plus prendre une route de la famille Guilds (`GET /guilds/{guild_id}` est implémentée) :
     `RestTestHarness` a son propre jeu de bindings, mais choisir une route lointaine (`/guilds/{guild_id}/vanity-url`…) pour un test sur `RestRoutes.Bindings`.
+- **Famille Members** (M1-REST-07) : conventions pour une sous-ressource de guilde indexée par utilisateur (rôles, bans, futurs `members/@me`).
+  - **Une seule résolution** : `ResolveMember(caller, guildId, userId)` (`FakeDiscordState.Members.cs`) enchaîne `GuildAccess` (profil `Denied`) puis le membre
+    (`UnknownUser` `10013` si le fake ne connaît pas l'utilisateur, puis `UnknownMember` `10007` s'il existe sans être membre ; ordre à confirmer UR-019) ; toutes les opérations de la famille l'appellent sous le verrou, jamais `_members` directement.
+    Un handler reçoit des `MemberDetails` (membre **et** utilisateur, détachés) car le JSON d'un membre porte `user`.
+  - **Faits** : `MemberUpdated` (nick, rôles, timeout, profil) et `MemberRemoved` (le membre tel qu'il était + l'utilisateur) à côté de `MemberAdded` ; comme pour une guilde,
+    un `PATCH` ne publie que si une valeur **change** (comparer avant d'écrire ; liste de rôles comparée comme **ensemble**) ; un `PUT`/`DELETE` de rôle déjà dans l'état voulu
+    renvoie 204 sans fait (`StateResult<bool>` : `true` = changé).
+  - **Validation avant écriture** d'une mise à jour multi-champs : membre → rôles (le premier inconnu, `@everyone` ignoré comme à `AddMember`) → règles de timeout → puis écrire ; un refus ne laisse rien.
+  - **Une même entrée d'état pour deux routes** : `UpdateMemberInput` sert `PATCH …/{user_id}` et `PATCH …/@me` (le validateur de `@me` y met `request.Caller.UserId`). Les routes littérales
+    (`@me`, `search`) sont inventoriées à côté de `{user_id}` : le littéral prime, rien à faire. Une réponse commune à deux schémas de la spec (`GuildMemberResponse`,
+    `PrivateGuildMemberResponse`) = un DTO sans les propriétés facultatives en trop (le mode strict ne les exige pas).
+  - **Défaut de pagination documenté mais que NetCord n'utilise pas** : la doc donne `limit` = 1 par défaut (`list`, `search`) alors que NetCord envoie toujours `limit` ; implémenter le défaut de la doc et le tester par `SendRequestAsync` brut.
+  - **Date-time ISO 8601** (corps ou query) : `FormValidation.TryReadDateTime(raw, path, errors, out value)` (formats ISO stricts, sans offset = UTC, `DATE_TYPE_PARSE` sinon ; refuse `12/25/2026`), jamais `DateTimeOffset.Parse`.
+  - **Route dont le seul succès possible est « déjà fait »** (`PUT …/members/{user_id}` sans OAuth2) : répondre le 204 documenté pour l'état déjà atteint, puis l'erreur du catalogue ; le dire dans la ligne de parité.
+  - **Image de guilde** (`avatar`/`banner` d'un membre) : réutiliser `GuildValidators.ReadImage` (interne, `Change<string>` avec hash dérivé) plutôt que d'en écrire un second.
+  - **Protéger le bot et le propriétaire** (`DELETE …/members/{user_id}`, timeout) : `StateFailureKind.MissingPermissions` (`50013`) **sans calcul de permissions** ; le test d'état attendu « un kind sans entrée du catalogue
+    lève `NotSupportedException` » (`DiscordErrorTests`) prend un kind qui n'a toujours pas d'entrée (`MemberAlreadyExists`) : le changer quand on le catalogue.
+  - **Tests** : semer un membre avec pseudo/rôles par `discord.State.AddMember(StateCaller.Fixture, new AddMemberInput(guild.Id, user, "Nick", [role]))` après `discord.Seed.User(...)`
+    (le seed n'expose pas le pseudo) ; un rôle administrateur par `discord.State.CreateRole(StateCaller.Fixture, new CreateRoleInput(guild.Id, "Admins", Permissions: 1UL << 3))`.
+    NetCord : `GetGuildUsersAsync` n'a pas de `cancellationToken` (`.WithCancellation(Ct)`), pagine par `after` jusqu'à une page **plus courte** que `BatchSize` (une dernière requête vide quand
+    le total est un multiple) ; `TimeOutUntil = default(DateTimeOffset)` écrit `null` (efface le timeout) et `ImageProperties.Empty` écrit `null` (efface l'image) ; `Nickname = ""` efface le pseudo, `null` n'est jamais envoyé
+    (tester `{"nick":null}` par `SendRequestAsync`). Le bot est le membre d'ID le plus petit : il ouvre tout listing trié par ID.
 
 ## 3. Handler (`src/Enx.NetCord.Testing/Rest/Routes/<Domaine>/`)
 

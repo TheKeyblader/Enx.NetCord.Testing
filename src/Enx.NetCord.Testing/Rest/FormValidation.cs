@@ -315,6 +315,38 @@ internal static class FormValidation
         }
     }
 
+    // ISO 8601 date-times only, with or without a zone (K: Z or ±hh:mm) and fractional seconds; "O" is what the fake writes, "s" what NetCord sends.
+    private static readonly string[] Iso8601Formats =
+    [
+        "O",
+        "s",
+        "yyyy-MM-dd'T'HH:mm:ssK",
+        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF",
+        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK",
+    ];
+
+    /// <summary>
+    /// Reads an ISO 8601 date-time (a value without an offset is UTC) or adds <c>DATE_TYPE_PARSE</c> (the code and message are hypotheses,
+    /// see <c>docs/parity/errors.md</c>). Other spellings, such as <c>12/25/2026</c>, are refused.
+    /// </summary>
+    /// <param name="raw">The text sent.</param>
+    /// <param name="path">The error path.</param>
+    /// <param name="errors">The collector.</param>
+    /// <param name="value">The instant, in UTC, on success.</param>
+    /// <returns><see langword="true"/> when <paramref name="raw"/> is an ISO 8601 date-time.</returns>
+    public static bool TryReadDateTime(string raw, string path, FormErrors errors, out DateTimeOffset value)
+    {
+        ArgumentNullException.ThrowIfNull(raw);
+        ArgumentNullException.ThrowIfNull(errors);
+        if (DateTimeOffset.TryParseExact(raw, Iso8601Formats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out value))
+        {
+            return true;
+        }
+
+        errors.Add(path, "DATE_TYPE_PARSE", $"Could not parse \"{raw}\" as a date-time.");
+        return false;
+    }
+
     /// <summary>Checks the length of a string in Unicode code points, as Discord does, and adds <c>BASE_TYPE_BAD_LENGTH</c> when out of range.</summary>
     /// <param name="value">The value.</param>
     /// <param name="path">The error path.</param>

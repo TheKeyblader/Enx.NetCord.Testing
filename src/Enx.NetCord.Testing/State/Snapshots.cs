@@ -200,7 +200,25 @@ internal sealed record MemberSnapshot(
     DateTimeOffset JoinedAt,
     bool Deaf,
     bool Mute,
-    long Ordinal);
+    long Ordinal)
+{
+    /// <summary>Gets the member's guild avatar hash, or <see langword="null"/> when the member uses their user avatar.</summary>
+    internal string? AvatarHash { get; init; }
+
+    /// <summary>Gets the member's guild banner hash, or <see langword="null"/> for none.</summary>
+    internal string? BannerHash { get; init; }
+
+    /// <summary>Gets when the member's timeout ends, as stored: <see langword="null"/> for none, possibly an instant already passed.</summary>
+    internal DateTimeOffset? CommunicationDisabledUntil { get; init; }
+
+    /// <summary>Gets the guild member flags bitfield.</summary>
+    internal int Flags { get; init; }
+}
+
+/// <summary>A guild member with the user it represents, as the member routes read it (the Discord <c>user</c> field of a member).</summary>
+/// <param name="Member">The membership.</param>
+/// <param name="User">The user.</param>
+internal sealed record MemberDetails(MemberSnapshot Member, UserSnapshot User);
 
 internal sealed record MessageSnapshot(
     ulong Id,

@@ -13,6 +13,18 @@ internal enum StateFailureKind
     UnknownMessage,
     MemberAlreadyExists,
 
+    /// <summary>The role cannot be given or taken away: it is the guild's <c>@everyone</c> role (M1-REST-07): 400 <c>50028</c> (status is a hypothesis).</summary>
+    InvalidRole,
+
+    /// <summary>
+    /// The action targets a member the bot may not act on: the bot itself or the guild owner (M1-REST-07, before the role hierarchy of M4-REST-05):
+    /// 403 <c>50013</c> (hypothesis). Also a timeout on the owner or on a member with <c>ADMINISTRATOR</c>, which the docs document.
+    /// </summary>
+    MissingPermissions,
+
+    /// <summary>A member timeout ends more than 28 days from now (documented limit): 400 <c>50035</c> on <c>communication_disabled_until</c> (form is a hypothesis).</summary>
+    InvalidMemberTimeout,
+
     /// <summary>The resource exists but the bot cannot see it: it is not a member of the guild (403 <c>50001</c>).</summary>
     MissingAccess,
 
