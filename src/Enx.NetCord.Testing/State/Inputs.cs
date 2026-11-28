@@ -26,13 +26,20 @@ internal sealed record CreateGuildInput(
     ulong? EveryonePermissions = null,
     bool WithBot = false);
 
-internal sealed record CreateTextChannelInput(
+// Creates any guild channel (ADR 0013). Position null means "after the others of the sorting group". Settings that do not
+// apply to the kind (a topic on a voice channel) are not stored; the seed refuses them before calling.
+internal sealed record CreateGuildChannelInput(
     ulong GuildId,
+    ChannelKind Kind,
     string Name,
     ulong? Id = null,
-    string? Topic = null,
+    ulong? ParentId = null,
     int? Position = null,
-    bool Nsfw = false);
+    string? Topic = null,
+    bool Nsfw = false,
+    int RateLimitPerUser = 0,
+    VoiceSettings? Voice = null,
+    ForumSettings? Forum = null);
 
 internal sealed record CreateDmChannelInput(ulong RecipientId, ulong? Id = null);
 

@@ -464,40 +464,7 @@ internal sealed partial class FakeDiscordState
         }
     }
 
-    internal StateResult<ChannelSnapshot> CreateTextChannel(StateCaller caller, CreateTextChannelInput input)
-    {
-        ArgumentNullException.ThrowIfNull(input);
-        ArgumentNullException.ThrowIfNull(input.Name);
-        ValidateExplicitId(input.Id, nameof(input));
-
-        lock (_gate)
-        {
-            var access = _access.ResolveGuild(caller, input.GuildId, GuildAccessProfile.Denied);
-            if (!access.TryGetValue(out var guild))
-            {
-                return access.Failure;
-            }
-
-            var now = ReadClock();
-            var id = ResolveNewId(input.Id, now);
-            _assigned.Add(id);
-
-            var channel = new ChannelEntity(id, ChannelKind.GuildText, NextOrdinal())
-            {
-                GuildId = guild.Id,
-                Name = input.Name,
-                Topic = input.Topic,
-                Position = input.Position ?? guild.ChannelIds.Count,
-                Nsfw = input.Nsfw,
-            };
-            _channels.Add(id, channel);
-            guild.ChannelIds.Add(id);
-
-            var snapshot = channel.ToSnapshot();
-            Publish(new ChannelCreated(NextChangeNumber(), snapshot));
-            return snapshot;
-        }
-    }
+    // CreateGuildChannel lives in FakeDiscordState.Channels.cs.
 
     /// <summary>
     /// Returns the DM channel of a recipient, creating it if none exists, under one lock: a recipient can never
@@ -560,6 +527,7 @@ internal sealed partial class FakeDiscordState
         }
     }
 
+    /// <summary>Lists the channels of a guild by ascending ID, the only tie-break Discord documents (ADR 0013, § 4); not by position.</summary>
     internal StateResult<ImmutableArray<ChannelSnapshot>> ListGuildChannels(StateCaller caller, ulong guildId)
     {
         lock (_gate)
@@ -570,7 +538,7 @@ internal sealed partial class FakeDiscordState
                 return access.Failure;
             }
 
-            return guild.ChannelIds.Select(id => _channels[id].ToSnapshot()).ToImmutableArray();
+            return guild.ChannelIds.Order().Select(id => _channels[id].ToSnapshot()).ToImmutableArray();
         }
     }
 

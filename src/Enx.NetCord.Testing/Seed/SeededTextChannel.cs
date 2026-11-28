@@ -2,7 +2,7 @@ using Enx.NetCord.Testing.State;
 
 namespace Enx.NetCord.Testing;
 
-/// <summary>Identifies a seeded guild text channel and creates message fixtures.</summary>
+/// <summary>Identifies a seeded guild text or announcement channel and creates message fixtures.</summary>
 public sealed class SeededTextChannel
 {
     private readonly FakeDiscord _fake;

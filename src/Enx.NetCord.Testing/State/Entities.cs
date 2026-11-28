@@ -62,12 +62,23 @@ internal sealed class ChannelEntity(ulong id, ChannelKind kind, long ordinal)
     internal ulong? LastMessageId { get; set; }
     internal List<ulong> RecipientIds { get; } = [];
 
+    // The category the channel sits in (ADR 0013, § 2); always null for a category and for a DM.
+    internal ulong? ParentId { get; set; }
+    internal int Flags { get; set; }
+    internal int? DefaultAutoArchiveDuration { get; set; }
+    internal int DefaultThreadRateLimitPerUser { get; set; }
+
+    // Family blocks: Voice is set exactly for the voice family, Forum exactly for the forum family.
+    internal VoiceSettings? Voice { get; set; }
+    internal ForumSettings? Forum { get; set; }
+
     // Message IDs ordered by ID (Discord's ordering), for list queries.
     internal SortedSet<ulong> MessageIds { get; } = [];
 
     internal ChannelSnapshot ToSnapshot() =>
         new(Id, Kind, GuildId, Name, Topic, Position, Nsfw, RateLimitPerUser, LastMessageId,
-            [.. RecipientIds], Snowflake.CreatedAt(Id), Ordinal);
+            [.. RecipientIds], ParentId, Flags, DefaultAutoArchiveDuration, DefaultThreadRateLimitPerUser,
+            Voice, Forum, Snowflake.CreatedAt(Id), Ordinal);
 }
 
 internal sealed class RoleEntity(ulong id, ulong guildId, string name, long ordinal)

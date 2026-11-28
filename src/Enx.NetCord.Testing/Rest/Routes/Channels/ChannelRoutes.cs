@@ -31,8 +31,8 @@ internal static class ChannelRoutes
         var patch = request.GetPayload<ChannelPatch>();
 
         // One state operation checks access and the rules that depend on the channel (type, parent, name) and commits, all under
-        // the state lock (ADR 0005). The fake models no category and only guild text channels, so a type change or a parent is
-        // refused there (hypothesis, see docs/parity/errors.md).
+        // the state lock (ADR 0005). Until M1-REST-02B2 (ADR 0013, § 2 and § 5) a type change or a parent is refused there
+        // (hypothesis, see docs/parity/errors.md); a field the channel's type has no use for is ignored.
         var updated = request.State.UpdateChannel(
             StateCaller.Bot,
             new UpdateChannelInput(
@@ -58,7 +58,7 @@ internal static class ChannelRoutes
     {
         if (channel.GuildId is not null)
         {
-            return RestResult.Ok(ChannelWire.ToGuildChannel(channel), FakeDiscordJsonContext.Default.GuildChannelResponse);
+            return ChannelWire.RenderGuildChannel(channel);
         }
 
         var recipients = channel.RecipientIds

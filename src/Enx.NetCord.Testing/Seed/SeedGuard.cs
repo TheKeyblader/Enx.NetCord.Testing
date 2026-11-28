@@ -35,6 +35,11 @@ internal static class SeedGuard
             StateFailureKind.UnknownRole => $"Role {failure.ResourceId} does not exist in this guild of this fake.",
             StateFailureKind.UnknownMember => $"Member {failure.ResourceId} does not exist in this guild of this fake.",
             StateFailureKind.UnknownMessage => $"Message {failure.ResourceId} does not exist in this fake.",
+            StateFailureKind.InvalidChannelParent => $"Category {failure.ResourceId} does not exist in this guild of this fake (it may have been deleted).",
+            StateFailureKind.ChannelParentNotCategory => $"Channel {failure.ResourceId} is not a category.",
+            StateFailureKind.ChannelCannotHaveParent => $"A category cannot have a parent ({failure.ResourceId}).",
+            StateFailureKind.ChannelParentFull => $"Category {failure.ResourceId} already holds 50 channels.",
+            StateFailureKind.MaxGuildChannels => $"Guild {failure.ResourceId} already has 500 channels.",
             StateFailureKind.MissingAccess => $"The bot cannot access resource {failure.ResourceId}.",
             _ => failure.ToString(),
         };
