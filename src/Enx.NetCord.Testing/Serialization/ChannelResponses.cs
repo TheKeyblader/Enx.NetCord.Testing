@@ -2,6 +2,26 @@ using System.Text.Json.Serialization;
 
 namespace Enx.NetCord.Testing.Serialization;
 
+/// <summary>The Discord <c>ChannelPermissionOverwriteResponse</c>; no overwrite is modeled before M4-REST-05, so the list that carries it is empty.</summary>
+internal sealed class PermissionOverwriteResponse
+{
+    /// <summary>Gets the ID of the role or user the overwrite applies to.</summary>
+    [JsonPropertyName("id")]
+    public required string Id { get; init; }
+
+    /// <summary>Gets the overwrite type: <c>0</c> for a role, <c>1</c> for a member.</summary>
+    [JsonPropertyName("type")]
+    public required int Type { get; init; }
+
+    /// <summary>Gets the allowed permissions, a stringified bitfield.</summary>
+    [JsonPropertyName("allow")]
+    public required string Allow { get; init; }
+
+    /// <summary>Gets the denied permissions, a stringified bitfield.</summary>
+    [JsonPropertyName("deny")]
+    public required string Deny { get; init; }
+}
+
 /// <summary>The Discord <c>GuildChannelResponse</c> (spec schema of <c>get_channel</c>) for a guild text channel.</summary>
 internal sealed class GuildChannelResponse
 {
@@ -49,9 +69,9 @@ internal sealed class GuildChannelResponse
     [JsonPropertyName("position")]
     public required int Position { get; init; }
 
-    /// <summary>Gets the permission overwrites; the fake models none, so the list is empty.</summary>
+    /// <summary>Gets the permission overwrites; the fake models none yet (M4-REST-05), so the list is empty.</summary>
     [JsonPropertyName("permission_overwrites")]
-    public required List<string> PermissionOverwrites { get; init; }
+    public required List<PermissionOverwriteResponse> PermissionOverwrites { get; init; }
 
     /// <summary>Gets whether the channel is age-restricted.</summary>
     [JsonPropertyName("nsfw")]

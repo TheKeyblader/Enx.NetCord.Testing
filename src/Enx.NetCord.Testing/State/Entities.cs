@@ -66,8 +66,8 @@ internal sealed class ChannelEntity(ulong id, ChannelKind kind, long ordinal)
     internal SortedSet<ulong> MessageIds { get; } = [];
 
     internal ChannelSnapshot ToSnapshot() =>
-        new(Id, Kind, GuildId, Name, Topic, Position, Nsfw, LastMessageId,
-            [.. RecipientIds], Snowflake.CreatedAt(Id), Ordinal, RateLimitPerUser);
+        new(Id, Kind, GuildId, Name, Topic, Position, Nsfw, RateLimitPerUser, LastMessageId,
+            [.. RecipientIds], Snowflake.CreatedAt(Id), Ordinal);
 }
 
 internal sealed class RoleEntity(ulong id, ulong guildId, string name, long ordinal)

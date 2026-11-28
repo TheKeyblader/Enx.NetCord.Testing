@@ -67,6 +67,21 @@ public sealed class DeleteChannelTests
 
     [Fact]
     [Parity("DELETE /channels/{channel_id}")]
+    public async Task DeleteChannelAsync_DeletedChannelId_IsNeverReused()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        var general = guild.TextChannel("general");
+        using var rest = discord.CreateRestClient();
+        await rest.DeleteChannelAsync(general.Id, cancellationToken: Ct);
+
+        Assert.Throws<InvalidOperationException>(() => guild.TextChannel("again", general.Id));
+
+        Assert.Null(discord.State.FindChannel(general.Id));
+    }
+
+    [Fact]
+    [Parity("DELETE /channels/{channel_id}")]
     public async Task DeleteChannelAsync_DeletedTwice_Returns404TheSecondTime()
     {
         await using var discord = FakeDiscord.Create();

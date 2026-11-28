@@ -31,7 +31,6 @@ internal sealed record ChannelPatch(
 /// </summary>
 internal static class ChannelValidators
 {
-    internal const int NameMinLength = 1;
     internal const int NameMaxLength = 100;
     internal const int TopicMaxLength = 1024;
     internal const int MaxRateLimitPerUser = 21600;
@@ -46,8 +45,10 @@ internal static class ChannelValidators
         => FormValidation.ValidateRouteSnowflake(request, "channel_id");
 
     /// <summary>
-    /// Validates <c>PATCH /channels/{channel_id}</c> against the guild-channel schema of the spec (<c>UpdateGuildChannelRequestPartial</c>);
-    /// every field is optional. Fields that do not apply to a text channel (bitrate, voice or forum settings…) are accepted and ignored.
+    /// Validates <c>PATCH /channels/{channel_id}</c> structurally, with the guild-channel schema of the spec (<c>UpdateGuildChannelRequestPartial</c>)
+    /// except for <c>name</c> (see below); every field is optional. Fields that do not apply to a text channel (bitrate, voice or forum
+    /// settings…) are accepted and ignored. The other fields of a DM, which has only <c>name</c> (<c>UpdateDMRequestPartial</c>), are
+    /// validated like a guild channel's: a known gap, since the kind is not known here.
     /// </summary>
     /// <param name="request">The request.</param>
     /// <returns>A <see cref="ChannelPatch"/> payload, or <c>50035</c>/<c>50109</c>.</returns>
@@ -69,10 +70,13 @@ internal static class ChannelValidators
             var root = document.RootElement;
             var errors = new FormErrors();
 
-            var name = FormValidation.ReadOptionalString(root, "name", errors);
-            if (name is not null)
+            // The schema depends on the kind of channel, which only the state knows: a DM accepts an empty or null name
+            // (UpdateDMRequestPartial, 0-100), a guild channel needs 1-100. Here: a string of at most 100 (null = not sent,
+            // the message is the guild one); an empty name on a guild channel is refused by the state operation.
+            var name = FormValidation.ReadNullableString(root, "name", errors, out _);
+            if (!string.IsNullOrEmpty(name))
             {
-                FormValidation.CheckLength(name, "name", NameMinLength, NameMaxLength, errors);
+                FormValidation.CheckLength(name, "name", 1, NameMaxLength, errors);
             }
 
             var topic = FormValidation.ReadNullableString(root, "topic", errors, out var changeTopic);

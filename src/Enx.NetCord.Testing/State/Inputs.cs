@@ -37,7 +37,8 @@ internal sealed record CreateTextChannelInput(
 internal sealed record CreateDmChannelInput(ulong RecipientId, ulong? Id = null);
 
 // A partial channel update: null means "unchanged", except for the topic, where a null Topic only clears it
-// when ChangeTopic is set (the wire distinguishes an absent topic from a null one).
+// when ChangeTopic is set (the wire distinguishes an absent topic from a null one). Type and ParentId are requests the
+// state checks under its lock: a type other than the channel's, or any parent, is refused.
 internal sealed record UpdateChannelInput(
     ulong ChannelId,
     string? Name = null,
@@ -45,7 +46,9 @@ internal sealed record UpdateChannelInput(
     string? Topic = null,
     bool? Nsfw = null,
     int? RateLimitPerUser = null,
-    int? Position = null);
+    int? Position = null,
+    int? Type = null,
+    ulong? ParentId = null);
 
 internal sealed record CreateRoleInput(
     ulong GuildId,

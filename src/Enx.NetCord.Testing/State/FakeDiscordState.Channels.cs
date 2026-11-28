@@ -5,10 +5,15 @@ internal sealed partial class FakeDiscordState
     /// <summary>
     /// Applies a partial update to a guild channel. A change is committed (and <see cref="ChannelUpdated"/> published) only when at
     /// least one value actually differs. A DM channel has nothing to update: it is returned as it is, with no change.
+    /// For a guild channel, a type other than its own, any parent and an empty name are refused before anything is written.
     /// </summary>
     /// <param name="caller">The caller; the bot is refused a channel of a guild it is not a member of.</param>
     /// <param name="input">The update.</param>
-    /// <returns>The channel after the update, <see cref="StateFailureKind.UnknownChannel"/> or <see cref="StateFailureKind.MissingAccess"/>.</returns>
+    /// <returns>
+    /// The channel after the update, <see cref="StateFailureKind.UnknownChannel"/>, <see cref="StateFailureKind.MissingAccess"/>,
+    /// <see cref="StateFailureKind.InvalidChannelType"/>, <see cref="StateFailureKind.InvalidChannelParent"/> or
+    /// <see cref="StateFailureKind.InvalidChannelName"/>.
+    /// </returns>
     internal StateResult<ChannelSnapshot> UpdateChannel(StateCaller caller, UpdateChannelInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -24,6 +29,22 @@ internal sealed partial class FakeDiscordState
             var changed = false;
             if (channel.GuildId is not null)
             {
+                // Every refusal comes before the first write: a refused update changes nothing.
+                if (input.Type is { } type && type != (int)channel.Kind)
+                {
+                    return new StateFailure(StateFailureKind.InvalidChannelType, channel.Id);
+                }
+
+                if (input.ParentId is not null)
+                {
+                    return new StateFailure(StateFailureKind.InvalidChannelParent, input.ParentId.Value);
+                }
+
+                if (input.Name is { Length: 0 })
+                {
+                    return new StateFailure(StateFailureKind.InvalidChannelName, channel.Id);
+                }
+
                 if (input.Name is { } name && !string.Equals(channel.Name, name, StringComparison.Ordinal))
                 {
                     channel.Name = name;

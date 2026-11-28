@@ -122,6 +122,20 @@ public sealed class DiscordErrorTests
         Assert.Equal(code, DiscordError.FromStateFailure(new StateFailure((StateFailureKind)kind, 1)).Code);
     }
 
+    [Theory]
+    [InlineData((int)StateFailureKind.InvalidChannelType, "type", "CHANNEL_TYPE_INVALID")]
+    [InlineData((int)StateFailureKind.InvalidChannelParent, "parent_id", "CHANNEL_PARENT_INVALID")]
+    [InlineData((int)StateFailureKind.InvalidChannelName, "name", "BASE_TYPE_BAD_LENGTH")]
+    public void FromStateFailure_ChannelFieldRefusal_MapsTo50035OnTheField(int kind, string field, string fieldCode)
+    {
+        var error = DiscordError.FromStateFailure(new StateFailure((StateFailureKind)kind, 1));
+
+        Assert.Equal((System.Net.HttpStatusCode.BadRequest, 50035), (error.Status, error.Code));
+        using var json = System.Text.Json.JsonDocument.Parse(error.ToJson());
+        var first = json.RootElement.GetProperty("errors").GetProperty(field).GetProperty("_errors")[0];
+        Assert.Equal(fieldCode, first.GetProperty("code").GetString());
+    }
+
     [Fact]
     public void FromStateFailure_KindWithoutACatalogError_IsRejected()
     {

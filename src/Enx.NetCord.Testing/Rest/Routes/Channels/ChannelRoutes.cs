@@ -30,34 +30,9 @@ internal static class ChannelRoutes
     {
         var patch = request.GetPayload<ChannelPatch>();
 
-        // The kind of a channel never changes, so checking it before the update cannot race with another writer.
-        var current = request.State.GetChannel(StateCaller.Bot, patch.ChannelId);
-        if (!current.TryGetValue(out var channel))
-        {
-            return DiscordError.FromStateFailure(current.Failure);
-        }
-
-        if (channel.GuildId is not null)
-        {
-            // The fake models neither categories nor channel types other than guild text, so these can only be refused (hypothesis,
-            // see docs/parity/errors.md): a guild text channel cannot become another type, and no category exists to be its parent.
-            var errors = new FormErrors();
-            if (patch.Type is { } type && type != (int)channel.Kind)
-            {
-                errors.Add("type", "CHANNEL_TYPE_INVALID", "Invalid channel type.");
-            }
-
-            if (patch.ParentId is not null)
-            {
-                errors.Add("parent_id", "CHANNEL_PARENT_INVALID", "Invalid parent channel.");
-            }
-
-            if (!errors.IsEmpty)
-            {
-                return DiscordError.InvalidFormBody(errors);
-            }
-        }
-
+        // One state operation checks access and the rules that depend on the channel (type, parent, name) and commits, all under
+        // the state lock (ADR 0005). The fake models no category and only guild text channels, so a type change or a parent is
+        // refused there (hypothesis, see docs/parity/errors.md).
         var updated = request.State.UpdateChannel(
             StateCaller.Bot,
             new UpdateChannelInput(
@@ -67,7 +42,9 @@ internal static class ChannelRoutes
                 patch.Topic,
                 patch.Nsfw,
                 patch.RateLimitPerUser,
-                patch.Position));
+                patch.Position,
+                patch.Type,
+                patch.ParentId));
         return updated.TryGetValue(out var result) ? Render(request, result) : DiscordError.FromStateFailure(updated.Failure);
     }
 
