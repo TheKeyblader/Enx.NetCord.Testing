@@ -6,4 +6,7 @@ namespace Enx.NetCord.Testing.Serialization;
 [JsonSourceGenerationOptions(GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(ErrorResponse))]
 [JsonSerializable(typeof(RateLimitedResponse))]
+[JsonSerializable(typeof(UserResponse))]
+[JsonSerializable(typeof(CurrentUserResponse))]
+[JsonSerializable(typeof(PrivateChannelResponse))]
 internal sealed partial class FakeDiscordJsonContext : JsonSerializerContext;

@@ -13,7 +13,7 @@ Rate limit (429) : corps `{ "message": "You are being rate limited.", "retry_aft
 (Discord renvoie un flottant ; le 429 injecté par `Intercept` écrit un **entier**, ADR 0005 — les flottants relèvent de M6-02),
 accompagné des en-têtes `Retry-After`, `X-RateLimit-*` et `X-RateLimit-Scope`.
 
-Progression `Fake` : ✅ **4** · 🟡 **9** · ⬜ **29** · ⛔ **0**
+Progression `Fake` : ✅ **5** · 🟡 **10** · ⬜ **28** · ⛔ **0**
 
 ## Statuts HTTP
 
@@ -40,7 +40,7 @@ Progression `Fake` : ✅ **4** · 🟡 **9** · ⬜ **29** · ⛔ **0**
 | `10007` | Unknown Member | `/guilds/{id}/members/{user_id}` | ⬜ | ⬜ | |
 | `10008` | Unknown Message | `/channels/{id}/messages/{id}` | 🟡 | ✅ | fabrique testée via un handler factice ; vrai handler en M1-REST-03 |
 | `10011` | Unknown Role | rôles | ⬜ | ⬜ | |
-| `10013` | Unknown User | `/users/{id}` | ⬜ | ⬜ | |
+| `10013` | Unknown User | `/users/{id}`, `recipient_id` d'un DM | ✅ | ✅ | `GET /users/{user_id}` et `POST /users/@me/channels` (M1-REST-01), via le vrai `RestClient` |
 | `10014` | Unknown Emoji | réactions, emojis | ⬜ | ⬜ | |
 | `10015` | Unknown Webhook | webhooks, followups avant callback | ⬜ | ⬜ | |
 | `10026` | Unknown Ban | `GET/DELETE /guilds/{id}/bans/{user_id}` | ⬜ | ⬜ | |
@@ -59,10 +59,11 @@ Progression `Fake` : ✅ **4** · 🟡 **9** · ⬜ **29** · ⛔ **0**
 | `50007` | Cannot send messages to this user | DM refusé (option du seed) | ⬜ | ⬜ | |
 | `50008` | Cannot send messages in a non-text channel | voix/catégorie | ⬜ | ⬜ | |
 | `50013` | Missing Permissions | permission calculée insuffisante | 🟡 | ✅ | injecté via `Intercept(403, 50013)` : ne prouve pas un calcul de permission ; dépend de M4-REST-05 |
+| `50025` | Invalid OAuth2 access token provided | `POST /users/@me/channels` avec `access_tokens` (group DM) | 🟡 | ✅ | le fake n'a aucun grant OAuth2 : tout jeton est refusé. **Statut HTTP 401 non vérifié** (la doc ne donne que le code JSON) ; à confirmer si un group DM simulé est un jour modélisé (M1-REST-01) |
 | `50024` | Cannot execute action on this channel type | ex. thread sur DM | ⬜ | ⬜ | |
 | `50027` | Invalid Webhook Token | token d'interaction expiré | ⬜ | ⬜ | |
-| `50035` | Invalid Form Body | validation (arbre `errors`) | 🟡 | ✅ | arbre `errors` (objets par propriété/indice décimal, `_errors` à la feuille, pas d'`errors: null`) lu par NetCord ; validateur et handler factices seulement (un 50035 de validateur ne consomme pas de règle `Intercept`), vrais validateurs en M1-REST-03 ; codes de champ `BASE_TYPE_*` |
+| `50035` | Invalid Form Body | validation (arbre `errors`) | 🟡 | ✅ | produit par les vrais validateurs des routes `/users` (M1-REST-01 : `BASE_TYPE_BAD_LENGTH`, `BASE_TYPE_BAD_TYPE`, `BASE_TYPE_REQUIRED`, `NUMBER_TYPE_COERCE`, `IMAGE_INVALID`, `MODEL_TYPE_CONVERT`) ; arbre `errors` (objets par propriété/indice décimal, `_errors` à la feuille, pas d'`errors: null`) lu par NetCord ; testé aussi avec un validateur factice (un 50035 de validateur ne consomme pas de règle `Intercept`), autres familles en M1-REST ; codes de champ `BASE_TYPE_*` |
 | `50083` | Operation on archived thread | threads archivés | ⬜ | ⬜ | |
-| `50109` | The request body contains invalid JSON. | corps JSON syntaxiquement invalide | 🟡 | ✅ | produit par `RestRequestBody.TryParseJson` (aide partagée des handlers), testé via un validateur factice (n'arme ni ne consomme de règle `Intercept`) ; à brancher dans les vrais validateurs (M1-REST) |
+| `50109` | The request body contains invalid JSON. | corps JSON syntaxiquement invalide | 🟡 | ✅ | produit par `RestRequestBody.TryParseJson` (aide partagée des handlers), testé via un validateur factice (n'arme ni ne consomme de règle `Intercept`) ; branché dans les validateurs `/users` (M1-REST-01), à brancher dans les autres familles |
 | `160004` | Thread already created for this message | `POST /channels/{id}/messages/{id}/threads` | ⬜ | ⬜ | |
 | `220001` | Forum webhook needs `thread_name`/`thread_id` | webhooks forum | ⬜ | ⬜ | |

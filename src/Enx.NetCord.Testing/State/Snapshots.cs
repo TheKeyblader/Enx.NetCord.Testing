@@ -18,6 +18,7 @@ internal sealed record UserSnapshot(
     string Username,
     string? GlobalName,
     string? AvatarHash,
+    string? BannerHash,
     bool IsBot,
     DateTimeOffset CreatedAt,
     long Ordinal);
