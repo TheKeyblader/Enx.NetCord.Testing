@@ -5,6 +5,8 @@
 - **Auteur** : agent `architect`
 - **Tâches liées** : M1-ADR-04C, M1-REST-01, M1-REST-02, M1-REST-02C, M1-REST-04B, M1-REST-05,
   M2-01, M2-13, M3-ADR-09, M3-03 ; proposées : M1-REST-02C1, M1-REST-02C2, PAR-REST-05
+- **Points utilisateur** (`docs/user-review.md`) : UR-020 (seed des salons privés), UR-021
+  (périmètre sans OAuth2, départ du bot), UR-022 (test manuel du lot D) ; UR-003 pour `50007`
 
 > **Une ADR, pas un amendement « 04C ».** La tâche garde son ID de roadmap, `M1-ADR-04C`. La
 > décision touche à parts égales le seed de l'[ADR 0004](0004-fake-discord-public-api.md), le
@@ -19,6 +21,8 @@ Le fake connaît un seul salon privé, le DM 1:1 (`ChannelKind.Dm`), et seulemen
 
 - `POST /users/@me/channels` le crée ou le retrouve (`State/FakeDiscordState.cs:469-504`,
   `GetOrCreateDmChannel`). `RecipientIds` y contient **l'autre partie** ; le bot est implicite.
+  Rien n'y refuse pourtant le bot lui-même : `{"recipient_id": "<bot>"}` crée aujourd'hui un DM
+  dont `RecipientIds` vaut `[bot]` (`Rest/Routes/Users/UserValidators.cs:114-118`).
 - Le même `POST` avec `access_tokens` rend 403 `50025` : le fake n'a aucun grant OAuth2
   (`Rest/Routes/Users/UserRoutes.cs:43-51`). Un group DM (type 3) ne peut donc pas exister, et
   l'[ADR 0013](0013-channel-hierarchy-and-types.md), § 1, renvoie ce type à M1-REST-02C.
@@ -56,10 +60,12 @@ Sources épinglées : `discord-api-docs` @ `62ab2d50`, `discord-api-spec` @ `654
   `50033` « Invalid Recipient(s) ». Aucune page ne dit quelle route rend lequel, ni avec quel
   statut.
 - **Gateway** (`developers/events/gateway-events.mdx:572-584`, `gateway.mdx:313-335,390-394`) :
-  `CHANNEL_CREATE` est « sent when a new **guild** channel is created » ; `CHANNEL_UPDATE` et
-  `CHANNEL_DELETE` ne précisent pas. Les trois ne figurent que sous l'intent `GUILDS` ;
-  `DIRECT_MESSAGES` porte les messages et `CHANNEL_PINS_UPDATE`. Aucun `CHANNEL_RECIPIENT_ADD`
-  ni `CHANNEL_RECIPIENT_REMOVE` dans les docs épinglées, et `READY` ne liste aucun salon privé.
+  `CHANNEL_CREATE` est « sent when a new **guild** channel is created, relevant to the current
+  user » ; `CHANNEL_UPDATE`, « when a channel is updated », sans autre précision ;
+  `CHANNEL_DELETE`, « when a channel relevant to the current user is deleted » (l. 584). Les
+  trois ne figurent que sous l'intent `GUILDS` (`gateway.mdx:320-322`) ; `DIRECT_MESSAGES` porte
+  les messages et `CHANNEL_PINS_UPDATE`. Aucun `CHANNEL_RECIPIENT_ADD` ni
+  `CHANNEL_RECIPIENT_REMOVE` dans les docs épinglées, et `READY` ne liste aucun salon privé.
 
 **Contradictions et silences.**
 
@@ -89,8 +95,10 @@ Sources épinglées : `discord-api-docs` @ `62ab2d50`, `discord-api-spec` @ `654
   pas retirer une icône.
 - Gateway (`NetCord/Gateway/GatewayClient.cs:1184-1203`) : `CHANNEL_CREATE`, `CHANNEL_UPDATE` et
   `CHANNEL_DELETE` passent tous par `IGuildChannel.CreateFromJson`. Un group DM y devient un
-  `UnknownGuildChannel` de guilde `0`, remis aux events `GuildChannel…`, sans toucher au cache
-  (`ImmutableGatewayClientCache.cs:207-221`). `CHANNEL_RECIPIENT_*` tomberait dans `UnknownEvent`.
+  `UnknownGuildChannel` de guilde `0`, remis aux events `GuildChannel…`, sans toucher au cache :
+  ni `CacheGuildChannel` (`ImmutableGatewayClientCache.cs:207-221`) pour la création et la
+  modification, ni `RemoveGuildChannel` (l. 408-423) pour `CHANNEL_DELETE`, ne trouvent la
+  guilde `0`. `CHANNEL_RECIPIENT_*` tomberait dans `UnknownEvent`.
 
 **fauxcord** crée un group DM dès que `access_tokens` est présent, sans résoudre les jetons : le
 bot en est le seul destinataire (`src/services/channels.ts:593-606`). Il rend `icon: null` et un
@@ -141,7 +149,8 @@ messages), plus un bloc `Group` présent si et seulement si le type est 3.
 | `Group.Managed` | — | créé par `gdm.join` | `true` |
 
 - **`RecipientIds` garde son sens actuel** : ce que le champ `recipients` montre au bot. Le bot
-  n'y figure jamais ; sa présence est l'invariant 2 du § 2, pas une donnée.
+  n'y figure jamais : sa présence est l'invariant 2 du § 2, pas une donnée, et l'invariant 3
+  ferme le seul chemin qui l'y mettait, le DM avec soi-même.
 - **Propriétaire, application, `managed` sont stockés, pas déduits.** Le seul group DM qu'un bot
   peut voir est celui que son application a créé par `gdm.join` : ces trois valeurs sont donc
   fixées à la création. Les stocker garde la projection JSON sans lien avec l'identité du bot, et
@@ -172,7 +181,9 @@ internal sealed partial class FakeDiscordState
     // No StateCaller: it receives no guild or channel ID, and the seed is its only caller.
     internal StateResult<ChannelSnapshot> CreateGroupDmChannel(CreateGroupDmChannelInput input);
     internal StateResult<ChannelSnapshot> RemoveGroupDmRecipient(StateCaller caller, ulong channelId, ulong userId);
-    // UpdateChannel: UpdateChannelInput gains ChangeIcon and IconHash. DeleteChannel: leaves a group DM (§ 4).
+    // GetOrCreateDmChannel: refuses the bot as the recipient (§ 2, invariant 3).
+    // UpdateChannel: UpdateChannelInput gains ChangeIcon, IconHash and IconInvalid (§ 4).
+    // DeleteChannel: leaves a group DM (§ 4).
 }
 ```
 
@@ -188,26 +199,43 @@ une forme que Discord ne peut pas avoir.
    déjà (« the other party is implicitly the bot »). Créer un group DM, dont le bot est
    propriétaire, demande une identité de bot (`InvalidOperationException` sinon, comme
    `CreateGuildInput.WithBot`). Quand le bot quitte un group DM, le salon **sort de l'état** (§ 4).
-3. **Destinataires.** Des utilisateurs existants, distincts, dont aucun n'est le bot. Au moins un
-   à la création, au plus **neuf** : dix participants avec le bot (`30004`). Des retraits peuvent
-   ensuite laisser le bot seul.
+3. **Destinataires.** Des utilisateurs existants, distincts, dont **aucun n'est le bot**, dans un
+   DM comme dans un group DM.
+   - *DM.* L'état refuse le bot comme destinataire de son propre DM, pour tout appelant. C'est
+     un changement : `GetOrCreateDmChannel` l'accepte aujourd'hui (Contexte). Le refus est un
+     nouveau `StateFailureKind`, `CannotMessageUser`, rendu en 403 `50007` par
+     `POST /users/@me/channels` (hypothèse d'UR-003 : « DM vers soi-même ou un bot ⇒ `50007` » ;
+     le statut 403 est aussi une hypothèse). Dans l'opération, il vient après `UnknownUser`,
+     dont il est exclusif : le bot est un utilisateur connu. Un état sans identité de bot n'a
+     rien à refuser. Un **autre** bot n'est pas concerné : UR-003 dira si Discord le refuse aussi.
+   - *Group DM.* Au moins un destinataire à la création, au plus **neuf** : dix participants
+     avec le bot (`30004`). Des retraits peuvent ensuite laisser le bot seul.
 4. **Dix group DM au plus** à la fois (`user.mdx:349`, `30011`). Un groupe quitté ne compte plus.
-5. **Nom** : `null`, ou 1 à 100 points de code.
+5. **Nom** : `null`, ou 1 à 100 points de code Unicode, l'unité de `IsValidChannelName` pour les
+   salons de guilde. C'est l'unité de toute longueur de nom dans cette ADR.
 6. **Seuls les participants agissent.** L'auteur d'un message et l'utilisateur d'une réaction,
    dans un salon privé, sont le bot ou l'un de ses destinataires actuels. Un salon de guilde ne
    l'exige pas, un membre parti y gardant ses messages ; un DM, lui, est défini par ses parties.
 
-| Faute | Invariant | Dans l'état | Au seed |
-| --- | --- | --- | --- |
-| Liste de destinataires qui ne décrit pas un groupe : vide, plus de neuf, doublon, le bot | 3 | `ArgumentException`, comme un ID explicite nul | `ArgumentException` |
-| Destinataire inconnu | 3 | `UnknownUser` (existant) | `InvalidOperationException` |
-| Onzième group DM | 4 | `MaxGroupDms` (nouveau) | `InvalidOperationException` |
-| Auteur ou utilisateur hors du salon | 6 | `NotChannelRecipient` (nouveau) | `InvalidOperationException` |
+| Faute | Invariant | Dans l'état | Par REST | Au seed |
+| --- | --- | --- | --- | --- |
+| Le bot comme destinataire d'un DM | 3 | `CannotMessageUser` (nouveau) | 403 `50007` | `ArgumentException` |
+| Liste de destinataires qui ne décrit pas un groupe : vide, plus de neuf, doublon, le bot | 3 | `ArgumentException`, levée avant toute écriture | inatteignable | `ArgumentException` |
+| Destinataire inconnu | 3 | `UnknownUser` (existant) | 404 `10013` (DM) | `InvalidOperationException` |
+| Onzième group DM | 4 | `MaxGroupDms` (nouveau) | inatteignable | `InvalidOperationException` |
+| Auteur ou utilisateur hors du salon | 6 | `NotChannelRecipient` (nouveau) | inatteignable | `InvalidOperationException` |
 
-Aucun des deux nouveaux refus n'est atteignable par REST en v1 : la création et l'ajout d'un
-destinataire s'arrêtent à `50025` (§ 4), et le bot est toujours participant. Ils n'ont donc pas
-encore de fabrique `DiscordError`, et `30004` et `30011`, que le fake ne produit pas, n'ont pas
-de ligne à recevoir dans `errors.md`.
+- **Un refus d'état pour le DM, une exception pour le groupe.** Le DM avec soi-même est une
+  requête qu'un bot peut envoyer : il lui faut un `StateFailure` et son erreur Discord. La liste
+  d'un group DM ne vient que du test : une liste mal formée est une faute d'argument, que
+  l'opération lève avant toute écriture, comme `ValidateExplicitId` lève une
+  `ArgumentOutOfRangeException` pour un ID explicite nul (`State/FakeDiscordState.cs:126-132`).
+- **Le seed lève `ArgumentException` sans passer par l'état** pour le bot destinataire d'un DM :
+  la faute se lit dans l'argument, le fake connaissant son `ApplicationId`.
+- `MaxGroupDms` et `NotChannelRecipient` ne sont pas atteignables par REST en v1 : la création
+  et l'ajout d'un destinataire s'arrêtent à `50025` (§ 4), et le bot est toujours participant.
+  Ils n'ont donc pas encore de fabrique `DiscordError`, et `30004` et `30011`, que le fake ne
+  produit pas, n'ont pas de ligne à recevoir dans `errors.md`.
 
 ### 3. Seed
 
@@ -218,6 +246,7 @@ facultatif, échec avant commit.
   d'état que la route : un utilisateur n'a jamais deux DM. Un second appel rend une poignée sur
   le même salon, et `GetDMChannelAsync` le retrouve. Avec un `id` explicite qui diffère de celui
   d'un DM déjà ouvert, l'appel lève `InvalidOperationException` au lieu d'ignorer l'argument.
+  Le bot lui-même n'est pas un destinataire (`ArgumentException`, invariant 3).
 - **`Seed.GroupDMChannel(recipients, name)`** crée un group DM dont le bot est propriétaire. Les
   destinataires viennent en premier : ils définissent le groupe, alors que le nom est souvent
   absent.
@@ -231,7 +260,11 @@ facultatif, échec avant commit.
   `Reaction` lèvent `InvalidOperationException`, comme sur un salon de guilde supprimé.
 
 **Hors du seed en v1** : icône (par `ModifyGroupDMChannelAsync`), `nicks`, ajout ou retrait d'un
-destinataire après coup, group DM sans le bot, DM refusé par l'utilisateur (`50007`, UR-003).
+destinataire après coup, group DM sans le bot, option « DM refusé » d'un utilisateur ordinaire
+(l'autre cas de `50007`, UR-003).
+
+Les choix d'ergonomie de cette section (noms, poignée unique, ordre des paramètres, pas de
+`withBot`, contrôle des participants) sont soumis à l'utilisateur par **UR-020**.
 
 **Rejeté :**
 
@@ -263,33 +296,67 @@ invitations, permissions) lui répondent comme à un DM. Le tableau ne liste que
 | `PUT /channels/{channel_id}/recipients/{user_id}` | toujours refusé : 403 `50025` | hypothèse (statut : UR-003) |
 | `DELETE /channels/{channel_id}/recipients/{user_id}` | 204 ; destinataire retiré, `ChannelRecipientRemoved` | spec ; détails : hypothèse |
 | `POST /users/@me/channels` avec `access_tokens` | inchangé : 403 `50025` | M1-REST-01 |
+| `POST /users/@me/channels` avec `recipient_id` = le bot | **nouveau** : 403 `50007`, aucun DM créé (§ 2, invariant 3) | hypothèse (UR-003) |
 | `GET /guilds/{guild_id}/channels` | n'en liste aucun | `guild.mdx:884-891` |
 
-- **`PATCH`.** L'étape structurelle ne connaît pas le type du salon : elle valide `icon` pour
-  tout salon (chaîne ou `null`, `IMAGE_INVALID` sinon, comme `avatar` de `PATCH /users/@me`),
-  et l'état ne l'applique qu'à un group DM. C'est la règle de l'ADR 0013 pour un champ hors de sa
-  famille ; à l'inverse, `topic`, `position` et les autres champs de guilde sont ignorés ici.
+- **`POST /users/@me/channels`, ordre des refus.** Étape structurelle (`50109`, `50035`) ; group
+  DM demandé ⇒ `50025` ; puis l'état : `10013` pour un destinataire inconnu, `50007` pour le bot
+  lui-même ; sinon le DM est créé ou retrouvé.
+- **`PATCH`.** `topic`, `position` et les autres champs de guilde sont validés par l'étape
+  structurelle, puis ignorés pour un group DM (règle de l'ADR 0013).
 
   | Champ | Absent | `null` | Valeur |
   | --- | --- | --- | --- |
-  | `name` | inchangé | inchangé | `""` efface le nom ; 1-100 le remplace ; plus de 100 ⇒ `50035` structurel |
-  | `icon` | inchangé | retire l'icône | image en *data URI* ⇒ hash dérivé comme pour un avatar |
+  | `name` | inchangé | inchangé | `""` efface le nom ; 1 à 100 points de code le remplacent ; plus de 100 ⇒ `50035` structurel |
+  | `icon` | inchangé | retire l'icône | image en *data URI* ⇒ hash dérivé comme pour un avatar ; toute autre valeur ⇒ `50035` |
 
   `name: null` suit le choix de M1-REST-02B2 (« `null` = inchangé »). NetCord ne peut envoyer ni
   ce `null` ni `icon: null` : le test de route construit ces requêtes à la main.
   Le `PATCH` d'un DM 1:1 reste sans effet (UR-004).
+- **`icon` est jugée par l'état, pas par l'étape structurelle.** Ce champ n'appartient qu'au
+  schéma du group DM (`UpdateGroupDMRequestPartial`), et l'étape structurelle ne connaît pas le
+  type du salon. Elle **lit sans refuser** : absente, `null`, image valide (hash dérivé par
+  `ImageData`, comme pour `avatar`) ou **invalide**, c'est-à-dire toute valeur qui n'est ni
+  `null` ni une image en *data URI*. L'état tranche sous le verrou, sans décoder d'image :
+  - sur un group DM, une icône invalide est refusée avant toute écriture : `InvalidChannelIcon`
+    (nouveau `StateFailureKind`), 400 `50035`, `icon` : `IMAGE_INVALID` « Invalid image data », le
+    code de champ d'`avatar` ;
+  - sur tout autre salon, DM 1:1 compris, la clé est ignorée, valide ou non.
+
+  C'est le traitement de `name` vide, que l'étape structurelle laisse passer et que seul l'état
+  refuse, pour un salon de guilde seulement.
+
+  *Rejeté :* valider `icon` à l'étape structurelle, pour tout salon. Un `PATCH` de salon de
+  guilde avec une `icon` mal formée rendrait alors `50035`, pour un champ que son schéma
+  (`UpdateGuildChannelRequestPartial`) ne déclare pas. La règle de l'ADR 0013, « validé avec le
+  schéma commun, puis ignoré », vaut pour les champs de ce schéma, pas pour un champ qui lui est
+  étranger. Prix du choix retenu : un `StateFailureKind` et un indicateur de plus, et un refus
+  qui arrive après `Intercept` sans se réunir avec les erreurs structurelles dans un même arbre
+  `errors` (limite déjà connue des refus d'état, UR-004 point 5).
 - **`DELETE` du salon.** Le DM 1:1 se « ferme » sans rien changer ; le group DM, lui, est quitté
   pour de bon, et le fake n'offre aucun moyen d'y revenir. Le salon part comme un salon de
   guilde supprimé : ses messages avec lui, sans fait par message, son ID jamais réutilisé.
-- **`PUT` d'un destinataire.** Dans l'ordre : accès au salon par le helper (404 `10003`, ou 403
-  `50001` pour un salon d'une guilde sans le bot) ; salon qui n'est pas un group DM ⇒ 400
-  `50024` ; utilisateur inconnu ⇒ 404 `10013` ; puis 403 `50025`, quel que soit `access_token`,
-  absent compris. Aucun jeton ne peut être valide sans grant OAuth2. La ligne de parité restera
-  🟡 : le succès n'est pas simulable.
-- **`DELETE` d'un destinataire.** Même accès, même `50024` hors d'un group DM. `user_id` qui
-  n'est pas destinataire, inconnu compris ⇒ 204, rien n'est écrit. `user_id` = le bot ⇒ 204, et
-  le bot quitte le groupe comme par `DELETE /channels/{channel_id}`. Les messages du
-  destinataire retiré restent.
+- **`PUT` d'un destinataire.** Dans l'ordre du pipeline de l'ADR 0005 :
+  1. **Étape structurelle**, avant tout accès à l'état. `channel_id` et `user_id` sont des
+     Snowflakes (`50035`, `NUMBER_TYPE_COERCE`). Le corps est requis par la spec
+     (`openapi.json:4487`) : **absent** ou non JSON ⇒ 400 `50109`, la réponse de
+     `FormValidation.TryReadJsonObject` pour toute route à corps ; JSON qui n'est pas un objet ⇒
+     `50035` `MODEL_TYPE_CONVERT`. `access_token` et `nick` sont chacun une chaîne d'au plus
+     152 133 caractères, `null` ou absents (`50035`, `BASE_TYPE_BAD_TYPE` ou
+     `BASE_TYPE_BAD_LENGTH`). Un objet vide `{}` est donc bien formé.
+  2. Accès au salon par le helper : 404 `10003`, ou 403 `50001` pour un salon d'une guilde sans
+     le bot.
+  3. Salon qui n'est pas un group DM ⇒ 400 `50024`.
+  4. Utilisateur inconnu ⇒ 404 `10013`.
+  5. 403 `50025`, quel que soit `access_token`, `null` ou absent compris : aucun jeton ne peut
+     être valide sans grant OAuth2.
+
+  La ligne de parité restera 🟡 : le succès n'est pas simulable (UR-021).
+- **`DELETE` d'un destinataire.** Pas de corps : l'étape structurelle ne contrôle que les deux
+  Snowflakes de la route. Puis même accès, même `50024` hors d'un group DM. `user_id` qui n'est
+  pas destinataire, inconnu compris ⇒ 204, rien n'est écrit. `user_id` = le bot ⇒ 204, et le bot
+  quitte le groupe comme par `DELETE /channels/{channel_id}`. Les messages du destinataire
+  retiré restent.
 - **Interactions.** `Seed.DMChannel(alice).Id` est le salon qu'attend l'ADR 0007 pour une
   interaction en DM. Une requête qui vise un group DM lève `InvalidOperationException` : son
   `context` (`BOT_DM` ou `PRIVATE_CHANNEL`) dépend du modèle d'installation de `M2-13`.
@@ -300,27 +367,33 @@ rejoint et se teste ; un group DM quitté n'a plus aucun usage. Le drapeau deman
 d'accès, un filtre de dispatch et un fait de plus, pour ne changer qu'un code d'erreur que les
 sources ne donnent pas. Si Discord rend `50001` (lot D), une liste des groupes quittés suffira.
 
+Le périmètre sans OAuth2 et le départ définitif du bot sont soumis à l'utilisateur par **UR-021**.
+
 ### 5. Faits et dispatchs attendus
 
-Les faits sont décidés ici. Leur traduction est celle que M3-03 devra implémenter ; l'intent et
-la barrière de livraison relèvent de M3-ADR-09. Shard `0`, comme tout salon sans guilde.
+Les faits sont décidés ici. Leur traduction est celle que M3-03 devra implémenter ; la barrière
+de livraison relève de M3-ADR-09. Shard `0`, comme tout salon sans guilde.
 
-| Mutation | Fait | Dispatch attendu |
-| --- | --- | --- |
-| `Seed.GroupDMChannel` | `ChannelCreated` | `CHANNEL_CREATE` (`user.mdx:346`) |
-| `PATCH` : `name`, `icon` | `ChannelUpdated` si une valeur change | `CHANNEL_UPDATE` (`channel.mdx:412`) |
-| Le bot quitte le groupe | `ChannelDeleted`, salon tel qu'il était | `CHANNEL_DELETE` (hypothèse) |
-| Retrait d'un autre destinataire | `ChannelRecipientRemoved` | **aucun** |
-| `Seed.DMChannel`, premier appel | `ChannelCreated` | aucun (inchangé : M3-03 l'ignore pour un DM) |
-| Message, réaction | faits existants, `GuildId` nul | ceux d'un DM, intents `DIRECT_MESSAGES` et `DIRECT_MESSAGE_REACTIONS` |
+| Mutation | Fait | Dispatch attendu | Intent |
+| --- | --- | --- | --- |
+| `Seed.GroupDMChannel` | `ChannelCreated` | `CHANNEL_CREATE` (`user.mdx:346`) | `GUILDS` |
+| `PATCH` : `name`, `icon` | `ChannelUpdated` si une valeur change | `CHANNEL_UPDATE` (`channel.mdx:412`) | `GUILDS` |
+| Le bot quitte le groupe | `ChannelDeleted`, salon tel qu'il était | `CHANNEL_DELETE` (hypothèse) | `GUILDS` |
+| Retrait d'un autre destinataire | `ChannelRecipientRemoved` | **aucun** | — |
+| `Seed.DMChannel`, premier appel | `ChannelCreated` | aucun (inchangé : M3-03 l'ignore pour un DM) | — |
+| Message, réaction | faits existants, `GuildId` nul | ceux d'un DM | `DIRECT_MESSAGES`, `DIRECT_MESSAGE_REACTIONS` |
 
 - **Un fait propre au retrait**, plutôt que `ChannelUpdated` : M3-03 traduit `ChannelUpdated` en
   `CHANNEL_UPDATE`, que Discord n'annonce pas pour un changement de destinataires. Le fait existe
   pour qu'un `CHANNEL_RECIPIENT_REMOVE` puisse en être tiré si Discord le documente un jour.
 - **Pas de `ChannelRecipientAdded`** : aucune opération n'ajoute un destinataire après la création.
-- **Intent** : les docs ne rangent `CHANNEL_CREATE`, `CHANNEL_UPDATE` et `CHANNEL_DELETE` que sous
-  `GUILDS`. Hypothèse recommandée à M3-ADR-09 : `DIRECT_MESSAGES` pour un salon sans guilde,
-  par analogie avec `CHANNEL_PINS_UPDATE`, rangé sous les deux intents (`gateway.mdx:323,394`).
+- **Intent : `GUILDS`, comme le disent les docs.** `CHANNEL_CREATE`, `CHANNEL_UPDATE` et
+  `CHANNEL_DELETE` ne figurent que sous cet intent (`gateway.mdx:320-322`), sans exception pour
+  un salon sans guilde : le fake les conditionne donc à `GUILDS`, group DM compris.
+  *Alternative non retenue :* `DIRECT_MESSAGES`, par analogie avec `CHANNEL_PINS_UPDATE`, que
+  les docs rangent sous les deux intents (`gateway.mdx:323,394`) selon que le salon a une guilde
+  ou non. L'analogie est plausible, mais aucune source ne l'étend à ces trois events. La
+  question est au lot D ; la changer revient à changer une ligne de la table d'intents de M3-03.
 - **Côté NetCord**, ces trois dispatchs arrivent par `GuildChannelCreate`, `GuildChannelUpdate`
   et `GuildChannelDelete` avec un `UnknownGuildChannel` de guilde `0`. C'est ce que NetCord fait
   du payload de Discord ; le fake n'y adapte rien.
@@ -354,25 +427,31 @@ d'un group DM porte le même DTO, sans `guild_id`.
 ### Hypothèses à confirmer (lot D)
 
 Les sources ne tranchent pas ces points. Le fake implémente la réponse indiquée ; les lignes de
-parité restent 🟡 « à confirmer » tant que le test manuel n'a pas été fait (`PAR-REST-05`). Ce
-test demande un parcours OAuth2 `gdm.join` avec au moins un compte utilisateur : il est coûteux,
-et l'utilisateur peut choisir de laisser ces lignes à 🟡.
+parité restent 🟡 « à confirmer (UR-022) » tant que le test manuel **UR-022** n'a pas été fait
+(tâche `PAR-REST-05`). Ce test demande un parcours OAuth2 `gdm.join` avec au moins un compte
+utilisateur : il est coûteux, et l'utilisateur peut choisir de laisser ces lignes à 🟡.
 
 - **Objet** : `owner_id` = le bot, `managed: true`, `application_id` = l'application ;
   `recipients` sans le bot ; `name: null` pour un groupe sans nom.
 - **Limites** : dix participants **bot compris** ; dix group DM « actifs » = dix groupes dont le
   bot fait partie.
 - **`PATCH`** : `name: ""` efface le nom, `name: null` ne change rien, `icon: null` retire
-  l'icône ; les champs de guilde sont ignorés.
+  l'icône ; une icône invalide ⇒ `50035` `IMAGE_INVALID` sur un group DM, ignorée sur un salon
+  de guilde ; les champs de guilde sont ignorés.
 - **`DELETE` du salon** : le bot quitte le groupe ; réponse 200 avec le salon ; accès ultérieur
   ⇒ 404 `10003` (et non 403 `50001`).
-- **Destinataires** : `50024` hors d'un group DM (fauxcord), `10013` au `PUT` d'un inconnu,
-  `50025` pour un jeton invalide ou absent, et l'ordre de ces refus ; `DELETE` d'un
-  non-destinataire en 204 ; `DELETE` du bot lui-même = départ.
-- **Gateway** : `CHANNEL_CREATE`, `CHANNEL_UPDATE` et `CHANNEL_DELETE` pour un group DM, et
-  l'intent qui les conditionne ; aucun dispatch au retrait d'un destinataire.
+- **Destinataires** : corps absent du `PUT` ⇒ `50109` ; `50024` hors d'un group DM (fauxcord),
+  `10013` au `PUT` d'un inconnu, `50025` pour un jeton invalide, `null` ou absent, et l'ordre de
+  ces refus (structurel, accès, type, utilisateur, jeton) ; `DELETE` d'un non-destinataire en
+  204 ; `DELETE` du bot lui-même = départ.
+- **Gateway** : `CHANNEL_CREATE`, `CHANNEL_UPDATE` et `CHANNEL_DELETE` sont-ils envoyés pour un
+  group DM ? Sous quel intent : `GUILDS` (défaut du fake, lecture des docs) ou `DIRECT_MESSAGES`
+  (alternative du § 5) ? Aucun dispatch au retrait d'un destinataire.
 - **Message d'autrui** : `50003` à sa suppression dans un group DM dont le bot est propriétaire
   (même hypothèse que pour le DM, UR-011).
+
+Hors de ce lot : le `50007` du DM avec soi-même (§ 2, invariant 3) relève d'**UR-003**, qui le
+teste déjà et ne demande pas OAuth2.
 
 ## API publique proposée
 
@@ -390,7 +469,7 @@ public sealed class DiscordSeed
 
     /// <summary>Creates a group DM owned by the bot and returns its handle.</summary>
     /// <param name="recipients">One to nine distinct users of this fake, other than the bot.</param>
-    /// <param name="name">The group name (1-100 characters), or <see langword="null"/> for an unnamed group.</param>
+    /// <param name="name">The group name (1 to 100 Unicode code points), or <see langword="null"/> for an unnamed group.</param>
     /// <param name="id">An explicit nonzero ID, or <see langword="null"/> to allocate one.</param>
     public SeededDMChannel GroupDMChannel(IEnumerable<ulong> recipients, string? name = null, ulong? id = null);
 }
@@ -414,7 +493,7 @@ Constructeurs non publics. Exceptions :
 | --- | --- | --- | --- |
 | `ArgumentNullException` | — | `recipients` | `content`, `emoji` |
 | `ArgumentException` | `userId` est le bot | aucun destinataire, plus de neuf, doublon, le bot | `emoji` mal formé |
-| `ArgumentOutOfRangeException` | `id` nul | `id` nul ; `name` vide ou de plus de 100 caractères | `id` nul |
+| `ArgumentOutOfRangeException` | `id` nul | `id` nul ; `name` vide ou de plus de 100 points de code | `id` nul |
 | `InvalidOperationException` | utilisateur inconnu ; ID déjà attribué ; `id` différent de celui du DM déjà ouvert | utilisateur inconnu ; ID déjà attribué ; dix group DM existent | salon disparu ; auteur ou utilisateur qui n'en est pas participant ; message inconnu ; ID déjà attribué |
 | `ObjectDisposedException` | fake disposé | fake disposé | fake disposé |
 
@@ -438,6 +517,16 @@ async Task SeedDMChannel_UserMessageAndReaction_AreReadByTheBot()
     Assert.Equal(dm.Id, discord.Seed.DMChannel(alice).Id);                        // one DM per user
     var carol = discord.Seed.User("carol");
     Assert.Throws<InvalidOperationException>(() => dm.Message("intruder", carol)); // not a party of this DM
+}
+
+async Task DMChannel_WithTheBotItself_IsRefused()
+{
+    await using var discord = FakeDiscord.Create();
+    using var rest = discord.CreateRestClient();
+
+    Assert.Throws<ArgumentException>(() => discord.Seed.DMChannel(discord.ApplicationId));
+    var refused = await Assert.ThrowsAsync<RestException>(() => rest.GetDMChannelAsync(discord.ApplicationId));
+    Assert.Equal((HttpStatusCode.Forbidden, 50007), (refused.StatusCode, refused.Error!.Code));
 }
 
 async Task SeedGroupDMChannel_IsReadAndRenamed()
@@ -505,48 +594,72 @@ async Task DeleteChannel_GroupDM_BotLeavesForGood()
   le comportement repose sur des hypothèses (lot D), dont la vérification demande OAuth2.
 - **Surface publique.** Un type de plus (`SeededDMChannel`) et deux méthodes sur `DiscordSeed` :
   des ajouts, compatibles source et binaire.
+- **Changement de comportement : le DM avec soi-même.** `POST /users/@me/channels` avec l'ID du
+  bot rendait un DM ; il rend 403 `50007` (§ 2, invariant 3). Aucun test du dépôt n'en dépend :
+  le seul qui passe l'ID du bot à `GetDMChannelAsync`
+  (`CurrentUserRoutesTests.UsersRoutes_WithoutCredentialsOrWithAnUnknownToken_Return401`)
+  s'arrête au 401.
 - **Refonte interne.** `ChannelKind.GroupDm`, `GroupDmSettings`, `ChannelSnapshot.Group`,
-  `UpdateChannelInput.ChangeIcon`, `ChannelPatch.Icon`, rendu par `Kind`. Le commentaire du fait
-  `ChannelDeleted` (« a guild channel was deleted ») s'élargit au group DM quitté. Le contrôle
-  de l'invariant 6 touche `CreateMessage` et `AddReaction` : les tests d'état qui écrivent dans
-  un DM au nom d'un tiers sont à ajuster.
-- **Effet de bord.** Un `PATCH` de salon de guilde avec un `icon` mal formé rendra `50035` au
-  lieu d'ignorer la clé (§ 4). NetCord n'envoie jamais ce champ à un salon de guilde ; à noter
-  dans `rest.md`.
+  `UpdateChannelInput.ChangeIcon`, `IconHash` et `IconInvalid`, leur pendant dans
+  `ChannelPatch`, rendu par `Kind`. Quatre `StateFailureKind` : `CannotMessageUser`,
+  `InvalidChannelIcon`, `MaxGroupDms`, `NotChannelRecipient` ; les deux premiers ont une
+  fabrique `DiscordError`. Le commentaire du fait `ChannelDeleted` (« a guild channel was
+  deleted ») s'élargit au group DM quitté. Le contrôle de l'invariant 6 touche `CreateMessage`
+  et `AddReaction` : les tests d'état qui écrivent dans un DM au nom d'un tiers sont à ajuster.
+- **Pas d'effet de bord sur les salons de guilde** : `icon` y reste ignorée, valide ou non
+  (§ 4). Aucun point utilisateur n'est donc nécessaire à ce sujet.
 - Ni dépendance, ni réflexion ; le DTO passe par `FakeDiscordJsonContext`.
 
 **Découpage de M1-REST-02C** (à remplacer par les deux premières lignes) et tâches à créer :
 
 - `M1-REST-02C1` — État, seed et lecture : § 1, § 2, § 3 et § 6 ; `GET /channels/{channel_id}`
-  d'un group DM ; refus de la famille `Private` par `CreateGuildChannel` — rest-implementer —
-  M1-ADR-04C, M1-REST-04. **Absorbe M1-REST-04B.** Touche `State/` et `Seed/` : à lancer après
-  la fusion de M1-REST-05 et de M1-REST-07, en cours sur ces dossiers.
-- `M1-REST-02C2` — Routes du group DM : `PATCH` (`name`, `icon`) et `DELETE` de
-  `/channels/{channel_id}`, `PUT` et `DELETE …/recipients/{user_id}`, fait
-  `ChannelRecipientRemoved`, lignes de `rest.md` et de `errors.md` (`50024`, `50025`) —
-  rest-implementer — M1-REST-02C1.
+  d'un group DM ; refus de la famille `Private` par `CreateGuildChannel` ; **refus du bot comme
+  destinataire d'un DM** (`CannotMessageUser`, fabrique `DiscordError` 403 `50007`, branchée
+  sur `POST /users/@me/channels` ; lignes `50007` de `errors.md` et `POST /users/@me/channels`
+  de `rest.md`) — rest-implementer — M1-ADR-04C, M1-REST-04. **Absorbe M1-REST-04B.** Touche
+  `State/` et `Seed/` : à lancer après la fusion de M1-REST-05 et de M1-REST-07, en cours sur
+  ces dossiers.
+- `M1-REST-02C2` — Routes du group DM : `PATCH` (`name`, `icon`, refus `InvalidChannelIcon`) et
+  `DELETE` de `/channels/{channel_id}`, `PUT` et `DELETE …/recipients/{user_id}`, fait
+  `ChannelRecipientRemoved`, lignes de `rest.md` et de `errors.md` : `50024`, `50025`, `10003`
+  (group DM quitté), `10013` (`PUT` d'un utilisateur inconnu), `50035` (`IMAGE_INVALID` sur
+  `icon` du `PATCH` ; champs du corps et de la route du `PUT`), `50109` (corps absent du `PUT`)
+  — rest-implementer — M1-REST-02C1.
 - `PAR-REST-05` — Confirmer contre Discord le lot D, puis aligner fake, tests et matrices —
-  test manuel (point utilisateur à créer), puis parity-auditor — M1-REST-02C2.
+  test manuel UR-022, puis parity-auditor — M1-REST-02C2.
 
 **Tâches existantes impactées.**
 
 - **M1-REST-02C** : remplacée par les deux lignes ci-dessus ; son libellé citait
   `UpdateDMRequestPartial` au lieu de `UpdateGroupDMRequestPartial`.
 - **M1-REST-04B** : absorbée par M1-REST-02C1.
+- **PAR-REST-01** (UR-003) : le `50007` du DM avec soi-même devient un comportement du fake à
+  confirmer, et non plus un manque ; le cas d'un autre bot reste ouvert.
 - **M1-REST-05** (en cours) : pins et typing traitent un group DM comme un DM. Rien à changer si
   la tâche teste « salon sans guilde ».
 - **M2-01, M2-11** : `Seed.DMChannel` fournit le salon d'une interaction en DM ; un group DM est
   refusé localement. **M2-13** décide de son `context`.
 - **M3-ADR-09, M3-03** : § 5. M3-03 traduit le `ChannelCreated` d'un group DM, continue
-  d'ignorer celui d'un DM, et ne dispatche rien pour `ChannelRecipientRemoved`.
+  d'ignorer celui d'un DM, ne dispatche rien pour `ChannelRecipientRemoved`, et conditionne les
+  trois `CHANNEL_*` d'un group DM à l'intent `GUILDS`.
 
 **Parité.** Prépare, sans les promouvoir :
 
-- `rest.md` : `GET`, `PATCH` et `DELETE /channels/{channel_id}` (le « Manque : group DM »),
-  `PUT` et `DELETE /channels/{channel_id}/recipients/{user_id}` (la première restera 🟡),
-  `POST /users/@me/channels` (note : group DM seedé, création toujours refusée).
-- `errors.md` : `50024` et `50025` (nouveaux contextes), `10003` (group DM quitté). `30004`,
-  `30011` et `50033` n'y ont pas de ligne et n'en reçoivent pas : le fake ne les produit pas.
-- `gateway.md` : `CHANNEL_CREATE`, `CHANNEL_UPDATE`, `CHANNEL_DELETE` (cas du group DM).
+- `rest.md` :
+  - `GET`, `PATCH` et `DELETE /channels/{channel_id}` (le « Manque : group DM ») ;
+  - `PUT` et `DELETE /channels/{channel_id}/recipients/{user_id}` (la première restera 🟡) ;
+  - `POST /users/@me/channels` : group DM seedé, création toujours refusée ; le « Manque : DM
+    vers soi-même » devient « 403 `50007`, à confirmer (UR-003) », celui d'un autre bot reste.
+- `errors.md` :
+  - `50007` : ⬜ → 🟡 à la livraison de M1-REST-02C1, contexte « DM avec soi-même », statut 403
+    et code à confirmer (UR-003) ; l'option de seed « DM refusé » reste à faire ;
+  - `50024` et `50025` : nouveaux contextes (routes de destinataires) ;
+  - `10003` : group DM quitté ; `10013` : `PUT` d'un utilisateur inconnu ;
+  - `50035` : `IMAGE_INVALID` sur `icon` du `PATCH` d'un group DM, et les champs du `PUT` ;
+    `50109` : corps absent ou non JSON du `PUT` ;
+  - `30004`, `30011` et `50033` n'y ont pas de ligne et n'en reçoivent pas : le fake ne les
+    produit pas.
+- `gateway.md` : `CHANNEL_CREATE`, `CHANNEL_UPDATE`, `CHANNEL_DELETE` (cas du group DM, intent
+  à confirmer).
 
 Aucune ligne promue ni exclue, aucune matrice modifiée par cette ADR.

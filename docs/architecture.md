@@ -96,7 +96,8 @@
   group DM (type 3) est une ligne de la table de traits, de la même famille que le DM, avec un
   bloc `Group` (propriétaire, icône, application, `managed`).
   - `RecipientIds` liste les participants autres que le bot. Tout salon privé de l'état contient
-    le bot : aucune règle d'accès ne s'ajoute.
+    le bot : aucune règle d'accès ne s'ajoute. Le bot n'est jamais son propre destinataire :
+    l'état refuse le DM avec soi-même (403 `50007` par REST, `ArgumentException` au seed).
   - Invariants : neuf destinataires au plus (dix participants avec le bot), dix group DM au
     plus ; dans un salon privé, seuls ses participants écrivent ou réagissent.
   - Quand le bot quitte un group DM, le salon sort de l'état avec ses messages (`ChannelDeleted`).
@@ -135,6 +136,8 @@
   guilde ». S'y ajoutent `PATCH /channels/{channel_id}` (`name`, `icon`), `DELETE` (le bot quitte
   le groupe, ensuite 404 `10003`) et `DELETE …/recipients/{user_id}`. Créer un group DM ou y
   ajouter un destinataire reste refusé (403 `50025`) : le fake n'a aucun grant OAuth2.
+  `icon` n'appartient qu'au schéma du group DM : l'étape structurelle la lit sans refuser, et
+  l'état ne rend `50035` (`IMAGE_INVALID`) que pour un group DM, comme pour un `name` vide.
   `/channels/{channel_id}` choisit son DTO par type de salon, `PrivateGroupChannelResponse`
   pour le type 3.
 - `discord.Rest.Intercept(route, effect)` applique un `RestEffect` à la prochaine tentative
@@ -155,8 +158,9 @@
   devient `GUILD_CREATE` ou `GUILD_DELETE` (amendement 04B de l'ADR 0004, **accepté** ; détail
   à M3-ADR-09).
 - Group DM ([ADR 0014](adr/0014-private-channels-dm-and-group-dm.md), § 5, **proposée**) :
-  `CHANNEL_CREATE`, `CHANNEL_UPDATE` et `CHANNEL_DELETE` sans `guild_id`, shard 0 ; l'intent qui
-  les conditionne est à fixer par M3-ADR-09. Le `ChannelCreated` d'un DM 1:1 reste sans dispatch.
+  `CHANNEL_CREATE`, `CHANNEL_UPDATE` et `CHANNEL_DELETE` sans `guild_id`, shard 0, sous l'intent
+  `GUILDS` comme le disent les docs (à confirmer, UR-022). Le `ChannelCreated` d'un DM 1:1 reste
+  sans dispatch.
 - Commandes de test : `DispatchAsync(...)`, `DisconnectAsync(closeCode)`, `RequestReconnectAsync()`,
   `InvalidateSessionAsync(resumable)`, `FlushAsync()`, `WaitForReadyAsync(client)`.
 - Heartbeat & timeouts pilotés par `TimeProvider`.
