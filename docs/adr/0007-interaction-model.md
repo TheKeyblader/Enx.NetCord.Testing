@@ -131,6 +131,11 @@ visé par un autre utilisateur que son destinataire, composant désactivé ou d'
 valeur hors des options du menu, option en double, sous-commande incohérente. Ces fautes sont celles du test : `InvalidOperationException` locale, jamais une
 erreur Discord, comme pour le seed de l'[ADR 0004](0004-fake-discord-public-api.md).
 
+> **Amendement 04B de l'[ADR 0004](0004-fake-discord-public-api.md#amendement-04b--adhésion-du-bot-aux-guildes-seedées), § 4
+> (proposé, 2026-11-28).** Un contrôle d'état s'ajoute : un salon d'une guilde dont le bot n'est
+> pas membre lève `InvalidOperationException`. Les interactions d'une application installée par
+> l'utilisateur, ou sans utilisateur bot, relèvent d'une tâche dédiée (`M2-13`, proposée).
+
 Pour une commande, la validation suit le registre de l'application, livré par M2-07 et appliqué
 par M2-11. Les commandes **visibles** sont celles de la guilde du salon et les commandes
 globales ; en DM, les globales seules. À nom et type égaux, la commande de guilde prime.
