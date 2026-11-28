@@ -261,6 +261,32 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   `EmbedValidation.cs`, `FakeDiscordState.Messages.cs`, `errors.md`, `rest.md` et les tests.
 - **Réponse** : _(à remplir)_
 
+### UR-012 — Erratum E-001 du contrat OpenAPI (`décision`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-T-01 (merge `01e6f35`) ; `tests/Enx.NetCord.Testing.Conformance/Contract/extract-openapi-contract.py` (`apply_errata`) ; roadmap `PAR-SPEC-01`
+- **Concerne** : `errors.md` `50035` ; `ChannelsConformanceTests`, `ContractInfrastructureTests`
+- **Décision** : la spec OpenAPI type `code` des erreurs de champ du `50035` en `integer`
+  (schéma générique `Error`, `openapi.json:43688`) ; les docs officielles
+  (`developers/reference.mdx:44-106`) et le vrai Discord renvoient une chaîne
+  (`BASE_TYPE_REQUIRED`). L'extrait commité substitue un schéma `FieldError` à code chaîne ; le
+  script échoue si la spec change de forme, pour retirer l'erratum le moment venu.
+- **Action possible** : signaler l'écart en amont (issue `discord/discord-api-spec`) — action
+  externe, laissée à ton initiative.
+- **Réponse** : _(à remplir)_
+
+### UR-013 — Garde « un scénario de conformité par handler », sans exemption (`décision`)
+
+- **Statut** : Ouvert
+- **Origine** : M1-T-01 ; `ContractInfrastructureTests.ConformanceTests_EveryImplementedOperation_HasAScenarioTaggedWithItsKey` ; skill `dotnet-test-conventions` § Conformité
+- **Concerne** : toutes les futures tâches REST/interactions
+- **Décision** : tout handler REST enregistré doit avoir au moins un test non ignoré
+  `[Parity("METHOD /path")]` dans le projet de conformité, terminé par `ContractAssert.Conforms` ;
+  sinon `dotnet test` échoue. Pas de liste d'exemptions. L'extrait couvre toutes les opérations
+  de la spec : ajouter un handler n'exige jamais de régénérer le contrat. Les propriétés non
+  déclarées par la spec ne sont pas encore rejetées (M1-T-04).
+- **Réponse** : _(à remplir ; à assouplir si la garde gêne)_
+
 ## Traités
 
 ### UR-006 — API de seed des salons (`décision`)
