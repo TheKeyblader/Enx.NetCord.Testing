@@ -28,9 +28,9 @@ internal static class StateTestSupport
     internal static (GuildSnapshot Guild, ChannelSnapshot Channel, UserSnapshot User) Seed(FakeDiscordState state)
     {
         var guild = state.CreateGuild(new CreateGuildInput("guild")).Value.Guild;
-        var channel = state.CreateTextChannel(new CreateTextChannelInput(guild.Id, "general")).Value;
+        var channel = state.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "general")).Value;
         var user = state.CreateUser(new CreateUserInput("alice"));
-        state.AddMember(new AddMemberInput(guild.Id, user.Id)).ValueOrThrow();
+        state.AddMember(StateCaller.Fixture, new AddMemberInput(guild.Id, user.Id)).ValueOrThrow();
         return (guild, channel, user);
     }
 }

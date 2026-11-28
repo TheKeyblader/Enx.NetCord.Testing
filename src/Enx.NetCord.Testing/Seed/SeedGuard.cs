@@ -35,6 +35,7 @@ internal static class SeedGuard
             StateFailureKind.UnknownRole => $"Role {failure.ResourceId} does not exist in this guild of this fake.",
             StateFailureKind.UnknownMember => $"Member {failure.ResourceId} does not exist in this guild of this fake.",
             StateFailureKind.UnknownMessage => $"Message {failure.ResourceId} does not exist in this fake.",
+            StateFailureKind.MissingAccess => $"The bot cannot access resource {failure.ResourceId}.",
             _ => failure.ToString(),
         };
         return new InvalidOperationException(message);

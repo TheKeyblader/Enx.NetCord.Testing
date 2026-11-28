@@ -34,7 +34,7 @@ public sealed class SeededGuild
         SeedGuard.ValidateId(id);
         _fake.ThrowIfDisposed();
 
-        var channel = SeedGuard.Unwrap(_fake.State.CreateTextChannel(new CreateTextChannelInput(Id, name, id)));
+        var channel = SeedGuard.Unwrap(_fake.State.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(Id, name, id)));
         return new SeededTextChannel(_fake, channel.Id);
     }
 
@@ -52,7 +52,7 @@ public sealed class SeededGuild
         SeedGuard.ValidateId(id);
         _fake.ThrowIfDisposed();
 
-        return SeedGuard.Unwrap(_fake.State.CreateRole(new CreateRoleInput(Id, name, id))).Id;
+        return SeedGuard.Unwrap(_fake.State.CreateRole(StateCaller.Fixture, new CreateRoleInput(Id, name, id))).Id;
     }
 
     /// <summary>Creates a user and guild membership together and returns the user ID.</summary>
@@ -69,10 +69,14 @@ public sealed class SeededGuild
         SeedGuard.ValidateId(id);
         _fake.ThrowIfDisposed();
 
-        return SeedGuard.Unwrap(_fake.State.CreateUserAndMember(Id, new CreateUserInput(username, id))).UserId;
+        return SeedGuard.Unwrap(_fake.State.CreateUserAndMember(StateCaller.Fixture, Id, new CreateUserInput(username, id))).UserId;
     }
 
     /// <summary>Adds an existing user to the guild and returns the same user ID.</summary>
+    /// <remarks>
+    /// The fake's bot is a user of the fake: <c>guild.Member(discord.ApplicationId)</c> makes it join a guild created with
+    /// <c>withBot: false</c>. On a guild created with the bot this throws, as for any member already present.
+    /// </remarks>
     /// <param name="userId">The ID of a user of this fake.</param>
     /// <returns><paramref name="userId"/>.</returns>
     /// <exception cref="ObjectDisposedException">The fake has been disposed.</exception>
@@ -81,6 +85,6 @@ public sealed class SeededGuild
     {
         _fake.ThrowIfDisposed();
 
-        return SeedGuard.Unwrap(_fake.State.AddMember(new AddMemberInput(Id, userId))).UserId;
+        return SeedGuard.Unwrap(_fake.State.AddMember(StateCaller.Fixture, new AddMemberInput(Id, userId))).UserId;
     }
 }

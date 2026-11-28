@@ -13,7 +13,7 @@ Rate limit (429) : corps `{ "message": "You are being rate limited.", "retry_aft
 (Discord renvoie un flottant ; le 429 injecté par `Intercept` écrit un **entier**, ADR 0005 — les flottants relèvent de M6-02),
 accompagné des en-têtes `Retry-After`, `X-RateLimit-*` et `X-RateLimit-Scope`.
 
-Progression `Fake` : ✅ **5** · 🟡 **10** · ⬜ **28** · ⛔ **0**
+Progression `Fake` : ✅ **5** · 🟡 **12** · ⬜ **26** · ⛔ **0**
 
 ## Statuts HTTP
 
@@ -24,7 +24,7 @@ Progression `Fake` : ✅ **5** · 🟡 **10** · ⬜ **28** · ⛔ **0**
 | `http:204` | 204 No Content | DELETE, PUT réaction/pin, typing… | ⬜ | ⬜ | |
 | `http:400` | 400 Bad Request | corps invalide (avec `50035`) | 🟡 | ✅ | `DiscordError.InvalidFormBody`/`InvalidJson` testés via le vrai `RestClient` avec des handlers factices (M1-03) ; reste à les produire depuis les vrais handlers (M1-REST) |
 | `http:401` | 401 Unauthorized | token absent/inconnu | ✅ | ✅ | `{"message":"401: Unauthorized","code":0}` ; absent, inconnu ou `Bearer <token bot>` ; une opération `{}` accepte l'anonyme **et** un token inconnu (le header est ignoré, `Caller.Kind == Unrecognized`). Source : fauxcord `src/middleware/auth.ts:109-118` (chemins exemptés, dont le callback d'interaction et les webhooks à token, sans contrôle de l'en-tête) ; le comportement réel de Discord pour un token invalide sur ces routes n'est **pas vérifié** (M1-03) |
-| `http:403` | 403 Forbidden | permission manquante (`50013`) / accès (`50001`) | 🟡 | ✅ | produit via `Intercept`/handler factice, et par un vrai handler : `50025` sur `POST /users/@me/channels` (group DM, M1-REST-01) ; calcul de permissions : M4-REST-05 ; `50001` pas encore dans le catalogue |
+| `http:403` | 403 Forbidden | permission manquante (`50013`) / accès (`50001`) | 🟡 | ✅ | produit via `Intercept`/handler factice, et par un vrai handler : `50025` sur `POST /users/@me/channels` (group DM, M1-REST-01) ; calcul de permissions : M4-REST-05 ; `50001` (accès à une guilde ou un salon que le bot ne voit pas) : fabrique `DiscordError.MissingAccess()` et helper d'état `GuildAccess`, testés avec un handler factice via le vrai `RestClient` (M1-05) |
 | `http:404` | 404 Not Found | ressource inconnue (`10xxx`) ou route inconnue (`code 0`) | 🟡 | ✅ | route inconnue / non implémentée (Lenient) : produit par le pipeline, aussi testé via `FakeDiscord.CreateRestClient()` (M1-02) ; ressources `10xxx` : via handler factice, vrais handlers à venir (M1-REST) |
 | `http:405` | 405 Method Not Allowed | méthode non supportée sur une route connue | ✅ | ✅ | en-tête `Allow` = méthodes inventoriées du chemin ; Lenient et Strict ; pas d'en-têtes de rate limit (aucune opération résolue) |
 | `http:429` | 429 Too Many Requests | simulation de rate limit (opt-in) ou `Intercept` | 🟡 | ✅ | `Intercept(RestEffect.RateLimited(s))` : corps `{"message":"You are being rate limited.","retry_after":s,"global":false}`, scope `user`, sans `code` (exemple Discord) ; un 429 injecté ne prouve pas un quota : M6-02 |
@@ -36,7 +36,7 @@ Progression `Fake` : ✅ **5** · 🟡 **10** · ⬜ **28** · ⛔ **0**
 | --- | --- | --- | --- | --- | --- |
 | `0` | General error / `404: Not Found` / `401: Unauthorized` | route inconnue, auth | ✅ | ✅ | 401, 404 (Lenient, aussi via la façade `FakeDiscord`) et 405 ; messages `NNN: Reason` comme Discord |
 | `10003` | Unknown Channel | `/channels/{id}` | 🟡 | ✅ | fabrique `DiscordError.UnknownChannel()` testée via un handler factice (404 même en Strict) ; le vrai `GET /channels/{channel_id}` vient en M1-REST |
-| `10004` | Unknown Guild | `/guilds/{id}` | ⬜ | ⬜ | |
+| `10004` | Unknown Guild | `/guilds/{id}`, sous-ressources et commandes d'une guilde inexistante | 🟡 | ✅ | fabrique `DiscordError.UnknownGuild()` (404) produite par le helper d'état `GuildAccess` (M1-05, ADR 0004 amendement 04B) : guilde inexistante **ou** guilde du fake dont le bot n'est pas membre pour la guilde elle-même (profil « masquée », `GET /guilds/{id}` : discord-api-docs#5840) ; testée via le vrai `RestClient` avec un handler factice, et injectable par `RestEffect.Error(NotFound, 10004)` ; vrais handlers en M1-REST-06. Le choix `10004` plutôt que `50001` pour une guilde hors du bot est une hypothèse hors spec épinglée (PAR-ERR-02) |
 | `10007` | Unknown Member | `/guilds/{id}/members/{user_id}` | ⬜ | ⬜ | |
 | `10008` | Unknown Message | `/channels/{id}/messages/{id}` | 🟡 | ✅ | fabrique testée via un handler factice ; vrai handler en M1-REST-03 |
 | `10011` | Unknown Role | rôles | ⬜ | ⬜ | |
@@ -54,7 +54,7 @@ Progression `Fake` : ✅ **5** · 🟡 **10** · ⬜ **28** · ⛔ **0**
 | `30013` | Maximum number of guild channels reached (500) | salons | ⬜ | ⬜ | |
 | `30033` | Maximum number of thread participants (1000) | threads | ⬜ | ⬜ | |
 | `40060` | Interaction has already been acknowledged | 2e callback | ⬜ | ⬜ | |
-| `50001` | Missing Access | salon non visible | ⬜ | ⬜ | |
+| `50001` | Missing Access | guilde (sous-ressources, commandes) ou salon que le bot ne voit pas | 🟡 | ✅ | fabrique `DiscordError.MissingAccess()` (403) produite par `GuildAccess` quand la ressource existe mais que le bot n'est pas membre de la guilde (profil « refusée », M1-05, ADR 0004 amendement 04B) ; testée via le vrai `RestClient` avec un handler factice, injectable par `RestEffect.Error(Forbidden, 50001)` ; vrais handlers en M1-REST-02 à 09 et M2-07. Le choix de la famille de routes est **observé, non documenté** (PAR-ERR-02) ; le refus pour `VIEW_CHANNEL` viendra avec M4-REST-05 |
 | `50006` | Cannot send an empty message | message sans contenu/embeds/fichiers/composants/sticker/poll | ⬜ | ⬜ | |
 | `50007` | Cannot send messages to this user | DM refusé (option du seed) | ⬜ | ⬜ | |
 | `50008` | Cannot send messages in a non-text channel | voix/catégorie | ⬜ | ⬜ | |

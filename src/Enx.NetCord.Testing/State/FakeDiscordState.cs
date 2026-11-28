@@ -29,6 +29,8 @@ internal sealed partial class FakeDiscordState
     // Every ID ever assigned in this fake (explicit or generated), including deleted entities.
     private readonly HashSet<ulong> _assigned = [];
 
+    private readonly GuildAccess _access;
+
     private ulong? _botId;
     private ulong? _lastAllocated;
     private long _ordinal;
@@ -41,6 +43,7 @@ internal sealed partial class FakeDiscordState
         ArgumentNullException.ThrowIfNull(ids);
         _clock = clock;
         _ids = ids;
+        _access = new GuildAccess(_guilds, _channels, _members, () => _botId);
     }
 
     /// <summary>Gets the clock this state reads (the single source of the fake's time).</summary>
@@ -264,7 +267,7 @@ internal sealed partial class FakeDiscordState
     /// <see cref="UserCreated"/> then <see cref="MemberAdded"/>). An unknown guild fails before anything is
     /// allocated or written; an unavailable ID throws before any write.
     /// </summary>
-    internal StateResult<MemberSnapshot> CreateUserAndMember(ulong guildId, CreateUserInput input)
+    internal StateResult<MemberSnapshot> CreateUserAndMember(StateCaller caller, ulong guildId, CreateUserInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(input.Username);
@@ -272,9 +275,10 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            if (!_guilds.TryGetValue(guildId, out var guild))
+            var access = _access.ResolveGuild(caller, guildId, GuildAccessProfile.Denied);
+            if (!access.TryGetValue(out var guild))
             {
-                return new StateFailure(StateFailureKind.UnknownGuild, guildId);
+                return access.Failure;
             }
 
             var now = ReadClock();
@@ -309,7 +313,9 @@ internal sealed partial class FakeDiscordState
 
     /// <summary>
     /// Creates a guild and its <c>@everyone</c> role (same ID as the guild) in one commit, so no reader or
-    /// subscriber can see one without the other.
+    /// subscriber can see one without the other. With <see cref="CreateGuildInput.WithBot"/> the bot's membership
+    /// joins the same commit (and the <see cref="GuildCreated"/> fact); it allocates no ID. Throws
+    /// <see cref="InvalidOperationException"/> before any commit when the bot is requested but has no identity.
     /// </summary>
     internal StateResult<GuildCreation> CreateGuild(CreateGuildInput input)
     {
@@ -322,6 +328,11 @@ internal sealed partial class FakeDiscordState
             if (input.OwnerId is { } ownerId && !_users.ContainsKey(ownerId))
             {
                 return new StateFailure(StateFailureKind.UnknownUser, ownerId);
+            }
+
+            if (input.WithBot && _botId is null)
+            {
+                throw new InvalidOperationException("The bot cannot join the guild: the bot identity does not exist yet.");
             }
 
             var now = ReadClock();
@@ -343,12 +354,23 @@ internal sealed partial class FakeDiscordState
             _roles.Add(id, everyone);
             guild.RoleIds.Add(id);
 
-            var creation = new GuildCreation(guild.ToSnapshot(), everyone.ToSnapshot());
-            Publish(new GuildCreated(NextChangeNumber(), creation.Guild, creation.Everyone));
+            // The bot joins as an ordinary member (no roles, @everyone implicit), clock-dated, with no ID allocation.
+            MemberSnapshot? botMember = null;
+            if (input.WithBot && _botId is { } botId)
+            {
+                var membership = new MemberEntity(id, botId, now, NextOrdinal());
+                _members.Add((id, botId), membership);
+                guild.MemberUserIds.Add(botId);
+                botMember = membership.ToSnapshot();
+            }
+
+            var creation = new GuildCreation(guild.ToSnapshot(), everyone.ToSnapshot(), botMember);
+            Publish(new GuildCreated(NextChangeNumber(), creation.Guild, creation.Everyone, creation.BotMember));
             return creation;
         }
     }
 
+    /// <summary>Looks a guild up without any access control: for tests, seed and inspection, never for a handler of <c>Rest/</c>.</summary>
     internal GuildSnapshot? FindGuild(ulong guildId)
     {
         lock (_gate)
@@ -357,7 +379,33 @@ internal sealed partial class FakeDiscordState
         }
     }
 
-    internal StateResult<RoleSnapshot> CreateRole(CreateRoleInput input)
+    /// <summary>
+    /// Reads the guild itself (<c>/guilds/{guild_id}</c>) for a caller. Profile <see cref="GuildAccessProfile.Hidden"/>: a guild the
+    /// bot is not a member of is indistinguishable from an unknown one (<see cref="StateFailureKind.UnknownGuild"/>).
+    /// </summary>
+    internal StateResult<GuildSnapshot> GetGuild(StateCaller caller, ulong guildId)
+    {
+        lock (_gate)
+        {
+            var access = _access.ResolveGuild(caller, guildId, GuildAccessProfile.Hidden);
+            return access.TryGetValue(out var guild) ? guild.ToSnapshot() : access.Failure;
+        }
+    }
+
+    /// <summary>
+    /// Reads a channel for a caller: <see cref="StateFailureKind.UnknownChannel"/> if it does not exist,
+    /// <see cref="StateFailureKind.MissingAccess"/> if it belongs to a guild the bot is not a member of.
+    /// </summary>
+    internal StateResult<ChannelSnapshot> GetChannel(StateCaller caller, ulong channelId)
+    {
+        lock (_gate)
+        {
+            var access = _access.ResolveChannel(caller, channelId);
+            return access.TryGetValue(out var channel) ? channel.ToSnapshot() : access.Failure;
+        }
+    }
+
+    internal StateResult<RoleSnapshot> CreateRole(StateCaller caller, CreateRoleInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(input.Name);
@@ -365,9 +413,10 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            if (!_guilds.TryGetValue(input.GuildId, out var guild))
+            var access = _access.ResolveGuild(caller, input.GuildId, GuildAccessProfile.Denied);
+            if (!access.TryGetValue(out var guild))
             {
-                return new StateFailure(StateFailureKind.UnknownGuild, input.GuildId);
+                return access.Failure;
             }
 
             var now = ReadClock();
@@ -401,20 +450,21 @@ internal sealed partial class FakeDiscordState
         }
     }
 
-    internal StateResult<ImmutableArray<RoleSnapshot>> ListGuildRoles(ulong guildId)
+    internal StateResult<ImmutableArray<RoleSnapshot>> ListGuildRoles(StateCaller caller, ulong guildId)
     {
         lock (_gate)
         {
-            if (!_guilds.TryGetValue(guildId, out var guild))
+            var access = _access.ResolveGuild(caller, guildId, GuildAccessProfile.Denied);
+            if (!access.TryGetValue(out var guild))
             {
-                return new StateFailure(StateFailureKind.UnknownGuild, guildId);
+                return access.Failure;
             }
 
             return guild.RoleIds.Select(id => _roles[id].ToSnapshot()).ToImmutableArray();
         }
     }
 
-    internal StateResult<ChannelSnapshot> CreateTextChannel(CreateTextChannelInput input)
+    internal StateResult<ChannelSnapshot> CreateTextChannel(StateCaller caller, CreateTextChannelInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(input.Name);
@@ -422,9 +472,10 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            if (!_guilds.TryGetValue(input.GuildId, out var guild))
+            var access = _access.ResolveGuild(caller, input.GuildId, GuildAccessProfile.Denied);
+            if (!access.TryGetValue(out var guild))
             {
-                return new StateFailure(StateFailureKind.UnknownGuild, input.GuildId);
+                return access.Failure;
             }
 
             var now = ReadClock();
@@ -491,6 +542,7 @@ internal sealed partial class FakeDiscordState
             .OrderBy(c => c.Ordinal)
             .FirstOrDefault();
 
+    /// <summary>Looks a channel up without any access control: for tests, seed and inspection, never for a handler of <c>Rest/</c>.</summary>
     internal ChannelSnapshot? FindChannel(ulong channelId)
     {
         lock (_gate)
@@ -508,29 +560,31 @@ internal sealed partial class FakeDiscordState
         }
     }
 
-    internal StateResult<ImmutableArray<ChannelSnapshot>> ListGuildChannels(ulong guildId)
+    internal StateResult<ImmutableArray<ChannelSnapshot>> ListGuildChannels(StateCaller caller, ulong guildId)
     {
         lock (_gate)
         {
-            if (!_guilds.TryGetValue(guildId, out var guild))
+            var access = _access.ResolveGuild(caller, guildId, GuildAccessProfile.Denied);
+            if (!access.TryGetValue(out var guild))
             {
-                return new StateFailure(StateFailureKind.UnknownGuild, guildId);
+                return access.Failure;
             }
 
             return guild.ChannelIds.Select(id => _channels[id].ToSnapshot()).ToImmutableArray();
         }
     }
 
-    internal StateResult<MemberSnapshot> AddMember(AddMemberInput input)
+    internal StateResult<MemberSnapshot> AddMember(StateCaller caller, AddMemberInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
         var requestedRoleIds = input.RoleIds?.ToArray() ?? []; // copy: the caller's list may change under us
 
         lock (_gate)
         {
-            if (!_guilds.TryGetValue(input.GuildId, out var guild))
+            var access = _access.ResolveGuild(caller, input.GuildId, GuildAccessProfile.Denied);
+            if (!access.TryGetValue(out var guild))
             {
-                return new StateFailure(StateFailureKind.UnknownGuild, input.GuildId);
+                return access.Failure;
             }
 
             if (!_users.TryGetValue(input.UserId, out var user))
@@ -573,6 +627,7 @@ internal sealed partial class FakeDiscordState
         }
     }
 
+    /// <summary>Looks a member up without any access control: for tests, seed and inspection, never for a handler of <c>Rest/</c>.</summary>
     internal MemberSnapshot? FindMember(ulong guildId, ulong userId)
     {
         lock (_gate)
@@ -581,13 +636,14 @@ internal sealed partial class FakeDiscordState
         }
     }
 
-    internal StateResult<ImmutableArray<MemberSnapshot>> ListGuildMembers(ulong guildId)
+    internal StateResult<ImmutableArray<MemberSnapshot>> ListGuildMembers(StateCaller caller, ulong guildId)
     {
         lock (_gate)
         {
-            if (!_guilds.TryGetValue(guildId, out var guild))
+            var access = _access.ResolveGuild(caller, guildId, GuildAccessProfile.Denied);
+            if (!access.TryGetValue(out var guild))
             {
-                return new StateFailure(StateFailureKind.UnknownGuild, guildId);
+                return access.Failure;
             }
 
             return guild.MemberUserIds.Select(id => _members[(guildId, id)].ToSnapshot()).ToImmutableArray();
@@ -596,7 +652,7 @@ internal sealed partial class FakeDiscordState
 
     // ----- Messages -------------------------------------------------------------------------
 
-    internal StateResult<MessageSnapshot> CreateMessage(CreateMessageInput input)
+    internal StateResult<MessageSnapshot> CreateMessage(StateCaller caller, CreateMessageInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(input.Content);
@@ -604,9 +660,10 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            if (!_channels.TryGetValue(input.ChannelId, out var channel))
+            var access = _access.ResolveChannel(caller, input.ChannelId);
+            if (!access.TryGetValue(out var channel))
             {
-                return new StateFailure(StateFailureKind.UnknownChannel, input.ChannelId);
+                return access.Failure;
             }
 
             if (!_users.TryGetValue(input.AuthorId, out var author))
@@ -639,6 +696,7 @@ internal sealed partial class FakeDiscordState
         }
     }
 
+    /// <summary>Looks a message up without any access control: for tests, seed and inspection, never for a handler of <c>Rest/</c>.</summary>
     internal MessageSnapshot? FindMessage(ulong channelId, ulong messageId)
     {
         lock (_gate)
@@ -655,6 +713,7 @@ internal sealed partial class FakeDiscordState
     /// <paramref name="before"/> and <paramref name="after"/> are exclusive; both set is rejected.
     /// </summary>
     internal StateResult<ImmutableArray<MessageSnapshot>> ListMessages(
+        StateCaller caller,
         ulong channelId,
         int limit,
         ulong? before = null,
@@ -668,9 +727,10 @@ internal sealed partial class FakeDiscordState
 
         lock (_gate)
         {
-            if (!_channels.TryGetValue(channelId, out var channel))
+            var access = _access.ResolveChannel(caller, channelId);
+            if (!access.TryGetValue(out var channel))
             {
-                return new StateFailure(StateFailureKind.UnknownChannel, channelId);
+                return access.Failure;
             }
 
             IEnumerable<ulong> ids;
@@ -699,13 +759,13 @@ internal sealed partial class FakeDiscordState
     /// Replaces the content of a message. Like Discord, any edit counts: <c>edited_timestamp</c> is set to the
     /// clock and a change is committed even when the content is identical.
     /// </summary>
-    internal StateResult<MessageSnapshot> EditMessageContent(ulong channelId, ulong messageId, string content)
+    internal StateResult<MessageSnapshot> EditMessageContent(StateCaller caller, ulong channelId, ulong messageId, string content)
     {
         ArgumentNullException.ThrowIfNull(content);
 
         lock (_gate)
         {
-            if (!TryGetMessage(channelId, messageId, out var channel, out var message, out var failure))
+            if (!TryGetMessage(caller, channelId, messageId, out var channel, out var message, out var failure))
             {
                 return failure;
             }
@@ -729,11 +789,11 @@ internal sealed partial class FakeDiscordState
             : null;
 
     /// <summary>Deletes a message and returns what it was. Its ID is never reused in this fake.</summary>
-    internal StateResult<MessageSnapshot> DeleteMessage(ulong channelId, ulong messageId)
+    internal StateResult<MessageSnapshot> DeleteMessage(StateCaller caller, ulong channelId, ulong messageId)
     {
         lock (_gate)
         {
-            if (!TryGetMessage(channelId, messageId, out var channel, out var message, out var failure))
+            if (!TryGetMessage(caller, channelId, messageId, out var channel, out var message, out var failure))
             {
                 return failure;
             }
@@ -746,10 +806,13 @@ internal sealed partial class FakeDiscordState
         }
     }
 
+    /// <summary>Unchecked lookup, for <see cref="FindMessage"/> only.</summary>
     private bool TryGetMessage(ulong channelId, ulong messageId, out ChannelEntity channel, out MessageEntity message) =>
-        TryGetMessage(channelId, messageId, out channel, out message, out _);
+        TryGetMessage(StateCaller.Fixture, channelId, messageId, out channel, out message, out _);
 
+    /// <summary>Channel access first, then the existence of the message (ADR 0004, amendment 04B: access before <c>10008</c>).</summary>
     private bool TryGetMessage(
+        StateCaller caller,
         ulong channelId,
         ulong messageId,
         out ChannelEntity channel,
@@ -757,9 +820,10 @@ internal sealed partial class FakeDiscordState
         out StateFailure failure)
     {
         message = null!;
-        if (!_channels.TryGetValue(channelId, out channel!))
+        var access = _access.ResolveChannel(caller, channelId);
+        if (!access.TryGetValue(out channel!))
         {
-            failure = new StateFailure(StateFailureKind.UnknownChannel, channelId);
+            failure = access.Failure;
             return false;
         }
 

@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Enx.NetCord.Testing.Rest;
+using Enx.NetCord.Testing.State;
 using NetCord.Rest;
 using Xunit;
 
@@ -71,6 +72,8 @@ public sealed class DiscordErrorTests
     [InlineData(HttpStatusCode.Forbidden, 50013)]
     [InlineData(HttpStatusCode.NotFound, 0)]
     [InlineData(HttpStatusCode.NotFound, 10003)]
+    [InlineData(HttpStatusCode.NotFound, 10004)]
+    [InlineData(HttpStatusCode.Forbidden, 50001)]
     [InlineData(HttpStatusCode.NotFound, 10008)]
     [InlineData(HttpStatusCode.NotFound, 10013)]
     [InlineData(HttpStatusCode.Forbidden, 50025)]
@@ -91,6 +94,38 @@ public sealed class DiscordErrorTests
     public void TryCreateSimple_UnknownPair_ReturnsFalse(HttpStatusCode status, int code)
     {
         Assert.False(DiscordError.TryCreateSimple(status, code, out _));
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound, 10004, "Unknown Guild")]
+    [InlineData(HttpStatusCode.Forbidden, 50001, "Missing Access")]
+    [Parity("10004")]
+    [Parity("50001")]
+    public void GuildAccessErrors_Factories_ProduceTheCatalogStatusCodeAndMessage(HttpStatusCode status, int code, string message)
+    {
+        var error = code == 10004 ? DiscordError.UnknownGuild() : DiscordError.MissingAccess();
+
+        Assert.Equal((status, code, message), (error.Status, error.Code, error.Message));
+        using var json = System.Text.Json.JsonDocument.Parse(error.ToJson());
+        Assert.Equal(code, json.RootElement.GetProperty("code").GetInt32());
+        Assert.Equal(message, json.RootElement.GetProperty("message").GetString());
+    }
+
+    [Theory]
+    [InlineData((int)StateFailureKind.UnknownGuild, 10004)]
+    [InlineData((int)StateFailureKind.MissingAccess, 50001)]
+    [InlineData((int)StateFailureKind.UnknownChannel, 10003)]
+    [InlineData((int)StateFailureKind.UnknownMessage, 10008)]
+    [InlineData((int)StateFailureKind.UnknownUser, 10013)]
+    public void FromStateFailure_KindWithACatalogError_MapsToIt(int kind, int code)
+    {
+        Assert.Equal(code, DiscordError.FromStateFailure(new StateFailure((StateFailureKind)kind, 1)).Code);
+    }
+
+    [Fact]
+    public void FromStateFailure_KindWithoutACatalogError_IsRejected()
+    {
+        Assert.Throws<NotSupportedException>(() => DiscordError.FromStateFailure(new StateFailure(StateFailureKind.UnknownRole, 1)));
     }
 
     [Fact]
