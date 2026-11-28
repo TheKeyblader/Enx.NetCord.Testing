@@ -54,17 +54,28 @@ Mettre à jour `docs/parity/interactions.md`.
 
 ### Scénario de conformité (obligatoire, en plus des tests ci-dessus)
 
-Tout handler REST enregistré, y compris les routes à jeton (`POST /interactions/{interaction_id}/{interaction_token}/callback`,
-`/webhooks/{webhook_id}/{webhook_token}…`), exige **au moins un** test non ignoré `[Parity("METHOD /path")]` (clé exacte de
-la route) dans `tests/Enx.NetCord.Testing.Conformance/Interactions/`. Ce dossier n'existe pas encore : la première tâche M2 qui
-enregistre un handler le crée. Le test exécute une interaction, le handler répond par le vrai client NetCord, et le test **se
-termine par `ContractAssert.Conforms(discord, "POST /interactions/{interaction_id}/{interaction_token}/callback")`**
-(`Conforms(FakeDiscord discord, params string[] expectedOperations)` : ajouter les routes de webhook atteintes). Sans lui, la
-garde `ConformanceTests_EveryImplementedOperation_HasAScenarioTaggedWithItsKey` fait échouer `dotnet test`. Il n'y a pas de
-liste d'exemptions (UR-013). `Conforms` valide **toutes** les tentatives du journal, erreurs comprises (`40060`, `10015`,
-`50027`…), et exige que chaque route citée ait été atteinte. Un test de conformité n'appelle jamais `Assert.Skip()`, et un
-écart de schéma est un bug du fake. Détail et régénération du contrat : `dotnet-test-conventions` § Conformité ; exemple de
+Tout handler REST enregistré, y compris les routes à jeton
+(`POST /interactions/{interaction_id}/{interaction_token}/callback`,
+`/webhooks/{webhook_id}/{webhook_token}…`), exige **au moins un** test non ignoré
+`[Parity("METHOD /path")]` (clé exacte de la route) dans
+`tests/Enx.NetCord.Testing.Conformance/Interactions/` (le créer s'il n'existe pas).
+
+Le test exécute une interaction **en transport `Gateway`** : la réponse initiale part en REST.
+L'entrée inline du transport `Http` ne passe pas par le journal REST, donc `Conforms(…,
+"POST /interactions/…/callback")` y échouerait avec « never reached ». Le handler répond par le
+vrai client NetCord, et le test **se termine par**
+**`ContractAssert.Conforms(discord, "POST /interactions/{interaction_id}/{interaction_token}/callback")`**
+(signature `Conforms(FakeDiscord discord, params string[] expectedOperations)` : ajouter les
+routes de webhook atteintes).
+
+Sans lui, la garde `ConformanceTests_EveryImplementedOperation_HasAScenarioTaggedWithItsKey`
+fait échouer `dotnet test`. Il n'y a pas de liste d'exemptions (UR-013). `Conforms` valide
+**toutes** les tentatives du journal, erreurs comprises (`40060`, `10015`, `50027`…), et exige
+que chaque route citée ait été atteinte. Un test de conformité n'appelle jamais `Assert.Skip()`.
+Un écart de schéma est un bug du fake (corriger `src/` ; un test `Skip` ne compte pas pour la
+garde). Détail et régénération du contrat : `dotnet-test-conventions` § Conformité ; exemple de
 style : `fake-rest-endpoint` § 4.
 
-Check-list de fin : build sans warning, tests verts, **scénario de conformité `[Parity]` + `ContractAssert.Conforms` ajouté
-pour chaque handler REST enregistré**, `docs/parity/interactions.md` à jour, skill mise à jour si convention nouvelle.
+Check-list de fin : build sans warning, tests verts, **scénario de conformité `[Parity]` +
+`ContractAssert.Conforms` ajouté pour chaque handler REST enregistré**,
+`docs/parity/interactions.md` à jour, skill mise à jour si convention nouvelle.
