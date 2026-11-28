@@ -26,16 +26,18 @@ ADR à rédiger d'abord :
 Implémentation :
 
 - [x] M1-01 — `FakeDiscordState` + entités de base (user, application, guild, channel, role, member, message) — rest-implementer — M1-ADR-03 — [`State/`](../src/Enx.NetCord.Testing/State/) (`27c6325`, `1327b98`), review APPROVE
-- [~] (rest-implementer) M1-02 — `FakeDiscord` façade + `Seed` (guild/channel/member/role) + `CreateRestClient()` (via `RestClientFactory`) + câblage `FakeDiscord.Rest`, `FakeDiscordOptions.UnimplementedRoutes`, `RestPipelineContext.Close()` au dispose — rest-implementer — M1-ADR-04, M1-01, M1-03
+- [x] M1-02 — `FakeDiscord` façade + `Seed` (guild/channel/member/role) + `CreateRestClient()` + `FakeDiscord.Rest`, `FakeDiscordOptions.{BotToken,ApplicationId,UnimplementedRoutes}`, `Close()` au dispose — rest-implementer — M1-ADR-04, M1-01, M1-03 — [`FakeDiscord.cs`](../src/Enx.NetCord.Testing/FakeDiscord.cs), [`Seed/`](../src/Enx.NetCord.Testing/Seed/) (`cfc6ff0`), review APPROVE
 - [x] M1-03 — `FakeRestRequestHandler` + `RouteTable` + auth `Bot` + `DiscordError` + en-têtes rate limit — rest-implementer — M1-ADR-05 — [`Rest/`](../src/Enx.NetCord.Testing/Rest/), [`Serialization/`](../src/Enx.NetCord.Testing/Serialization/) (`cf488a4`, `2cd2c6c`), review APPROVE
-- [~] (rest-implementer) M1-DEBT-01 — NITs M1-03 : `FakeRestRequest.Payload` immuable après validation (`init`/ctor) ; `errors.md:12-14` ligne `+ en-têtes` (liste CommonMark involontaire) — rest-implementer — M1-03
+- [x] M1-DEBT-01 — NITs M1-03 : `FakeRestRequest.Payload` immuable (ctor + `WithPayload`) ; `errors.md` ligne `+ en-têtes` reformulée — rest-implementer — M1-03 — (`5398767`), review APPROVE
+- [ ] M1-DEBT-02 — NITs M1-02 : paramètre `state` obligatoire dans `FakeRestRequest` ; test `CreateRestClient_DefaultOptions_IsLenient` qui teste vraiment le défaut ; supprimer/reformuler `Create_DefaultTable_IsTheTableOfRestRoutes` ; une seule source des valeurs par défaut (`FakeDiscord.cs:76-78` vs `FakeDiscordState.Create`) — rest-implementer — M1-02
+- [ ] M1-ADR-04B — Adhésion du bot aux guildes seedées (implicite vs `Seed.Guild(..., withBot)`), visibilité REST (`10004`/`50001`) et Gateway (`READY.guilds`) ; amendement ADR 0004 — architect — M1-02
 - [ ] M1-04 — `Recorded.Requests` + assertions de base — rest-implementer — M1-03
 - [ ] M1-REST-01 — Users : `GET/PATCH /users/@me`, `GET /users/{user_id}`, `POST /users/@me/channels` (DM) — rest-implementer — M1-03
 - [ ] M1-REST-02 — Channels : `GET/PATCH/DELETE /channels/{channel_id}` — rest-implementer — M1-03
 - [ ] M1-REST-03 — Messages : list/get/create/edit/delete/bulk-delete/crosspost (JSON + multipart) — rest-implementer — M1-REST-02
 - [ ] M1-REST-04 — Réactions : put/delete @me, delete user, list, delete all, delete emoji — rest-implementer — M1-REST-03
 - [ ] M1-REST-05 — Pins (nouvelle et ancienne API), typing — rest-implementer — M1-REST-03
-- [ ] M1-REST-06 — Guilds : get/modify/preview, channels list/create/positions — rest-implementer — M1-03
+- [ ] M1-REST-06 — Guilds : get/modify/preview, channels list/create/positions — rest-implementer — M1-03, M1-ADR-04B
 - [ ] M1-REST-07 — Members : get/list/search/modify/@me/add role/remove role/kick — rest-implementer — M1-REST-06
 - [ ] M1-REST-08 — Roles : list/get/create/modify/positions/delete (`@everyone` = guild id) — rest-implementer — M1-REST-06
 - [ ] M1-REST-09 — Bans : list/get/create/delete/bulk-ban — rest-implementer — M1-REST-07
