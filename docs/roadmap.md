@@ -33,8 +33,8 @@ Implémentation :
 - [x] M1-ADR-04B — Adhésion du bot aux guildes seedées (implicite vs `Seed.Guild(..., withBot)`), visibilité REST (`10004`/`50001`) et Gateway (`READY.guilds`) ; amendement ADR 0004 — architect — M1-02 — [amendement 04B](adr/0004-fake-discord-public-api.md#amendement-04b--adhésion-du-bot-aux-guildes-seedées) (`324be21`), review APPROVE
 - [x] M1-04 — `Recorded.Requests` (`DiscordRecording`, `RecordedRestRequest`, `FakeDiscord.Recorded`, ADR 0004/0005) ; les assertions sont déplacées en M1-04B — rest-implementer — M1-03 — [`Recording/`](../src/Enx.NetCord.Testing/Recording/) (`e3ffa9b`, `56e67e8`), review APPROVE
 - [x] M1-05 — Adhésion du bot (amendement 04B) : `Seed.Guild(…, withBot)`, adhésion dans le commit de création et `GuildCreated`, `CreateGuildInput.WithBot`, `FakeDiscord.ApplicationId`, helper `GuildAccess`, appelant `StateCaller` (`Fixture`, `Bot`), `StateFailureKind.MissingAccess`, `DiscordError.UnknownGuild()`/`MissingAccess()` + `errors.md`, couples `RestEffect.Error`, ajustement de `DiscordSeedTests.cs:202,214,364` — rest-implementer — M1-ADR-04B, M1-04 — [`State/GuildAccess.cs`](../src/Enx.NetCord.Testing/State/GuildAccess.cs), [`StateCaller.cs`](../src/Enx.NetCord.Testing/State/StateCaller.cs) (`3338d6a`, `a4f69c8`, merge `afd17f0`), review APPROVE ; `errors.md` `10004`/`50001` Fake 🟡 Tests ✅ ; skill `fake-rest-endpoint` (visibilité)
-- [~] (architect) M1-ADR-12 — Assertions agnostiques : `FakeDiscordAssertionException`, `ShouldHaveRequested(...)` et premières assertions sur `Recorded` (ADR 0002 n'en fixe que l'exception, ADR 0004 les exclut) — architect — M1-04
-- [ ] M1-04B — Assertions de base selon M1-ADR-12 — rest-implementer — M1-ADR-12
+- [x] M1-ADR-12 — Assertions agnostiques : `FakeDiscordAssertionException`, `ShouldHaveRequested(...)` et premières assertions sur `Recorded` (ADR 0002 n'en fixe que l'exception, ADR 0004 les exclut) — architect — M1-04 — [ADR 0012](adr/0012-agnostic-assertions.md) (`5b72b9d`, `cd39440`, merge `96e070a`), review APPROVE ; 3 choix d'ergonomie confirmés par l'utilisateur
+- [ ] M1-04B — Assertions de base (ADR 0012) : `FakeDiscordAssertionException` (+ interface interne `IAssertionException`), `RecordedRequestAssertions` (`ShouldHaveRequested`, `ShouldHaveRequestedOnce`, `ShouldNotHaveRequested` sur `DiscordRecording` et `IEnumerable<RecordedRestRequest>`), motif de route résolu par `RouteTable` avec ses gardes de valeur (segment `%XX`, Snowflake = `ulong` canonique, jeton via `RestRedaction.IsTokenName`, `[redacted]`), liste générée des paramètres `SnowflakeType` (`tools/generate-route-inventory.py` → `RouteInventory.g.cs`), message d'échec du § 5, accès interne de `DiscordRecording` à la table ; tests des tableaux § 3 et § 4, suite paresseuse non énumérée, interface nommée `IAssertionException` — rest-implementer — M1-ADR-12, M1-04
 - [x] M1-REST-01 — Users : `GET/PATCH /users/@me`, `GET /users/{user_id}`, `POST /users/@me/channels` (DM) — rest-implementer — M1-03 — [`Routes/Users/`](../src/Enx.NetCord.Testing/Rest/Routes/Users/) (`e4a2df8`, `0bd0dba`, `f669901`), review APPROVE ; PATCH et DM 🟡 (group DM, `50007`)
 - [x] M1-DEBT-03 — Factoriser les aides de validation locales à `Routes/Users/UserValidators.cs` (snowflake de route/corps, corps objet, `MODEL_TYPE_CONVERT`) dans `Rest/` pour toutes les familles — rest-implementer — M1-REST-01 — [`Rest/FormValidation.cs`](../src/Enx.NetCord.Testing/Rest/FormValidation.cs) (`2b84902`, `b75b511`, `edc847f`, merge `8cf44d8`), review APPROVE ; skill `fake-rest-endpoint` § 3 à jour
 - [ ] M1-DEBT-04 — Compléter `FormValidation` au besoin des familles M1-REST-02+ : entiers et bornes numériques, booléens, tableaux typés (à faire dans la première tâche qui en a besoin, pas en lot) — rest-implementer — M1-DEBT-03
@@ -57,7 +57,7 @@ Implémentation :
 - [x] M2-ADR-08 — Harnais `Enx.NetCord.Testing.Services` (API, DI, enregistrement des commandes) — architect — M2-ADR-07 — [ADR 0008](adr/0008-services-harness.md) (`c557acb`, `b7ea229`, `b3d983a`), review APPROVE
 - [ ] M2-01 — Builders slash command (options, sous-commandes, `resolved`) + exécution directe (refus local d'une guilde sans le bot, amendement 04B § 4) — interactions-implementer — M2-ADR-07, M1-05
 - [ ] M2-02 — Callbacks : Pong, Message, DeferredMessage, DeferredModifyMessage, ModifyMessage, Autocomplete, Modal + route `POST /interactions/{interaction_id}/{interaction_token}/callback` (ADR 0007) — interactions-implementer — M2-01, M1-03, M1-04
-- [ ] M2-03 — REST interactions à jeton : original response get/edit/delete, followups (`/webhooks/{application_id}/{token}…`), `WaitForAsync`, `GetResult` — interactions-implementer — M2-02, M1-REST-03
+- [ ] M2-03 — REST interactions à jeton : original response get/edit/delete, followups (`/webhooks/{application_id}/{token}…`), `WaitForAsync`, `GetResult` ; `InteractionResult.Requests` rend les instances du journal (ADR 0012) — interactions-implementer — M2-02, M1-REST-03
 - [ ] M2-04 — User/Message commands, Autocomplete — interactions-implementer — M2-01
 - [ ] M2-05 — Composants : bouton, string/user/role/mentionable/channel menus ; modals (text input, Label, FileUpload, Radio/Checkbox) — interactions-implementer — M2-02
 - [ ] M2-06 — Components V2 (Section, TextDisplay, Thumbnail, MediaGallery, File, Separator, Container) dans les messages — interactions-implementer — M2-05
@@ -68,7 +68,8 @@ Implémentation :
 - [ ] M2-11 — Validation des requêtes d'interaction contre les commandes visibles (guilde du salon + globales) — interactions-implementer — M2-04, M2-07, M1-05
 - [ ] M2-12 — `FakeDiscord.CreateGatewayClient()` minimal : REST branché, compression désactivée, provider WebSocket dans `Gateway/` qui refuse la connexion (remplacé par M3-01) — gateway-implementer — M1-02
 - [ ] M2-13 — Interactions hors installation de guilde : installation par l'utilisateur (`authorizing_integration_owners` `{"1": user_id}`, `context`, `app_permissions`, limite de 5 followups) et application installée sans utilisateur bot ; amendement ADR 0007 puis implémentation — architect, puis interactions-implementer — M2-07, M2-11
-- [ ] M2-T-01 — Sample bot : `/ping`, `/greet user`, bouton de confirmation, modal + tests — test-engineer — M2-08
+- [ ] M2-14 — Assertions sur `InteractionResult` (« a répondu », modal, réponse refusée) : amendement ADR 0012 puis implémentation — architect, puis interactions-implementer — M2-03, M1-04B
+- [ ] M2-T-01 — Sample bot : `/ping`, `/greet user`, bouton de confirmation, modal + tests (utilise les assertions de l'ADR 0012) — test-engineer — M2-08, M1-04B
 - [ ] M2-R — Review de jalon + `/parity/audit interactions` — reviewer, parity-auditor — M2-*
 
 ## M3 — Gateway
@@ -83,6 +84,7 @@ Implémentation :
 - [ ] M3-07 — Send events : PRESENCE_UPDATE, VOICE_STATE_UPDATE (état seulement), REQUEST_GUILD_MEMBERS → GUILD_MEMBERS_CHUNK, REQUEST_SOUNDBOARD_SOUNDS — gateway-implementer — M3-03
 - [ ] M3-08 — INTERACTION_CREATE via Gateway (voie 2) — interactions-implementer — M3-02, M2-03
 - [ ] M3-09 — Harnais Services : `CommandService` par `MESSAGE_CREATE` sur un client connecté (préfixe, résultat par ID de message) — interactions-implementer — M3-ADR-09, M3-03, M3-04, M2-08
+- [ ] M3-10 — Assertions Gateway (journal des frames et dispatchs) : amendement ADR 0012 puis implémentation — architect, puis gateway-implementer — M3-ADR-09, M3-03, M1-04B
 - [ ] M3-R — Review + `/parity/audit gateway` — reviewer, parity-auditor — M3-*
 
 ## M4 — Couverture REST étendue
@@ -107,7 +109,7 @@ Implémentation :
 
 ## M6 — Qualité, docs, release
 
-- [ ] M6-01 — Guides `docs/guides/01..08` + README — docs-writer — M2, M3
+- [ ] M6-01 — Guides `docs/guides/01..08` + README (dont composition des assertions ADR 0012 avec xUnit/NUnit/MSTest/Shouldly/FluentAssertions) — docs-writer — M2, M3
 - [ ] M6-02 — Simulation de rate limits (429 + `retry_after`, bucket) opt-in — rest-implementer — M1-03
 - [ ] M6-03 — Benchmarks + chasse aux tests flaky (50 runs) — test-engineer — M3
 - [ ] M6-04 — Packaging NuGet (README, icône, SourceLink, symboles) — build — M6-01
