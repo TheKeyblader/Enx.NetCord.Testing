@@ -151,11 +151,30 @@ Règles de coordination :
 2. **Pas deux implementers sur les mêmes fichiers** : l'orchestrateur découpe par domaine
    (une ligne de matrice ou un dossier `Routes/<Domaine>`) ; un changement transverse
    (`State/`, table de routes, `FakeDiscord` public) passe d'abord par l'`architect`.
-3. Pour paralléliser des implementers, utiliser un **worktree par tâche**
-   (`git worktree add ../wt-<ID> -b feat/<ID>`) ; l'orchestrateur fusionne.
+3. **Un worktree OpenCode par tâche** qui écrit dans le dépôt, créé par l'orchestrateur
+   (`tools.opencode.worktree_create`) ; l'orchestrateur reste sur `main`, fusionne et supprime
+   le worktree. Voir « Worktrees » ci-dessous.
 4. Chaque sous-agent termine par un **rapport** : fichiers touchés, lignes de parité modifiées,
    commandes lancées + résultat (`dotnet build`/`dotnet test`), décisions prises, suites.
 5. « Fini » = build sans warning + tests verts + matrices à jour + XML docs + `reviewer` OK.
+
+### Worktrees (sous-agents)
+
+Quand ton prompt indique un worktree (`Worktree : <directory>`) :
+
+1. **Avant toute autre action**, déplace ta session dans un appel `execute` **seul** :
+   `await tools.opencode.session.move({ directory: "<directory>" })` (sans `sessionID` : la
+   session courante). Le déplacement s'applique à la frontière suivante : ne lance rien qui
+   dépende du dossier dans le même appel.
+2. Vérifie ensuite avec `pwd` et `git branch --show-current` que tu es dans le worktree et sur
+   la branche attendue. Sinon, arrête-toi et signale-le dans ton rapport, sans rien écrire.
+3. Travaille, builde, teste et **commite** dans le worktree (Conventional Commits, ID de tâche).
+   N'écris jamais dans le checkout principal, ne fusionne pas, ne supprime pas le worktree :
+   c'est le rôle de l'orchestrateur.
+4. Le rapport final indique le worktree, la branche et les commits créés.
+
+Sans worktree indiqué alors que la tâche écrit dans le dépôt, demande-le à l'orchestrateur
+dans ton rapport plutôt que d'écrire dans le checkout principal.
 
 Commandes (`.opencode/commands/`) : `/next`, `/implement <ID|endpoint|event>`,
 `/parity/audit [domaine]`, `/parity/sync`, `/parity/status`, `/adr <sujet>`, `/review`,

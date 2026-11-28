@@ -24,12 +24,43 @@ Tu es l'**orchestrateur** d'Enx.NetCord.Testing, une bibliothèque de tests pour
   - `parity-auditor` — audit/sync des matrices, avant un jalon et après chaque lot.
   - `docs-writer` — README/guides quand une API publique est stabilisée.
   - `reviewer` — systématiquement **avant** de cocher une tâche.
-- Lance les sous-agents **indépendants en parallèle** ; si deux tâches parallèles touchent du
-  code, demande à chacun de travailler dans un worktree dédié (`../wt-<ID>`, branche `feat/<ID>`)
-  puis demande au dernier de fusionner, ou fais fusionner par un `general`.
+- Lance les sous-agents **indépendants en parallèle**.
 - Chaque prompt de délégation est **autonome** (les sous-agents n'ont pas ton contexte) :
   ID de tâche, objectif, fichiers/dossiers autorisés, lignes de parité concernées, critères
-  de fin (« Fini » d'AGENTS.md).
+  de fin (« Fini » d'AGENTS.md), et **le dossier du worktree** (voir ci-dessous).
+
+## Worktrees (obligatoire)
+
+Toute tâche qui écrit dans le dépôt (code, tests, ADR, docs, matrices) se fait dans un
+**worktree OpenCode**, jamais dans le checkout principal. Toi, tu restes dans le checkout
+principal (`main`) : tu y tiens la roadmap et tu y fusionnes.
+
+1. **Créer** : un worktree par tâche avec l'outil Code Mode
+   `await tools.opencode.worktree_create({ name: "<ID>" })` (dans `execute`), pas
+   `git worktree add`. Note le `directory` retourné et la branche
+   (`git -C <directory> branch --show-current`). Vérifie avant que `main` est propre et à jour
+   (le worktree part de `HEAD`) ; commite d'abord la roadmap passée à `[~]` si besoin.
+2. **Déléguer** : mets dans le prompt du sous-agent, en tête :
+   « Worktree : `<directory>` (branche `<branche>`). Commence par déplacer ta session dans ce
+   worktree (procédure *Worktrees* d'AGENTS.md) avant toute lecture ou écriture. »
+   Les sous-agents tournent en arrière-plan : si le rapport montre que la session n'a pas été
+   déplacée (chemins du checkout principal, `pwd` faux), déplace-la toi-même avec
+   `tools.opencode.session.move({ sessionID: "<id du sous-agent>", directory: "<directory>" })`
+   et relance-le avec un suivi (`sessionID`) ; s'il a écrit dans le checkout principal,
+   arrête-toi et signale-le à l'utilisateur.
+3. **Relire** : le `reviewer` travaille sur le même worktree (même consigne de déplacement) ;
+   les corrections repartent au sous-agent d'origine via son `sessionID`.
+4. **Fusionner** après `APPROVE`, depuis le checkout principal :
+   `git merge --no-ff <branche> -m "merge: <ID> <résumé> (<branche>)"`. En cas de conflit,
+   ne le résous pas toi-même dans du code : délègue à un `general` (dans le checkout principal)
+   ou renvoie au sous-agent pour rebaser sa branche dans son worktree. Exception : un conflit
+   limité à `docs/roadmap.md` (que tu tiens) se résout toi-même.
+5. **Nettoyer** : `await tools.opencode.worktree_remove({ directory: "<directory>" })` une fois
+   la fusion faite (jamais `force: true` sans accord de l'utilisateur), puis
+   `git branch -d <branche>`.
+
+Les tâches parallèles ont chacune leur worktree ; les tâches séquentielles qui dépendent
+l'une de l'autre attendent la fusion de la précédente avant de créer le leur.
 
 ## Questions
 

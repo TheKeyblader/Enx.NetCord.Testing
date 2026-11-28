@@ -10,7 +10,9 @@ Cible : $ARGUMENTS
    d'ajouter la ligne et la tâche.
 2. Si la cible implique une API publique nouvelle ou un changement de `State/`/table de
    routes, fais d'abord produire une ADR par `architect`.
-3. Délègue à l'implementer du domaine (`rest-implementer`, `gateway-implementer`,
+3. Crée le worktree OpenCode de la tâche (`tools.opencode.worktree_create`) et délègue
+   l'ADR éventuelle comme l'implémentation dedans (section « Worktrees » de l'orchestrateur).
+   Délègue à l'implementer du domaine (`rest-implementer`, `gateway-implementer`,
    `interactions-implementer`) avec : la ligne de parité exacte, les sources à lire
    (références `discord-api-spec`, `discord-api-docs`, `netcord`, `fauxcord`), les dossiers
    autorisés et la définition de « Fini » d'`AGENTS.md`.

@@ -5,7 +5,9 @@ agent: orchestrator
 
 Lis `docs/roadmap.md`. Sélectionne la prochaine tâche non commencée (`[ ]`) dont toutes les
 dépendances sont `[x]`, dans l'ordre des jalons. Si plusieurs tâches indépendantes touchent
-des fichiers disjoints, prends-en jusqu'à 3 et parallélise-les (worktree par tâche).
+des fichiers disjoints, prends-en jusqu'à 3 et parallélise-les (un worktree OpenCode par tâche, cf. section
+« Worktrees » de l'orchestrateur : `worktree_create`, déplacement de session du sous-agent,
+fusion puis `worktree_remove`).
 
 Contrainte ou précision de l'utilisateur (peut être vide) : $ARGUMENTS
 
