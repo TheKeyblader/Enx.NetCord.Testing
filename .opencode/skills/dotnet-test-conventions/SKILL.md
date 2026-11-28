@@ -38,6 +38,15 @@ description: Conventions de tests du dépôt Enx.NetCord.Testing (xUnit v3, nomm
     `Assert.Skip()` à l'exécution (non détectable par la garde : le test passerait pour une couverture sans en être une). L'extrait couvre toutes les opérations de la spec : aucun fichier de `Contract/` à toucher.
   - Un écart de schéma est un bug du fake (corriger `src/`, ou `Skip` avec raison + ID de tâche et ligne de parité en 🟡).
     Une route hors spec (`InSpecification: false`) n'a pas de contrat.
+  - **Mode strict** : `Conforms` rejette toute propriété d'une réponse que le schéma de la spec ne déclare pas
+    (à travers `$ref`, `allOf` = union, `oneOf`/`anyOf` = branches qui valident, objets imbriqués, tableaux ; `additionalProperties`
+    respecté). Propriété non déclarée = bug du fake **sauf** si `discord-api-docs` la déclare (lacune de la spec) : dans ce
+    cas **une seule** entrée dans `Contract/ContractExceptions.cs` (`Schema`, `Property`, `Justification`, `Reference`
+    = `developers/….mdx:ligne`, `Operation`, `Task`). Jamais d'exception pour masquer un bug. `ContractExceptionsTests`
+    échoue pour une entrée mal formée, déclarée (ou acceptée par `additionalProperties`) désormais par la spec, ou **inutilisée**.
+    Règle « morte » : jugée seulement si une réponse **2xx** validée de l'`Operation` contenait un objet évalué contre le
+    `Schema` (comptage par couple opération/schéma) sans qu'aucune réponse n'ait eu besoin de l'exception ; un run filtré
+    qui n'atteint pas le couple ne juge rien. `{}` (annotations seules) = schéma `true`, `{"type":"object","properties":{}}` reste fermé.
   - Régénération après `/parity/sync` (tâche `parity-auditor`/`test-engineer`) :
     `python3 -I tests/Enx.NetCord.Testing.Conformance/Contract/extract-openapi-contract.py <chemin>/discord-api-spec/specs/openapi.json <sha-complet>`,
     relire le diff (= dérive de contrat), puis `dotnet test` ; voir `tests/Enx.NetCord.Testing.Conformance/README.md`.

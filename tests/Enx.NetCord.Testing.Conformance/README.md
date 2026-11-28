@@ -10,9 +10,12 @@ produced is validated against the **Discord OpenAPI spec** pinned in `docs/parit
 | `Rest/*ConformanceTests.cs` | One scenario per operation (and its main `Unknown *` error), through the NetCord API. |
 | `Contract/openapi-contract.json` | Checked-in extract of the pinned spec: 2xx response schemas of **every** operation + the `$ref` closure + the error envelopes (`ErrorResponse`, and `RatelimitedResponse` for 429). Embedded in the assembly; CI needs no checkout of `discord-api-spec`. |
 | `Contract/extract-openapi-contract.py` | Generates the extract (offline, reproducible; the spec SHA is in the extract's `source` object). |
-| `Contract/JsonSchemaValidator.cs` | Small validator for the subset of JSON Schema the spec uses. It **throws** on an unsupported keyword. |
+| `Contract/JsonSchemaValidator.cs` | Small **strict** validator for the subset of JSON Schema the spec uses (undeclared properties are rejected). It **throws** on an unsupported keyword. |
+| `Contract/ContractExceptions.cs` + `ContractException.cs` | The single list of justified undeclared properties (empty today) and its static audit. |
 | `Contract/ContractAssert.cs` | `ContractAssert.Conforms(discord, "METHOD /template"…)`. |
-| `Contract/ContractInfrastructureTests.cs` | Guards: pinned commit, inventory ↔ extract in sync, supported keywords, one scenario per implemented operation. |
+| `Contract/ContractInfrastructureTests.cs` | Guards: pinned commit, inventory ↔ extract in sync, supported keywords, one scenario per implemented operation, validator oracle. |
+| `Contract/StrictContractTests.cs` | Strict mode: `$ref`, `allOf`, `oneOf`/`anyOf`, nested, arrays, `additionalProperties`, exceptions. |
+| `Contract/ContractExceptionsTests.cs` | Exception list soundness and dead-exception detection (runs last). |
 
 ## Adding a REST handler (no change to `Contract/` needed)
 
@@ -51,7 +54,32 @@ Review the diff of `openapi-contract.json`: it is the contract drift. Then run `
 - The script's guarded errata fail loudly when the spec fixed what they correct. Current erratum **E-001**: the spec types
   the field-error `code` of a `50035` as an integer, whereas Discord (docs `reference.mdx`) and the fake send a string.
 
+## Strict mode and justified exceptions
+
+`ContractAssert.Conforms` is **strict**: a property of a response that the spec schema does not declare is a violation,
+like `unevaluatedProperties: false` (message: JSON path, property name, spec schema). A property is declared by
+`properties` of the schema, of its `$ref` target, of any `allOf` branch (union), or of a `oneOf`/`anyOf` branch **that
+validates**; `additionalProperties: true` or a schema accepts the others, `false` rejects them. It applies through nested
+objects and arrays, and to the error envelopes.
+
+When the fake sends an undeclared property, decide:
+
+- the official docs (`discord-api-docs`) do **not** declare it → bug of the fake (fix `src/`, or `Skip` the test with the
+  reason and a task ID, and downgrade the parity row to 🟡);
+- the docs declare it and the spec is incomplete → add **one** entry to `Contract/ContractExceptions.cs`: `Schema`,
+  `Property`, `Justification`, `Reference` (`developers/…mdx:line` of `discord-api-docs`), `Operation` (the route whose
+  success response carries it) and `Task` (roadmap task or `UR-NNN`). Never register an exception to silence a bug.
+
+`ContractExceptionsTests` keeps the list honest: it fails for a malformed entry, for a property the spec now declares or
+accepts through `additionalProperties` (after a `/parity/sync`), and for an **unused** exception. Dead rule: an exception is
+judged only if at least one validated **success** response of its `Operation` contained an object evaluated against its
+`Schema` (counted per (operation, schema) pair while validating); if that happened and no response needed the exception, it
+is dead. A filtered run that never reached the pair judges nothing. The collection runs after all the others
+(`ExceptionsLastCollectionOrderer`, also in sequential runs), so every scenario has recorded its use first.
+An empty schema `{}` (annotations only) is the `true` schema and accepts any value; `{"type":"object","properties":{}}` stays closed.
+The list is empty today: no response of the fake carries an undeclared property.
+
 ## Limits
 
-Only response *schemas* are checked: a property the spec does not declare is not rejected (the spec does not forbid it
-either), and request validation / behaviour stay in `Enx.NetCord.Testing.Tests`.
+Only response *schemas* are checked, strictly; request validation and behaviour stay in `Enx.NetCord.Testing.Tests`.
+Required properties are checked, but a property the spec declares optional is not required to be present.
