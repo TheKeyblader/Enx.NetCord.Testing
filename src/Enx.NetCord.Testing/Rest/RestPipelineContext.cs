@@ -18,7 +18,6 @@ internal sealed class RestPipelineContext
     /// <param name="routes">The route table.</param>
     /// <param name="state">The fake's state, handed to the route handlers through <see cref="FakeRestRequest.State"/>.</param>
     /// <param name="identities">The resolver mapping an <c>Authorization</c> value to a caller.</param>
-    /// <param name="timeProvider">The fake's clock.</param>
     /// <param name="unimplementedRoutes">The policy for routes without a handler.</param>
     /// <param name="journal">The sink receiving terminal attempts, or <see langword="null"/> to discard them.</param>
     /// <param name="hostname">The sentinel hostname.</param>
@@ -26,7 +25,6 @@ internal sealed class RestPipelineContext
         RouteTable routes,
         FakeDiscordState state,
         IRestIdentityResolver identities,
-        TimeProvider timeProvider,
         UnimplementedRouteMode unimplementedRoutes = UnimplementedRouteMode.Lenient,
         IRestAttemptSink? journal = null,
         string hostname = DefaultHostname)
@@ -34,7 +32,6 @@ internal sealed class RestPipelineContext
         Routes = routes;
         State = state;
         Identities = identities;
-        TimeProvider = timeProvider;
         UnimplementedRoutes = unimplementedRoutes;
         Journal = journal ?? NullRestAttemptSink.Instance;
         Hostname = hostname;
@@ -50,8 +47,8 @@ internal sealed class RestPipelineContext
     /// <summary>Gets the identity resolver.</summary>
     public IRestIdentityResolver Identities { get; }
 
-    /// <summary>Gets the clock.</summary>
-    public TimeProvider TimeProvider { get; }
+    /// <summary>Gets the clock: the single clock of the fake, owned by its state.</summary>
+    public TimeProvider TimeProvider => State.Clock;
 
     /// <summary>Gets the policy for routes without a handler.</summary>
     public UnimplementedRouteMode UnimplementedRoutes { get; }

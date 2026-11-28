@@ -43,7 +43,13 @@ internal sealed partial class FakeDiscordState
         _ids = ids;
     }
 
-    /// <summary>Creates a state from public options, applying the fixed virtual clock and default generator.</summary>
+    /// <summary>Gets the clock this state reads (the single source of the fake's time).</summary>
+    internal TimeProvider Clock => _clock;
+
+    /// <summary>
+    /// Creates a state from public options, applying the fixed virtual clock and default generator.
+    /// This is the only place the defaults are chosen: callers read <see cref="Clock"/> back instead of re-deriving it.
+    /// </summary>
     internal static FakeDiscordState Create(FakeDiscordOptions? options = null) =>
         new(
             options?.TimeProvider ?? new VirtualTimeProvider(),

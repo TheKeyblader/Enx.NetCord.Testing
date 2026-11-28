@@ -28,6 +28,7 @@ public sealed class FakeDiscord : IAsyncDisposable
         Token = token;
         Seed = new DiscordSeed(this);
         Rest = new FakeDiscordRest(context.Interceptions);
+        Recorded = new DiscordRecording(this, journal);
     }
 
     /// <summary>Gets the fixture builder bound to this fake.</summary>
@@ -35,6 +36,9 @@ public sealed class FakeDiscord : IAsyncDisposable
 
     /// <summary>Gets the REST controls bound to this fake.</summary>
     public FakeDiscordRest Rest { get; }
+
+    /// <summary>Gets the observations collected by this fake.</summary>
+    public DiscordRecording Recorded { get; }
 
     /// <summary>Gets the state shared by every transport of this fake.</summary>
     internal FakeDiscordState State { get; }
@@ -73,9 +77,7 @@ public sealed class FakeDiscord : IAsyncDisposable
         var token = options.BotToken is { } raw ? new BotToken(raw) : null;
         var explicitId = ResolveExplicitId(options, token);
 
-        var clock = options.TimeProvider ?? new VirtualTimeProvider();
-        var ids = options.SnowflakeGenerator ?? new DefaultSnowflakeGenerator();
-        var state = new FakeDiscordState(clock, ids);
+        var state = FakeDiscordState.Create(options);
 
         // One reservation for the pair: the user and the application share this ID (ADR 0004).
         var identity = state.CreateBotIdentity(new CreateBotIdentityInput(BotUsername, Id: explicitId));
@@ -86,7 +88,6 @@ public sealed class FakeDiscord : IAsyncDisposable
             routes,
             state,
             new BotIdentityResolver(token.RawToken, token.Id),
-            clock,
             options.UnimplementedRoutes,
             journal);
         return new FakeDiscord(state, journal, context, token);

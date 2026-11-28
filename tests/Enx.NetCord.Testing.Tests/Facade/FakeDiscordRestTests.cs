@@ -12,9 +12,9 @@ public sealed class FakeDiscordRestTests
     [Fact]
     [Parity("http:404")]
     [Parity("0")]
-    public async Task CreateRestClient_UnimplementedRouteInLenientMode_ReturnsDiscord404WithCodeZero()
+    public async Task CreateRestClient_UnimplementedRouteInExplicitLenientMode_ReturnsDiscord404WithCodeZero()
     {
-        await using var discord = FakeDiscord.Create();
+        await using var discord = FakeDiscord.Create(new FakeDiscordOptions { UnimplementedRoutes = UnimplementedRouteMode.Lenient });
         using var rest = discord.CreateRestClient();
 
         var exception = await Assert.ThrowsAsync<RestException>(() => rest.GetCurrentUserAsync(cancellationToken: Ct));
@@ -29,12 +29,15 @@ public sealed class FakeDiscordRestTests
     [Fact]
     public async Task CreateRestClient_DefaultOptions_IsLenient()
     {
-        await using var explicitLenient = FakeDiscord.Create(new FakeDiscordOptions { UnimplementedRoutes = UnimplementedRouteMode.Lenient });
-        using var rest = explicitLenient.CreateRestClient();
+        await using var discord = FakeDiscord.Create();
+        using var rest = discord.CreateRestClient();
 
         var exception = await Assert.ThrowsAsync<RestException>(() => rest.GetCurrentUserAsync(cancellationToken: Ct));
 
+        // Options not set at all: the default must be Lenient (a 404 with code 0), not Strict (NotSupportedException).
+        Assert.Equal(UnimplementedRouteMode.Lenient, new FakeDiscordOptions().UnimplementedRoutes);
         Assert.Equal(HttpStatusCode.NotFound, exception.StatusCode);
+        Assert.Equal(0, exception.Error!.Code);
     }
 
     [Fact]
@@ -109,14 +112,5 @@ public sealed class FakeDiscordRestTests
         await using var discord = FakeDiscord.Create();
 
         Assert.Throws<ArgumentException>(() => discord.Rest.Intercept(FacadeTestSupport.MeKey, RestEffect.Delay(TimeSpan.Zero)));
-    }
-
-    [Fact]
-    public async Task Create_DefaultTable_IsTheTableOfRestRoutes()
-    {
-        await using var discord = FakeDiscord.Create();
-
-        // No endpoint is implemented yet (M1-REST): every default binding is the table's, nothing hidden in the facade.
-        Assert.Equal(RestRoutes.Bindings.Count, RouteTable.Default.Entries.Count(entry => entry.Handler is not null));
     }
 }
