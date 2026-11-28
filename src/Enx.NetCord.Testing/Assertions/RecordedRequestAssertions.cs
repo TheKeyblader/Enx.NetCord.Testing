@@ -143,9 +143,11 @@ public static class RecordedRequestAssertions
         ArgumentNullException.ThrowIfNull(recording);
         ArgumentNullException.ThrowIfNull(route);
 
-        // The snapshot is taken once, before the pattern is read, and throws when the fake is closed.
-        var requests = recording.Requests;
-        return (requests, RoutePattern.Parse(route, recording.Routes));
+        recording.ThrowIfDisposed();
+        var pattern = RoutePattern.Parse(route, recording.Routes);
+
+        // One snapshot per call, taken once the call is known to be valid.
+        return (recording.Requests, pattern);
     }
 
     private static RoutePattern Prepare(IEnumerable<RecordedRestRequest> requests, string route)

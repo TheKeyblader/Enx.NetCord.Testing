@@ -40,6 +40,23 @@ def security_flags(operation, key):
 SNOWFLAKE_REF = "#/components/schemas/SnowflakeType"
 
 
+PARAMETER_REF_PREFIX = "#/components/parameters/"
+
+
+def resolve_parameter_ref(spec, template, ref):
+    """Resolves a reference to a reusable parameter, so a non-path one is filtered like an inline one."""
+    if not ref.startswith(PARAMETER_REF_PREFIX):
+        raise SystemExit(f"{template}: unsupported parameter reference {ref}")
+    parameter = (
+        spec.get("components", {})
+        .get("parameters", {})
+        .get(ref[len(PARAMETER_REF_PREFIX) :])
+    )
+    if parameter is None:
+        raise SystemExit(f"{template}: parameter reference {ref} does not resolve")
+    return parameter
+
+
 def snowflake_path_parameters(spec):
     """Returns the sorted names of the path parameters the spec types as SnowflakeType.
 
@@ -57,7 +74,7 @@ def snowflake_path_parameters(spec):
                 declared += operation.get("parameters", [])
         for parameter in declared:
             if "$ref" in parameter:
-                raise SystemExit(f"{template}: parameter references are not supported")
+                parameter = resolve_parameter_ref(spec, template, parameter["$ref"])
             if parameter["in"] != "path":
                 continue
             is_snowflake = parameter["schema"].get("$ref") == SNOWFLAKE_REF

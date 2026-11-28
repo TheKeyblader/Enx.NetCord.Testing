@@ -316,10 +316,8 @@ public sealed class RecordedRequestAssertionsTests
     }
 
     [Fact]
-    public async Task Sequence_EmptySequence_ReportsThatNothingWasRecorded()
+    public void Sequence_EmptySequence_ReportsThatNothingWasRecorded()
     {
-        await using var discord = CreateFake();
-
         var exception = Assert.Throws<FakeDiscordAssertionException>(() => Array.Empty<RecordedRestRequest>().ShouldHaveRequested("GET /users/@me"));
 
         Assert.Contains("No request was recorded.", exception.Message, StringComparison.Ordinal);
