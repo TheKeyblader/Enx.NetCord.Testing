@@ -34,7 +34,8 @@ description: Conventions de tests du dépôt Enx.NetCord.Testing (xUnit v3, nomm
     (valide toutes les tentatives du journal contre le schéma de la spec épinglée et exige que la route ait été
     atteinte). Ajouter le cas d'erreur principal (`Unknown *`, `[Parity("<code>")]`).
   - La garde `ConformanceTests_EveryImplementedOperation_HasAScenarioTaggedWithItsKey` **échoue** sans ce scénario ;
-    un test `Skip` ne compte pas. L'extrait couvre toutes les opérations de la spec : aucun fichier de `Contract/` à toucher.
+    un test `Skip`/`SkipUnless`/`SkipWhen` ne compte pas, et un scénario de conformité ne doit **pas** appeler
+    `Assert.Skip()` à l'exécution (non détectable par la garde : le test passerait pour une couverture sans en être une). L'extrait couvre toutes les opérations de la spec : aucun fichier de `Contract/` à toucher.
   - Un écart de schéma est un bug du fake (corriger `src/`, ou `Skip` avec raison + ID de tâche et ligne de parité en 🟡).
     Une route hors spec (`InSpecification: false`) n'a pas de contrat.
   - Régénération après `/parity/sync` (tâche `parity-auditor`/`test-engineer`) :

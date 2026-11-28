@@ -45,7 +45,7 @@ public sealed class ContractInfrastructureTests
     {
         var tagged = typeof(ContractInfrastructureTests).Assembly.GetTypes()
             .SelectMany(static t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
-            .Where(static m => !m.GetCustomAttributes<FactAttribute>().Any(static f => f.Skip is not null)) // a skipped test proves nothing
+            .Where(static m => !m.GetCustomAttributes<FactAttribute>().Any(static f => f.Skip is not null || f.SkipUnless is not null || f.SkipWhen is not null)) // a skipped test proves nothing
             .SelectMany(static m => m.GetCustomAttributes<ParityAttribute>())
             .SelectMany(static a => a.GetTraits())
             .Select(static trait => trait.Value)
