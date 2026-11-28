@@ -380,6 +380,48 @@ public sealed class RecordedRequestsTests
     }
 
     [Fact]
+    public async Task Requests_MultipartWithFilesBeforeAndAfterPayloadJson_RecordsOnlyThePayload()
+    {
+        await using var discord = CreateFake();
+        using var rest = discord.CreateRestClient();
+        using var content = new MultipartFormDataContent("quoted boundary");
+        var lookalike = Encoding.Latin1.GetBytes("\r\n--quoted boundaryX\r\n--quoted boundary-\0ÿ\u0080");
+        content.Add(new ByteArrayContent(lookalike), "files[0]", "a.bin");
+        content.Add(new StringContent("{\"a\":1}", Encoding.UTF8, "application/json"), "payload_json");
+        content.Add(new ByteArrayContent([0xff, 0xfe, 0x00]), "files[1]", "b.bin");
+
+        await rest.SendRequestAsync(HttpMethod.Post, content, $"/channels/123/messages", cancellationToken: Ct);
+
+        Assert.Equal(1, Assert.Single(discord.Recorded.Requests).RequestBody!.Value.GetProperty("a").GetInt32());
+    }
+
+    [Fact]
+    public async Task Requests_MultipartWithOnlyAFilePart_HasNoRequestBody()
+    {
+        await using var discord = CreateFake();
+        using var rest = discord.CreateRestClient();
+        using var content = new MultipartFormDataContent("b");
+        content.Add(new ByteArrayContent([1, 2, 3]), "files[0]", "a.bin");
+
+        await rest.SendRequestAsync(HttpMethod.Post, content, $"/channels/123/messages", cancellationToken: Ct);
+
+        Assert.Null(Assert.Single(discord.Recorded.Requests).RequestBody);
+    }
+
+    [Fact]
+    public async Task Requests_MultipartWithCrlfInsideThePayloadJson_RecordsTheWholePayload()
+    {
+        await using var discord = CreateFake();
+        using var rest = discord.CreateRestClient();
+        using var content = new MultipartFormDataContent("b");
+        content.Add(new StringContent("{\"a\":\r\n1}", Encoding.UTF8, "application/json"), "payload_json");
+
+        await rest.SendRequestAsync(HttpMethod.Post, content, $"/channels/123/messages", cancellationToken: Ct);
+
+        Assert.Equal(1, Assert.Single(discord.Recorded.Requests).RequestBody!.Value.GetProperty("a").GetInt32());
+    }
+
+    [Fact]
     public async Task Requests_CanceledAttempt_IsRecordedWithoutAStatus()
     {
         await using var discord = CreateFake();

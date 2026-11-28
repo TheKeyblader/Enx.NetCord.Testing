@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Enx.NetCord.Testing.Rest;
 
 /// <summary>The request content, read exactly once by the pipeline before interception.</summary>
-internal sealed class RestRequestBody(byte[] content, string? contentType)
+internal sealed class RestRequestBody(ReadOnlyMemory<byte> content, string? contentType)
 {
     /// <summary>Gets the raw bytes (possibly empty).</summary>
     public ReadOnlyMemory<byte> Content { get; } = content;
