@@ -1,6 +1,6 @@
 # 0013 — Hiérarchie et types de salons dans l'état
 
-- **Statut** : Proposée
+- **Statut** : Acceptée
 - **Date** : 2026-11-28
 - **Auteur** : agent `architect`
 - **Tâches liées** : M1-ADR-13, M1-REST-02, M1-REST-02B, M1-REST-02D, M1-REST-03, M1-REST-06,
@@ -95,7 +95,8 @@ Sources épinglées : `discord-api-docs` @ `62ab2d50`, `discord-api-spec` @ `654
   texte, annonces, forum et media ensemble (« always at the top »), voix et stage ensemble
   (« always at the bottom »), catégories entre elles (`getSortableGroupTypes`). Son `setPosition`
   envoie lui-même `{id, position}` pour **tous** les salons du groupe, ce qui suggère que le
-  serveur ne renumérote pas les voisins.
+  serveur ne renumérote pas les voisins. Son `discordSort` (« Sorts by Discord's position and
+  id ») re-trie les salons par position puis par ID, sans se fier à l'ordre reçu.
 - Une question publique (Stack Overflow 68512655) cite la réponse de Discord à un parent
   inexistant : `Invalid Form Body — parent_id: Category does not exist`.
 
@@ -158,13 +159,13 @@ endroit que l'état, le fil et le seed consultent.
 
 | Champ d'état | Familles | Défaut | Bornes |
 | --- | --- | --- | --- |
-| `Name`, `Position`, `ParentId`, `Flags` | toutes (`ParentId` toujours nul pour une catégorie) | —, § 4, `null`, `0` | nom 1-100 |
+| `Name`, `Position`, `ParentId`, `Flags` | toutes (`ParentId` toujours nul pour une catégorie ; `Flags` toujours `0` en stage et en catégorie) | —, § 4, `null`, `0` | nom 1-100 |
 | `Topic` | texte, forum | `null` | 1024 ; 4096 en forum |
 | `Nsfw` | texte, voix, forum | `false` | — |
 | `RateLimitPerUser` | texte (type 0 seulement), voix, forum | `0` | 0-21600 |
 | `LastMessageId` | texte, voix, forum (dernier thread, M4) | `null` | — |
 | `DefaultAutoArchiveDuration` | texte, forum | non défini | 60, 1440, 4320, 10080 |
-| `DefaultThreadRateLimitPerUser` | texte, forum | `0` | 0-21600 |
+| `DefaultThreadRateLimitPerUser` | texte (annonces comprises, voir ci-dessous), forum | `0` | 0-21600 |
 | `Voice.Bitrate` | voix | `64000` | 8000-96000 ; 64000 en stage |
 | `Voice.UserLimit` | voix | `0` | 0-99 ; 0-10000 en stage |
 | `Voice.RtcRegion`, `Voice.VideoQualityMode` | voix | `null`, non défini | — ; 1 ou 2 |
@@ -172,6 +173,15 @@ endroit que l'état, le fil et le seed consultent.
 
 Sources : `channel.mdx:424-446`. Le défaut `64000` est celui de l'exemple (l. 191) : hypothèse.
 Les paliers de boost ne sont pas modélisés : le plafond vocal est celui d'une guilde sans boost.
+
+- **`default_thread_rate_limit_per_user` sur un salon d'annonces : les docs se contredisent.**
+  `Modify Channel` le réserve à « Text, Forum, Media » (`channel.mdx:442`), `Create Guild
+  Channel` y ajoute « Announcement » (`guild.mdx:928`). Le fake suit la création : le champ
+  existe pour toute la famille texte, annonces comprises, se modifie par `PATCH` et figure dans
+  le JSON. Hypothèse (lot C).
+- **`flags`** : `PATCH` ne l'accepte que pour « Text, Voice, Announcement, Forum, Media »
+  (`channel.mdx:439`), donc ni pour un salon stage ni pour une catégorie, où il est validé puis
+  ignoré comme tout champ hors de sa famille. Ailleurs il est reporté (point suivant).
 
 - **Reportés** : `available_tags`, `default_reaction_emoji` et le drapeau `REQUIRE_TAG` n'ont de
   sens qu'avec les posts de forum, donc avec M4-REST-01. D'ici là un forum rend
@@ -241,7 +251,7 @@ internal sealed partial class FakeDiscordState
 | `bitrate`, `user_limit`, `rtc_region` | absents | présents (`rtc_region` nullable) | absents | absents |
 | `video_quality_mode` | absent | présent si défini | absent | absent |
 | `default_auto_archive_duration` | présent si défini | absent | absent | présent si défini |
-| `default_thread_rate_limit_per_user` | présent | absent | absent | présent |
+| `default_thread_rate_limit_per_user` | présent (type 5 compris : hypothèse, lot C) | absent | absent | présent |
 | `available_tags`, `default_reaction_emoji`, `default_sort_order` | absents | absents | absents | présents (les deux derniers nullables) |
 | `default_forum_layout` | absent | absent | absent | présent (type 15) |
 
@@ -326,9 +336,11 @@ interdit de supprimer (`50074`) ne sont pas modélisés.
   discord.js, qui renvoie lui-même toutes les positions du groupe.
 - **Défaut à la création** : `1 + max(position)` parmi les salons de la guilde du **même groupe
   de tri**, toutes catégories confondues ; `0` s'il n'y en a pas. Le premier salon texte, le
-  premier salon vocal et la première catégorie d'une guilde ont donc chacun la position `0` ;
-  une guilde qui n'a que des salons texte garde les valeurs d'aujourd'hui (`0`, `1`, `2`…).
-  Hypothèse, non documentée (lot B).
+  premier salon vocal et la première catégorie d'une guilde ont donc chacun la position `0`.
+  Une guilde qui n'a que des salons texte garde les valeurs d'aujourd'hui (`0`, `1`, `2`…) tant
+  qu'aucun salon n'y a été supprimé ni créé avec une position explicite : après la suppression
+  du premier de trois salons, l'ancien défaut donnait `2` au suivant (ex æquo), le nouveau
+  donne `3`. Hypothèse, non documentée (lot B).
   *Rejeté :* le nombre de salons de la guilde (valeur actuelle et de fauxcord), qui numérote
   ensemble des groupes que Discord numérote à part et crée des ex æquo après une suppression.
 - **`PATCH /channels/{channel_id}`** : `position` écrit la valeur de ce salon ; `null` ou absent
@@ -345,11 +357,12 @@ interdit de supprimer (`50074`) ne sont pas modélisés.
     deux fois reçoit ses entrées dans l'ordre et un seul fait. Réponse 204.
   - `lock_permissions` : validé (booléen ou `null`), sans effet avant M4-REST-05, qui portera
     aussi les permissions par entrée de `guild.mdx:966-967`.
-- **Ordre de `GET /guilds/{guild_id}/channels`** : ID croissant, sans les threads. Aucun ordre
-  n'est documenté ; l'ID est le départage que la doc nomme, et il ne dépend d'aucun `PATCH`. Le
-  fake ne trie **pas** par position. S'il le faisait à tort, un bot qui compte sur cet ordre
-  passerait ses tests et casserait en production ; l'erreur inverse fait seulement échouer un
-  test. Hypothèse (lot B). `GUILD_CREATE.channels` suit le même ordre (M3-02).
+- **Ordre de `GET /guilds/{guild_id}/channels`** : ID croissant, sans les threads. Le fake ne
+  trie **pas** par position. Aucun ordre n'est documenté ; l'ID est le seul départage que la doc
+  nomme, et il ne dépend d'aucun `PATCH` ; les bibliothèques clientes ne se fient pas à l'ordre
+  reçu et re-trient (`discordSort` de discord.js, par position puis ID). Hypothèse (lot B).
+  `GUILD_CREATE.channels` suit le même ordre (M3-02). Avec un ID explicite au seed, cet ordre
+  n'est plus celui de création, que rend le listing d'aujourd'hui.
 
 ### 5. Changement de type
 
@@ -384,8 +397,11 @@ pas de faux POST, `id` explicite facultatif, échec avant commit par `InvalidOpe
 - **Options** : une classe, `SeededChannelOptions`, en dernier paramètre facultatif. Elle porte
   `Topic`, `Nsfw`, `Slowmode` et `Position`. **`rate_limit_per_user` est donc inclus dans le
   seed** (`Slowmode`, le nom de NetCord), ce qui absorbe M1-REST-02D. Une option qui ne vaut pas
-  pour le type demandé lève `ArgumentException` au lieu d'être ignorée ; une valeur hors bornes
-  lève `ArgumentOutOfRangeException`. Les réglages vocaux (`bitrate`, `user_limit`…) ne sont pas
+  pour le type demandé lève `ArgumentException` au lieu d'être ignorée, **si sa valeur diffère
+  du défaut** : `Topic` non nul, `Nsfw` vrai, `Slowmode` différent de `0` (`Position` vaut pour
+  tous les types). `Nsfw` et `Slowmode` n'étant pas nullables, leur valeur par défaut ne se
+  distingue pas d'une option non renseignée et ne lève donc jamais. Une valeur hors bornes lève
+  `ArgumentOutOfRangeException`. Les réglages vocaux (`bitrate`, `user_limit`…) ne sont pas
   dans le seed : valeurs par défaut, modifiables par REST. Ajouter une propriété plus tard ne
   casse aucune signature.
 
@@ -419,7 +435,7 @@ Chaque payload est l'objet salon du § 1, **avec** `guild_id`, que NetCord lit p
 | Création (seed ou `POST`), catégorie comprise | `ChannelCreated` | `CHANNEL_CREATE` |
 | `PATCH` d'un salon : champs, parent, position, type | `ChannelUpdated` si une valeur change | `CHANNEL_UPDATE` (le nouveau `type` après conversion) |
 | `PATCH` de positions | un `ChannelUpdated` par salon changé, ordre du tableau | autant de `CHANNEL_UPDATE` |
-| Suppression d'un salon | `ChannelDeleted` | `CHANNEL_DELETE`, sans `MESSAGE_DELETE` |
+| Suppression d'un salon | `ChannelDeleted` | `CHANNEL_DELETE`, sans `MESSAGE_DELETE` pour ses messages (hypothèse, lot A) |
 | Suppression d'une catégorie | `ChannelUpdated` par enfant (ID croissant), puis `ChannelDeleted` | `CHANNEL_UPDATE` × n, puis `CHANNEL_DELETE` |
 | Message créé dans le salon | `MessageCreated` seul | pas de `CHANNEL_UPDATE` pour `last_message_id` (documenté) |
 
@@ -439,13 +455,14 @@ tant que le test manuel correspondant de `docs/user-review.md` n'a pas été fai
 
 - **Lot A — hiérarchie** (§ 2, § 3) : codes de champ et messages des quatre refus de parent ;
   ordre des `CHANNEL_UPDATE` des enfants et du `CHANNEL_DELETE` d'une catégorie supprimée ; les
-  enfants gardent leur position.
+  enfants gardent leur position ; aucun `MESSAGE_DELETE` pour les messages d'un salon supprimé.
 - **Lot B — positions** (§ 1, § 4) : groupes de tri ; position par défaut d'un nouveau salon ;
   absence de renumérotation des voisins ; position inchangée par un déplacement ; ordre de
   `GET /guilds/{guild_id}/channels` ; sens de « changes `parent_id` » pour `40009` ; réponse à
   un ID inconnu et ordre des `CHANNEL_UPDATE` du `PATCH` de positions.
-- **Lot C — types** (§ 1, § 5) : slowmode remis à `0` par la conversion 0 → 5 et
-  `rate_limit_per_user` d'un salon d'annonces ; conversion appliquée avant les autres champs ;
+- **Lot C — types** (§ 1, § 5) : slowmode remis à `0` par la conversion 0 → 5 ;
+  `rate_limit_per_user` et `default_thread_rate_limit_per_user` d'un salon d'annonces (docs
+  contradictoires pour le second) ; conversion appliquée avant les autres champs ;
   refus d'un `topic` de plus de 1024 caractères hors forum, d'un `user_limit` trop grand ; statut
   HTTP de `30052` et de `30013` ; `40058` pour un salon media ; bitrate par défaut ; guilde sans
   `NEWS`.
@@ -458,7 +475,9 @@ namespace Enx.NetCord.Testing;
 /// <summary>Optional settings of a seeded guild channel.</summary>
 /// <remarks>
 /// A setting Discord has no field for on the requested channel type throws
-/// <see cref="ArgumentException"/>; a value outside Discord's bounds throws
+/// <see cref="ArgumentException"/> when it differs from its default (a non-null
+/// <see cref="Topic"/>, a true <see cref="Nsfw"/>, a nonzero <see cref="Slowmode"/>); left at
+/// its default it is not applied. A value outside Discord's bounds throws
 /// <see cref="ArgumentOutOfRangeException"/>.
 /// </remarks>
 public sealed class SeededChannelOptions
@@ -520,7 +539,7 @@ public sealed class SeededVoiceChannel
     /// <summary>Gets the channel ID.</summary>
     public ulong Id { get; }
     /// <summary>Creates a message by the specified user and returns the message ID.</summary>
-    public ulong Message(string content, ulong authorId, ulong? id = null);
+    public ulong Message(string content, ulong authorId, ulong? id = null);   // delivered by M1-REST-03B
 }
 
 /// <summary>Identifies a seeded forum channel.</summary>
@@ -637,7 +656,16 @@ async Task SeedChannel_Options_ApplyOrThrow()
 - **Positif.** Une seule table dit ce qui vaut pour chaque type : ajouter les threads ou le
   group DM, c'est une ligne et, au besoin, un bloc. Les faits et `GuildAccess` ne bougent pas.
   Les fixtures existantes restent valables : `TextChannel(name, id)` compile, et une guilde qui
-  n'a que des salons texte garde ses positions et son ordre de listing.
+  n'a que des salons texte, **créés sans ID explicite et dont aucun n'a été supprimé**, garde
+  ses positions et son ordre de listing. Hors de ce cas les deux changent (§ 4) : un ID
+  explicite plus petit passe devant dans le listing, et la position par défaut après une
+  suppression n'est plus le nombre de salons. Le test
+  `FakeDiscordStateTests.CreateTextChannel_Several_AreListedInCreationOrderWithPositions`
+  (`tests/Enx.NetCord.Testing.Tests/State/FakeDiscordStateTests.cs:599`) appelle
+  `CreateTextChannel`, qui disparaît, et son nom décrit l'ancienne règle. Ses valeurs attendues
+  (positions `0` et `1`, listing `a` puis `b`) restent justes sous les nouvelles règles :
+  M1-REST-02B1 le migre vers `CreateGuildChannel`, le renomme (ordre par ID, position par
+  groupe) et y ajoute un cas à ID explicite et un cas après suppression.
 - **Négatif.** Quatre types publics de plus et onze méthodes de seed. Les bornes par type sont
   jugées sous le verrou, donc après `Intercept` et sans se réunir avec les erreurs structurelles
   dans un même arbre `errors` (limite déjà notée par M1-REST-02). Une bonne part des codes de
@@ -659,13 +687,24 @@ async Task SeedChannel_Options_ApplyOrThrow()
   (`SeededChannelOptions` compris), variantes de DTO par famille, `GET` et `DELETE
   /channels/{channel_id}` pour tous les types du § 1 — rest-implementer — M1-ADR-13, M1-REST-03.
   **Absorbe M1-REST-02D.**
+  - Porte les `StateFailureKind` dont la création a besoin : `ChannelParentNotCategory`,
+    `ChannelCannotHaveParent`, `ChannelParentFull` (§ 2) et `MaxGuildChannels` (§ 1). Dans cette
+    tâche leur seul appelant est le seed, qui les rend en `InvalidOperationException` ; aucune
+    fabrique `DiscordError` n'est encore nécessaire.
+  - Livre `SeededVoiceChannel` avec **`Id` seulement**. Sa méthode `Message` (§ 6) attend le
+    contrôle des salons à messages, donc M1-REST-03B.
 - `M1-REST-02B2` — `PATCH /channels/{channel_id}` complet : `parent_id` à trois états et
-  déplacement (§ 2), conversion 0 ↔ 5 (§ 5), champs et bornes par type (§ 1), nouveaux
-  `StateFailureKind` et fabriques `DiscordError`, lignes `30052` et `50035` de `errors.md` —
+  déplacement (§ 2), conversion 0 ↔ 5 (§ 5), champs et bornes par type (§ 1) —
   rest-implementer — M1-REST-02B1.
+  - Ajoute les `StateFailureKind` propres au `PATCH` (`InvalidChannelTopic`,
+    `ChannelBitrateTooHigh`, `InvalidChannelUserLimit`) et les fabriques `DiscordError` des
+    refus qu'un `PATCH` peut rendre : ceux-là et les trois refus de parent de M1-REST-02B1, plus
+    le nouveau message de `CHANNEL_PARENT_INVALID` ; lignes `30052` et `50035` de `errors.md`.
+  - La fabrique de `MaxGuildChannels` (`30013`) revient à M1-REST-06, seule route qui crée un
+    salon ; elle y réutilise les fabriques de parent pour `POST` et pour le `PATCH` de positions.
 - `M1-REST-03B` — Messages selon le type de salon : `50008` dans une catégorie, `40058` dans un
-  forum ou un media, `crosspost` réservé au type 5 (`40033` au second appel), `Message` sur
-  `SeededVoiceChannel` — rest-implementer — M1-REST-03, M1-REST-02B1.
+  forum ou un media, `crosspost` réservé au type 5 (`40033` au second appel), méthode `Message`
+  de `SeededVoiceChannel` — rest-implementer — M1-REST-03, M1-REST-02B1.
 - `M4-REST-10` — Contrôles par `features` de guilde : `NEWS` pour le type 5 et la conversion,
   Community pour le type 13, salons qu'une guilde Community interdit de supprimer (`50074`) —
   rest-implementer — M1-REST-06.
@@ -675,9 +714,10 @@ async Task SeedChannel_Options_ApplyOrThrow()
 
 **Tâches existantes impactées.**
 
-- **M1-REST-06** dépend de M1-REST-02B1 : listing par ID sans threads ; `POST` par
-  `CreateGuildChannel` pour les types du § 1 (`30013`, invariants de parent, position par
-  défaut) ; `PATCH` de positions selon le § 4 (`40009`).
+- **M1-REST-06** dépend de M1-REST-02B1 et de M1-REST-02B2 (fabriques `DiscordError` des refus
+  de parent) : listing par ID sans threads ; `POST` par `CreateGuildChannel` pour les types du
+  § 1 (fabrique `30013`, invariants de parent, position par défaut) ; `PATCH` de positions selon
+  le § 4 (`40009`).
 - **M1-REST-03** (en cours) ne change pas : il ne connaît que le salon texte. Le salon
   d'annonces et les refus par type arrivent avec M1-REST-03B.
 - **M1-REST-02D** : absorbée par M1-REST-02B1 (`SeededChannelOptions.Slowmode`).
