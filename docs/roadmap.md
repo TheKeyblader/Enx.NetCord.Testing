@@ -47,7 +47,7 @@ Implémentation :
 - [ ] M1-REST-08 — Roles : list/get/create/modify/positions/delete (`@everyone` = guild id) ; ajouter `UnknownRole` (`10011`) au catalogue `DiscordError.FromStateFailure` + `errors.md` — rest-implementer — M1-REST-06
 - [ ] M1-REST-09 — Bans : list/get/create/delete/bulk-ban — rest-implementer — M1-REST-07
 - [ ] M1-REST-10 — `GET /users/@me/guilds`, `DELETE /users/@me/guilds/{guild_id}` (le départ produit le fait que M3-03 traduira en `GUILD_DELETE`) — rest-implementer — M1-05, M1-REST-06
-- [~] (test-engineer) M1-T-02 — Test d'architecture : aucun `StateCaller.Fixture` ni `Find(Guild|Channel|Member|Message)` appelé depuis `src/**/Rest/**` (suite review M1-05) — test-engineer — M1-05
+- [x] M1-T-02 — Test d'architecture : aucun `StateCaller.Fixture` ni `Find(Guild|Channel|Member|Message)` appelé depuis `src/**/Rest/**` (suite review M1-05) — test-engineer — M1-05 — [`Architecture/RestIsolationTests.cs`](../tests/Enx.NetCord.Testing.Tests/Architecture/RestIsolationTests.cs) (`d9546f8`, `b80c420`, `a117b04`), review APPROVE ; analyse du texte source, membres de `FakeDiscordState` sans `StateCaller` interdits sauf liste blanche `AllowedUnguardedMembers`
 - [ ] M1-T-01 — Conformité M1 via `RestClient` NetCord + validation de contrat JSON (openapi) — test-engineer — M1-REST-03
 - [ ] M1-R — Review de jalon + `/parity/audit rest` — reviewer, parity-auditor — M1-*
 
