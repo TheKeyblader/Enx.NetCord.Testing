@@ -28,4 +28,6 @@ ajoutés plus tard si le besoin apparaît (ADR dédiée).
 ## Conséquences
 
 - Aucune référence à un framework de test dans `src/` (vérifié par le reviewer).
+- Le contrat de `FakeDiscordAssertionException` et les assertions de `src/` sont fixés par
+  l'[ADR 0012](0012-agnostic-assertions.md).
 - Le sample montre l'usage avec xUnit ; les guides donnent un équivalent NUnit/MSTest.
