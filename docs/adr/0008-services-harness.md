@@ -1,6 +1,6 @@
 # 0008 — Harnais NetCord.Services : composition, DI, enregistrement et exécution
 
-- **Statut** : Proposée
+- **Statut** : Acceptée
 - **Date** : 2026-11-28
 - **Auteur** : agent `architect`
 - **Tâches liées** : M2-ADR-08, M1-ADR-04B, M2-02, M2-04, M2-05, M2-07, M2-08, M2-09, M2-10,

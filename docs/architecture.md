@@ -140,7 +140,7 @@
 
 ### Services (package dédié)
 
-- [ADR 0008 — Harnais NetCord.Services](adr/0008-services-harness.md) (Proposée) :
+- [ADR 0008 — Harnais NetCord.Services](adr/0008-services-harness.md) :
   `discord.Services()` rend un `FakeDiscordServicesBuilder`. Le test construit ses services
   NetCord comme son bot (`AddModule<T>`, builders de délégués, configuration) et passe les
   **instances** : `AddApplicationCommands(service)`, `AddComponentInteractions(service)`. Le
