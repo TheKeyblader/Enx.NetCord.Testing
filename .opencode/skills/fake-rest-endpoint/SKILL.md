@@ -46,6 +46,27 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   `RestValidation.Valid(recordDétaché)`, lu par `request.GetPayload<T>()`. Ne garder dans
   `Routes/<Domaine>/` que les règles propres au domaine ; une règle qui sert à deux familles
   remonte dans `FormValidation`.
+- **Tableaux typés, objets imbriqués, query** (`FormValidation`, M1-REST-03) : `TryReadArray` / `TryReadObject`
+  (absent ou `null` ⇒ `false` sans erreur ; autre type ⇒ `BASE_TYPE_BAD_TYPE` / `MODEL_TYPE_CONVERT`),
+  `ReadSnowflakeArray(root, name, minItems, maxItems, unique, errors)` (erreurs par indice `name.N`, `BASE_TYPE_BAD_LENGTH`
+  si `minItems > 0`, sinon `BASE_TYPE_MAX_LENGTH`, `BASE_TYPE_ARRAY_UNIQUE`), `CheckMaxLength` / `CheckMaxCount`
+  (`BASE_TYPE_MAX_LENGTH` « Must be N or fewer in length. »), `ReadQueryInteger` / `ReadQuerySnowflake` (la query a les mêmes
+  erreurs que le corps). Pour lire un objet imbriqué avec ses propres noms de propriété, **`errors.Scope("embeds.0")`**
+  rend un `FormErrors` qui préfixe ses chemins : y passer les mêmes helpers `Read*` (`Scope` se chaîne ; son `IsEmpty` ne
+  reflète que ce qui a été ajouté par la vue). Le validateur d'une route peut rendre en payload **un record d'entrée de
+  l'état** (`CreateMessageInput`, `EditMessageInput`) ; le handler complète ce que seul l'appelant connaît
+  (`payload with { AuthorId = request.Caller.UserId }`).
+- **Multipart** (`payload_json` + `files[n]`, ex. NetCord `IMessageProperties.Serialize`) : `RestMultipart.IsMultipart(body)` /
+  `TryParse(body, out parts)` (`MultipartPart` : `Name`, `FileName`, `ContentType`, octets exacts ; noms non ASCII décodés) ;
+  lire `payload_json` avec `FormValidation.TryReadJsonObject(new RestRequestBody(part.Content, "application/json"), …)` (un
+  `payload_json` absent = objet vide). Le fake ne conserve que le nom, la taille et le type des fichiers ; l'`url` d'une pièce
+  jointe est déterministe (`MessageWire.CdnHost`). NetCord numérote ses fichiers à partir de 0 et ne peut donc que **remplacer**
+  les pièces jointes d'un message à l'édition ; tester la conservation par un `SendRequestAsync` JSON brut.
+- Ordre des contrôles d'un message : champs invalides (`50035`) puis message vide (`50006`) à l'étape structurelle ; salon
+  (`10003`/`50001`) puis message (`10008`) puis règles d'auteur (`50005`) dans l'état. Un `50006` précède donc `10003` : les
+  tests de `404`/`403` envoient un corps valide.
+- Une projection qui nomme d'autres entités (auteur, mentions, message cité) reçoit `request.State.FindUser` (membre autorisé
+  de la liste blanche de `RestIsolationTests`) ; ce que l'état renvoie est déjà détaché (`MessageSnapshot.ReferencedMessage`).
 - Pour une réponse JSON, projeter le résultat dans un DTO interne conforme à la spec Discord et le sérialiser avec `FakeDiscordJsonContext` (source-gen STJ). Le vrai client désérialise la réponse ; réserver les `NetCord.JsonModels` aux API NetCord qui les exigent, comme `Interaction.CreateFromJson`.
 - Erreurs : `DiscordError.*` (404 `10003 Unknown Channel`, 400 `50035 Invalid Form Body`
   avec arbre `errors`, 403 `50013 Missing Permissions`, 401 `0 401: Unauthorized`…). Ajouter
@@ -102,6 +123,13 @@ endpoint n'implémente encore, `RestClient.SendRequestAsync(method, content, $"/
 `FormattableString` (les arguments sont encodés par NetCord) : écrire un littéral interpolé, pas une variable `string`.
 Si la spec change (`/parity/sync`), régénérer l'inventaire : la liste `RouteInventory.SnowflakeParameters`
 (paramètres typés `SnowflakeType`) en fait partie.
+
+Pièges de test : (1) `array.Reverse()` se lie à `MemoryExtensions.Reverse` (C# 14) et ne renvoie rien : utiliser
+`OrderDescending()` / `AsEnumerable().Reverse()` ; (2) `ImmutableArray` dans `Assert.Equal` : `.AsEnumerable()` ; (3) l'horloge par
+défaut est figée (`VirtualTimeProvider.DefaultNow`) : pour un message « ancien » (bulk-delete), semer avec un ID explicite
+`IdAt(instant)` ; un ID **inventé** comme `424242` est déjà vieux de plus de 14 jours (snowflake de 2015), prendre `IdAt(now, n)` ;
+(4) `NetCord.DeleteMessagesAsync` n'appelle `bulk-delete` que pour 2 IDs ou plus, un seul passe par `DELETE …/{message_id}` ;
+(5) ne pas écrire de route avec `string` pour `SendRequestAsync` : un littéral interpolé, ou un paramètre `FormattableString`.
 
 Minimum : nominal, relecture d'état, `Unknown *` 404, validation 50035, (401 si token
 invalide modélisé), event Gateway émis (ou non). Les API exactes (`Seed`, `CreateRestClient`,
