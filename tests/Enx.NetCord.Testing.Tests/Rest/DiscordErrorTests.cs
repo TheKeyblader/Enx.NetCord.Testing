@@ -130,8 +130,8 @@ public sealed class DiscordErrorTests
     {
         var error = DiscordError.FromStateFailure(new StateFailure((StateFailureKind)kind, 1));
 
-        Assert.Equal((System.Net.HttpStatusCode.BadRequest, 50035), (error.Status, error.Code));
-        using var json = System.Text.Json.JsonDocument.Parse(error.ToJson());
+        Assert.Equal((HttpStatusCode.BadRequest, 50035), (error.Status, error.Code));
+        using var json = JsonDocument.Parse(error.ToJson());
         var first = json.RootElement.GetProperty("errors").GetProperty(field).GetProperty("_errors")[0];
         Assert.Equal(fieldCode, first.GetProperty("code").GetString());
     }
