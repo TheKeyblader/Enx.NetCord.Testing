@@ -237,8 +237,8 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
 ### UR-011 — Messages : codes, statuts et pagination (`test-manuel`)
 
 - **Statut** : Ouvert
-- **Origine** : M1-REST-03 (`3aea9b6`…`18f71be`) ; roadmap `PAR-ERR-04`
-- **Concerne** : `rest.md` `/channels/{channel_id}/messages…` (7 lignes) ; `errors.md` `50003`, `50005`, `50006`, `50024`, `50034`, `50035` ; tests `tests/Enx.NetCord.Testing.Tests/Rest/Messages/*` (`SendRequest_InvalidField_*`, `SendRequest_InvalidEmbed_*`, `SendRequest_BulkDeleteWithInvalidMessages_*`)
+- **Origine** : M1-REST-03 (`3aea9b6`…`18f71be`), M1-REST-03B (`3bec8aa`) ; roadmap `PAR-ERR-04`
+- **Concerne** : `rest.md` `/channels/{channel_id}/messages…` (7 lignes) ; `errors.md` `50003`, `50005`, `50006`, `50008`, `50024`, `50034`, `50035`, `40033`, `40058` ; tests `tests/Enx.NetCord.Testing.Tests/Rest/Messages/*` (`SendRequest_InvalidField_*`, `SendRequest_InvalidEmbed_*`, `SendRequest_BulkDeleteWithInvalidMessages_*`, `MessageChannelTypeTests`)
 - **Hypothèse** :
   - codes de champ `50035` : `MESSAGE_REFERENCE_UNKNOWN_MESSAGE` (réponse à un message
     inexistant), `MAX_EMBED_SIZE_EXCEEDED`, `MESSAGE_ALLOWED_MENTIONS_PARSE_EXCLUSIVE`,
@@ -254,6 +254,11 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
     `nonce` numérique est renvoyé en chaîne ;
   - `attachments[].id` à l'édition : un `id` qui est un index `files[n]` désigne un fichier
     téléversé, sinon une pièce existante à conserver.
+  - (ajout M1-REST-03B) statut 400 de `50008` (message dans une catégorie), `40058` (forum,
+    et aussi salon media : les docs ne citent que le forum) et `40033` (second crosspost) ;
+    `GET …/messages` et `bulk-delete` d'une catégorie, d'un forum ou d'un media ⇒ 400 `50024`
+    (Discord pourrait rendre `[]` ou `10008`) ; `GET`/`PATCH`/`DELETE`/`crosspost` d'un message
+    dans ces salons ⇒ 404 `10008`.
 - **Procédure** (G1, `$CH1`, un DM du bot avec un utilisateur qui y a écrit) :
   1. `POST /channels/$CH1/messages` avec chaque corps invalide (réponse à `"message_id":"1"`,
      embed de plus de 6000 caractères, `allowed_mentions` `{"parse":["users"],"users":["1"]}`,
@@ -267,9 +272,16 @@ fois le résultat connu, le test du fake est aligné sur le comportement observ�
   6. `DELETE` du message de l'utilisateur dans le DM.
   7. 7 messages, puis `GET …/messages?around=<4ᵉ>&limit=5` ; puis `?before=A&after=B`.
   8. `POST` avec `"nonce": 123`.
+  9. (ajout M1-REST-03B, avec une catégorie `$CAT`, un forum `$FORUM`, un salon d'annonces
+     `$NEWS`, un salon media si la guilde est Community) `POST /channels/$CAT/messages`
+     `{"content":"x"}`, puis sur `$FORUM` et le media ; `GET /channels/$CAT/messages` puis
+     `$FORUM` ; `POST /channels/$CAT/messages/bulk-delete` avec deux ID récents ; deux
+     `POST …/crosspost` de suite sur un message de `$NEWS` ; `GET /channels/$CAT/messages/1`.
 - **Résultat attendu** : 1-2 ⇒ les codes ci-dessus, 400 `50034` et 403 `50003` en DM ; 3 ⇒
   400 `50024` ; 4 ⇒ 403 `50005`, 400 `50006`, pièce conservée ; 5 ⇒ 400 `50006` ; 6 ⇒ 403
-  `50003` ; 7 ⇒ 2 plus anciens + cible + 2 suivants, puis réponse 200 ; 8 ⇒ `"nonce":"123"`.
+  `50003` ; 7 ⇒ 2 plus anciens + cible + 2 suivants, puis réponse 200 ; 8 ⇒ `"nonce":"123"` ;
+  9 ⇒ 400 `50008`, 400 `40058` (×2), 400 `50024` (×2), 400 `50024`, 200 puis 400 `40033`,
+  404 `10008`.
 - **Si différent** : corriger `DiscordError`, `Routes/Messages/MessageValidators.cs`,
   `EmbedValidation.cs`, `FakeDiscordState.Messages.cs`, `errors.md`, `rest.md` et les tests.
 - **Réponse** : _(à remplir)_
