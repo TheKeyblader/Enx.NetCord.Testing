@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using Enx.NetCord.Testing.Rest;
@@ -17,8 +16,6 @@ internal sealed class OpenApiContract
 
     private readonly JsonDocument _document;
     private readonly JsonSchemaValidator _validator;
-
-    private readonly ConcurrentDictionary<string, byte> _validatedOperations = new(StringComparer.Ordinal);
 
     private OpenApiContract(JsonDocument document, IReadOnlyList<ContractException> exceptions)
     {
@@ -71,16 +68,16 @@ internal sealed class OpenApiContract
     public IReadOnlyCollection<ContractException> UsedExceptions => _validator.UsedExceptions;
 
     /// <summary>
-    /// Lists the exceptions whose <see cref="ContractException.Operation"/> had a success response validated in this run although no response
-    /// needed them: the fake no longer sends the property, so the entry is dead and must be removed.
+    /// Lists the dead exceptions: the success response of <see cref="ContractException.Operation"/> was validated in this run and
+    /// contained an object evaluated against <see cref="ContractException.Schema"/>, yet no response needed the exception.
     /// </summary>
     /// <param name="exceptions">The registered exceptions.</param>
-    /// <returns>The dead exceptions; entries whose operation no scenario reached (a filtered run) are not judged.</returns>
+    /// <returns>The dead exceptions; an exception whose operation and schema no validated response reached (a filtered run) is not judged.</returns>
     public IReadOnlyList<ContractException> FindDeadExceptions(IReadOnlyList<ContractException> exceptions)
     {
         ArgumentNullException.ThrowIfNull(exceptions);
         var used = _validator.UsedExceptions;
-        return [.. exceptions.Where(e => _validatedOperations.ContainsKey(e.Operation) && !used.Contains(e))];
+        return [.. exceptions.Where(e => _validator.WasEvaluated(e.Operation, e.Schema) && !used.Contains(e))];
     }
 
     /// <summary>Returns whether the extract describes an operation.</summary>
@@ -114,7 +111,6 @@ internal sealed class OpenApiContract
                 : [$"{key}: {code} response has no JSON error body"];
         }
 
-        _validatedOperations[key] = 0; // A success response was checked: it is where a registered exception would have been needed.
         if (!_document.RootElement.GetProperty("operations").TryGetProperty(key, out var operation))
         {
             // A route NetCord calls but the spec does not document has no contract to check.
@@ -142,7 +138,7 @@ internal sealed class OpenApiContract
         }
 
         return request.ResponseBody is { } body
-            ? Prefix(key, _validator.Validate(body, schema))
+            ? Prefix(key, _validator.Validate(body, schema, key))
             : [$"{key}: the spec documents a JSON body for {statusText}, the fake sent none"];
     }
 

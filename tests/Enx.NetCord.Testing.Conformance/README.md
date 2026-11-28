@@ -15,7 +15,7 @@ produced is validated against the **Discord OpenAPI spec** pinned in `docs/parit
 | `Contract/ContractAssert.cs` | `ContractAssert.Conforms(discord, "METHOD /template"…)`. |
 | `Contract/ContractInfrastructureTests.cs` | Guards: pinned commit, inventory ↔ extract in sync, supported keywords, one scenario per implemented operation, validator oracle. |
 | `Contract/StrictContractTests.cs` | Strict mode: `$ref`, `allOf`, `oneOf`/`anyOf`, nested, arrays, `additionalProperties`, exceptions. |
-| `Contract/ContractExceptionsTests.cs` | Exception list soundness and dead-exception detection (runs after the parallel collections). |
+| `Contract/ContractExceptionsTests.cs` | Exception list soundness and dead-exception detection (runs last). |
 
 ## Adding a REST handler (no change to `Contract/` needed)
 
@@ -70,9 +70,13 @@ When the fake sends an undeclared property, decide:
   `Property`, `Justification`, `Reference` (`developers/…mdx:line` of `discord-api-docs`), `Operation` (the route whose
   success response carries it) and `Task` (roadmap task or `UR-NNN`). Never register an exception to silence a bug.
 
-`ContractExceptionsTests` keeps the list honest: it fails for a malformed entry, for a property the spec now declares
-(after a `/parity/sync`), and for an **unused** exception (its operation's success response was validated in the run and
-no response needed it). A filtered `dotnet test` does not judge exceptions whose operation did not run.
+`ContractExceptionsTests` keeps the list honest: it fails for a malformed entry, for a property the spec now declares or
+accepts through `additionalProperties` (after a `/parity/sync`), and for an **unused** exception. Dead rule: an exception is
+judged only if at least one validated **success** response of its `Operation` contained an object evaluated against its
+`Schema` (counted per (operation, schema) pair while validating); if that happened and no response needed the exception, it
+is dead. A filtered run that never reached the pair judges nothing. The collection runs after all the others
+(`ExceptionsLastCollectionOrderer`, also in sequential runs), so every scenario has recorded its use first.
+An empty schema `{}` (annotations only) is the `true` schema and accepts any value; `{"type":"object","properties":{}}` stays closed.
 The list is empty today: no response of the fake carries an undeclared property.
 
 ## Limits

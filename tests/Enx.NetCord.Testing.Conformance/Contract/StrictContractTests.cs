@@ -23,6 +23,14 @@ public sealed class StrictContractTests
           "Dog": {"type":"object","properties":{"kind":{"const":"dog"},"barks":{"type":"boolean"}},"required":["kind"]},
           "Pet": {"oneOf":[{"$ref":"#/components/schemas/Cat"},{"$ref":"#/components/schemas/Dog"}]},
           "Either": {"anyOf":[{"type":"object","properties":{"a":{"type":"integer"}}},{"type":"object","properties":{"b":{"type":"integer"}}}]},
+          "Nullable": {"oneOf":[{"type":"null"},{"$ref":"#/components/schemas/Base"}]},
+          "NullableObject": {"type":["object","null"],"properties":{"a":{"type":"integer"}}},
+          "Holder": {"type":"object","properties":{"any":{},"described":{"description":"annotations only"}}},
+          "ClosedEmpty": {"type":"object","properties":{}},
+          "Child": {"type":"object","properties":{"a":{"type":"integer"}}},
+          "First": {"type":"object","properties":{"kind":{"const":1},"child":{"$ref":"#/components/schemas/Child"}},"required":["kind"]},
+          "Second": {"type":"object","properties":{"kind":{"const":2}},"required":["kind"]},
+          "Choice": {"oneOf":[{"$ref":"#/components/schemas/First"},{"$ref":"#/components/schemas/Second"}]},
           "Free": {"type":"object","additionalProperties":true},
           "Tags": {"type":"object","additionalProperties":{"type":"string"}}
         }
@@ -35,6 +43,13 @@ public sealed class StrictContractTests
     [InlineData("Pet", """{"kind":"cat","purrs":true}""")]
     [InlineData("Pet", """{"kind":"dog","barks":true}""")]
     [InlineData("Either", """{"a":1,"b":2}""")] // anyOf: every valid branch declares
+    [InlineData("Nullable", "null")]
+    [InlineData("Nullable", """{"id":"1"}""")]
+    [InlineData("NullableObject", "null")]
+    [InlineData("NullableObject", """{"a":1}""")]
+    [InlineData("Holder", """{"any":{"x":1,"y":[1]},"described":{"z":1}}""")] // {} and annotation-only schemas are the true schema
+    [InlineData("Holder", """{"any":5,"described":"text"}""")]
+    [InlineData("Choice", """{"kind":1,"child":{"a":1}}""")]
     [InlineData("Free", """{"whatever":[1,2],"nested":{"x":1}}""")] // additionalProperties: true
     [InlineData("Tags", """{"x":"1","y":"2"}""")] // additionalProperties: schema
     public void Validate_OnlyDeclaredProperties_IsAccepted(string schema, string json)
@@ -51,6 +66,10 @@ public sealed class StrictContractTests
     [InlineData("Pet", """{"kind":"cat","barks":true}""", "$: undeclared property 'barks'", "Cat")] // oneOf: only the branch that validates declares
     [InlineData("Pet", """{"kind":"dog","purrs":true}""", "$: undeclared property 'purrs'", "Dog")]
     [InlineData("Either", """{"a":1,"c":2}""", "$: undeclared property 'c'", "Either")]
+    [InlineData("Nullable", """{"id":"1","x":1}""", "$: undeclared property 'x'", "Base")] // oneOf [null, $ref]
+    [InlineData("NullableObject", """{"a":1,"x":1}""", "$: undeclared property 'x'", "NullableObject")] // type: [object, null]
+    [InlineData("ClosedEmpty", """{"x":1}""", "$: undeclared property 'x'", "ClosedEmpty")] // properties: {} stays closed
+    [InlineData("Holder", """{"any":1,"x":1}""", "$: undeclared property 'x'", "Holder")] // only the {} property is open, not its parent
     public void Validate_UndeclaredProperty_IsRejectedWithPathPropertyAndSchema(string schema, string json, string expected, string schemaInMessage)
     {
         var errors = Validate(schema, json);
@@ -88,9 +107,9 @@ public sealed class StrictContractTests
     }
 
     [Fact]
-    public void Validate_UndeclaredPropertyInANonValidatingOneOfBranch_ReportsTheBranchMismatch()
+    public void Validate_OneOfWithNoValidBranch_ReportsTheBranchMismatch()
     {
-        // The nested object breaks the only branch that could validate: the failure is the oneOf one, not silently accepted.
+        // purrs has the wrong type, so the Cat branch fails and Dog fails on the kind: the failure is the oneOf one.
         var errors = Validate("Pet", """{"kind":"cat","purrs":"yes"}""");
 
         Assert.Contains(errors, e => e.Contains("matches none of the oneOf branches", StringComparison.Ordinal));
@@ -104,6 +123,28 @@ public sealed class StrictContractTests
         var errors = OpenApiContract.Current.Validate(attempt);
 
         Assert.Contains(errors, e => e.Contains("GET /users/{user_id} $: undeclared property 'leaked'", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Validate_NestedUndeclaredObjectInAOneOfBranch_FailsTheSelectionWithTheNestedMessage()
+    {
+        // The undeclared property sits in a nested object of the only branch whose kind matches: that branch no longer validates.
+        var errors = Validate("Choice", """{"kind":1,"child":{"a":1,"zzz":2}}""");
+
+        var error = Assert.Single(errors);
+        Assert.Contains("$: matches none of the oneOf branches", error, StringComparison.Ordinal);
+        Assert.Contains("$.child: undeclared property 'zzz'", error, StringComparison.Ordinal);
+        Assert.Contains("Child", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Validate_FormBodyErrorTreeWithAnUndeclaredProperty_IsRejectedWithItsPath()
+    {
+        using var body = JsonDocument.Parse("""{"code":50035,"message":"Invalid Form Body","errors":{"name":{"_errors":[{"code":"BASE_TYPE_REQUIRED","message":"This field is required","extra":1}]}}}""");
+
+        var errors = OpenApiContract.Current.Validator.ValidateNamed(body.RootElement, "ErrorResponse");
+
+        Assert.Contains(errors, e => e.Contains("$.errors.name._errors[0]: undeclared property 'extra'", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -121,9 +162,10 @@ public sealed class StrictContractTests
         var attempts = discord.Recorded.Requests.Where(static r => r.Method == "GET" && r.RouteTemplate == "/channels/{channel_id}").ToList();
 
         Assert.Equal(4, attempts.Count);
-        Assert.Empty(OpenApiContract.Current.Validate(attempts[0])); // the untouched response conforms
         foreach (var attempt in attempts)
         {
+            Assert.Empty(OpenApiContract.Current.Validate(attempt)); // the untouched response of each family conforms
+
             var node = JsonNode.Parse(attempt.ResponseBody!.Value.GetRawText())!.AsObject();
             node["injected"] = 1;
             using var mutated = JsonDocument.Parse(node.ToJsonString());
@@ -176,7 +218,7 @@ public sealed class StrictContractTests
     }
 
     [Fact]
-    public void Validate_ExceptionOnlyCoversItsProperty()
+    public void Validate_ExceptionAndAnotherUndeclaredProperty_RejectsOnlyTheOther()
     {
         var validator = Validator(Registered("Base", "legacy"));
 

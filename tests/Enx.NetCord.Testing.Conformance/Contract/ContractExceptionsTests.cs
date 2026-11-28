@@ -1,10 +1,14 @@
 using System.Net;
+using System.Text.Json;
 using Enx.NetCord.Testing.Rest;
 using Xunit;
 
 namespace Enx.NetCord.Testing.Conformance.Contract;
 
-/// <summary>Collection that runs after every parallel one, so the usage of the exceptions has been recorded by all the scenarios.</summary>
+/// <summary>
+/// Collection that runs after every other one (see <see cref="ExceptionsLastCollectionOrderer"/>), so the usage of the exceptions
+/// has been recorded by all the scenarios before it judges them.
+/// </summary>
 [CollectionDefinition(Name, DisableParallelization = true)]
 public sealed class ContractExceptionsCollection
 {
@@ -20,6 +24,17 @@ public sealed class ContractExceptionsTests
     private const string GetMe = "GET /users/{user_id}";
 
     [Fact]
+    public void Collection_DisplayName_IsTheOneTheOrdererPutsLast()
+    {
+        var collection = TestContext.Current.TestCase!.TestCollection;
+
+        Assert.Equal(ContractExceptionsCollection.Name, collection.TestCollectionDisplayName);
+        Assert.Equal(
+            [collection.TestCollectionDisplayName],
+            new ExceptionsLastCollectionOrderer().OrderTestCollections([collection, collection]).Skip(1).Select(static c => c.TestCollectionDisplayName));
+    }
+
+    [Fact]
     public void Default_Exceptions_AreSoundAgainstThePinnedSpec()
     {
         var problems = ContractExceptions.Audit(ContractExceptions.Default, OpenApiContract.Current);
@@ -30,7 +45,8 @@ public sealed class ContractExceptionsTests
     [Fact]
     public void Default_Exceptions_AreAllExercisedByAScenario()
     {
-        // Judged only for the operations whose success response was validated in this run, so a filtered `dotnet test` stays green.
+        // Judged only when a validated success response of the operation contained an object evaluated against the schema,
+        // so a filtered `dotnet test` stays green.
         var dead = OpenApiContract.Current.FindDeadExceptions(ContractExceptions.Default);
 
         Assert.True(
@@ -59,6 +75,29 @@ public sealed class ContractExceptionsTests
 
         Assert.Empty(contract.FindDeadExceptions([exception]));
         Assert.Equal([exception], contract.UsedExceptions);
+    }
+
+    [Fact]
+    public void FindDeadExceptions_ResponseOfAnotherOperation_IsNotJudged()
+    {
+        var exception = Registered("UserResponse", "legacy_flag");
+        var contract = OpenApiContract.Create([exception]);
+
+        // The reactions route also returns UserResponse items, but the exception is registered for GET /users/{user_id}.
+        Assert.Empty(contract.Validate(Attempt($"[{UserJson}]", HttpStatusCode.OK, "GET", "/channels/{channel_id}/messages/{message_id}/reactions/{emoji_name}")));
+
+        Assert.Empty(contract.FindDeadExceptions([exception]));
+    }
+
+    [Fact]
+    public void FindDeadExceptions_SchemaNotEvaluatedInTheResponse_IsNotJudged()
+    {
+        var exception = Registered("GuildChannelResponse", "legacy_flag");
+        var contract = OpenApiContract.Create([exception]);
+
+        Assert.Empty(contract.Validate(Attempt(UserJson)));
+
+        Assert.Empty(contract.FindDeadExceptions([exception]));
     }
 
     [Fact]
@@ -93,6 +132,30 @@ public sealed class ContractExceptionsTests
         var problems = ContractExceptions.Audit([Registered("UserResponse", "username")], OpenApiContract.Current);
 
         Assert.Contains(problems, p => p.Contains("spec now declares this property", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Audit_SchemaThatAcceptsAnyProperty_IsReportedAsSuch()
+    {
+        // No component of the pinned spec accepts any property at its root, so the case is built from a synthetic extract.
+        using var schemas = JsonDocument.Parse("""{"Free":{"type":"object","additionalProperties":true},"Tags":{"type":"object","additionalProperties":{"type":"string"}},"Closed":{"type":"object","properties":{"a":{"type":"string"}}}}""");
+        var validator = new JsonSchemaValidator(schemas.RootElement.EnumerateObject().ToDictionary(static p => p.Name, static p => p.Value, StringComparer.Ordinal));
+
+        Assert.True(validator.Declares("Free", "anything"));
+        Assert.True(validator.Declares("Tags", "anything"));
+        Assert.False(validator.Declares("Closed", "anything"));
+        Assert.True(validator.Declares("Closed", "a"));
+        Assert.False(validator.AcceptsAnyProperty("Closed"));
+        foreach (var schema in new[] { "Free", "Tags" })
+        {
+            var problems = ContractExceptions.Audit([Registered(schema, "anything")], validator, static _ => true);
+
+            Assert.Contains(problems, p => p.Contains("the spec accepts any property", StringComparison.Ordinal));
+        }
+
+        Assert.Contains(
+            ContractExceptions.Audit([Registered("Closed", "a")], validator, static _ => true),
+            p => p.Contains("the spec now declares this property", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -144,11 +207,12 @@ public sealed class ContractExceptionsTests
     private static ContractException Registered(string schema, string property)
         => new(schema, property, "The spec forgot it.", "developers/resources/user.mdx:10", GetMe, "PAR-SPEC-01");
 
-    private static RecordedRestRequest Attempt(string responseJson, HttpStatusCode status = HttpStatusCode.OK) => RecordedRestRequest.From(new RestAttempt
-    {
-        Method = "GET",
-        RouteTemplate = "/users/{user_id}",
-        StatusCode = status,
-        ResponseBody = System.Text.Encoding.UTF8.GetBytes(responseJson),
-    });
+    private static RecordedRestRequest Attempt(string responseJson, HttpStatusCode status = HttpStatusCode.OK, string method = "GET", string template = "/users/{user_id}")
+        => RecordedRestRequest.From(new RestAttempt
+        {
+            Method = method,
+            RouteTemplate = template,
+            StatusCode = status,
+            ResponseBody = System.Text.Encoding.UTF8.GetBytes(responseJson),
+        });
 }

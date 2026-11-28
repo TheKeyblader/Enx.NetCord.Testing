@@ -26,8 +26,20 @@ internal static partial class ContractExceptions
     /// <returns>One line per problem; empty when the list is sound.</returns>
     public static IReadOnlyList<string> Audit(IReadOnlyList<ContractException> exceptions, OpenApiContract contract)
     {
-        ArgumentNullException.ThrowIfNull(exceptions);
         ArgumentNullException.ThrowIfNull(contract);
+        return Audit(exceptions, contract.Validator, contract.Covers);
+    }
+
+    /// <summary>Audits a list of exceptions against a validator and a predicate telling which operations the contract describes.</summary>
+    /// <param name="exceptions">The list to audit.</param>
+    /// <param name="validator">The validator over the component schemas.</param>
+    /// <param name="coversOperation">Whether an operation key is in the contract.</param>
+    /// <returns>One line per problem; empty when the list is sound.</returns>
+    public static IReadOnlyList<string> Audit(IReadOnlyList<ContractException> exceptions, JsonSchemaValidator validator, Func<string, bool> coversOperation)
+    {
+        ArgumentNullException.ThrowIfNull(exceptions);
+        ArgumentNullException.ThrowIfNull(validator);
+        ArgumentNullException.ThrowIfNull(coversOperation);
 
         var problems = new List<string>();
         foreach (var (schema, property, justification, reference, operation, task) in exceptions)
@@ -54,18 +66,20 @@ internal static partial class ContractExceptions
                 problems.Add($"{label}: the reference '{reference}' must be a discord-api-docs file and line (developers/….mdx:123)");
             }
 
-            if (!contract.Covers(operation ?? string.Empty))
+            if (!coversOperation(operation ?? string.Empty))
             {
                 problems.Add($"{label}: the operation '{operation}' is not in the contract extract");
             }
 
-            if (!contract.Validator.HasSchema(schema))
+            if (!validator.HasSchema(schema))
             {
                 problems.Add($"{label}: the spec has no schema '{schema}'");
             }
-            else if (contract.Validator.Declares(schema, property))
+            else if (validator.Declares(schema, property))
             {
-                problems.Add($"{label}: the spec now declares this property, remove the exception");
+                problems.Add(validator.AcceptsAnyProperty(schema)
+                    ? $"{label}: the spec accepts any property on this schema, remove the exception"
+                    : $"{label}: the spec now declares this property, remove the exception");
             }
         }
 

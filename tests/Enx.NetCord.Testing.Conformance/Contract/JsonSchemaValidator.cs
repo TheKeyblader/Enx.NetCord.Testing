@@ -30,8 +30,16 @@ internal sealed class JsonSchemaValidator(
 {
     private readonly IReadOnlyList<ContractException> _exceptions = exceptions ?? [];
     private readonly ConcurrentDictionary<ContractException, int> _hits = new();
+    private readonly ConcurrentDictionary<(string Operation, string Schema), byte> _evaluated = new();
+
+    // The operation whose success response is being validated; validation is synchronous, so a thread-static scope is enough.
+    [ThreadStatic]
+    private static string? _currentOperation;
 
     private const string SchemaPrefix = "#/components/schemas/";
+
+    // A property name no schema declares: DeclaresProperty then only succeeds through additionalProperties.
+    private const string NoSuchProperty = "\u0000";
 
     private static readonly HashSet<string> Annotations =
     [
@@ -55,10 +63,27 @@ internal sealed class JsonSchemaValidator(
     /// <param name="instance">The JSON instance.</param>
     /// <param name="schema">The schema (inline or a <c>$ref</c>).</param>
     /// <returns>The violations, as <c>$.path: message</c>; empty when the instance conforms.</returns>
-    public IReadOnlyList<string> Validate(JsonElement instance, JsonElement schema)
+    public IReadOnlyList<string> Validate(JsonElement instance, JsonElement schema) => Validate(instance, schema, null);
+
+    /// <summary>Validates an instance against a schema node, recording which component schemas its objects were evaluated against.</summary>
+    /// <param name="instance">The JSON instance.</param>
+    /// <param name="schema">The schema (inline or a <c>$ref</c>).</param>
+    /// <param name="operation">The <c>METHOD /template</c> key of the success response being validated, or <see langword="null"/>.</param>
+    /// <returns>The violations, as <c>$.path: message</c>; empty when the instance conforms.</returns>
+    public IReadOnlyList<string> Validate(JsonElement instance, JsonElement schema, string? operation)
     {
         var errors = new List<string>();
-        Check(instance, schema, "$", errors);
+        var previous = _currentOperation;
+        _currentOperation = operation;
+        try
+        {
+            Check(instance, schema, "$", errors);
+        }
+        finally
+        {
+            _currentOperation = previous;
+        }
+
         return errors;
     }
 
@@ -66,12 +91,28 @@ internal sealed class JsonSchemaValidator(
     /// <param name="instance">The JSON instance.</param>
     /// <param name="schemaName">The component schema name.</param>
     /// <returns>The violations; empty when the instance conforms.</returns>
-    public IReadOnlyList<string> ValidateNamed(JsonElement instance, string schemaName)
+    public IReadOnlyList<string> ValidateNamed(JsonElement instance, string schemaName) => ValidateNamed(instance, schemaName, null);
+
+    /// <summary>Validates an instance against a named component schema, recording the evaluations like <see cref="Validate(JsonElement, JsonElement, string?)"/>.</summary>
+    /// <param name="instance">The JSON instance.</param>
+    /// <param name="schemaName">The component schema name.</param>
+    /// <param name="operation">The <c>METHOD /template</c> key of the success response being validated, or <see langword="null"/>.</param>
+    /// <returns>The violations; empty when the instance conforms.</returns>
+    public IReadOnlyList<string> ValidateNamed(JsonElement instance, string schemaName, string? operation)
     {
         Resolve(SchemaPrefix + schemaName); // Fails early on an unknown name.
-        using var reference = JsonDocument.Parse($$"""{"$ref":"{{SchemaPrefix}}{{schemaName}}"}""");
-        return Validate(instance, reference.RootElement); // Through the $ref, so the schema name is part of the messages and of the exception scope.
+        using var reference = JsonDocument.Parse(new JsonObject { ["$ref"] = SchemaPrefix + schemaName }.ToJsonString());
+        return Validate(instance, reference.RootElement, operation); // Through the $ref, so the schema name is part of the messages and of the exception scope.
     }
+
+    /// <summary>
+    /// Returns whether a validated success response of an operation contained an object evaluated against a component schema
+    /// (directly, through <c>$ref</c>, <c>allOf</c> or a branch): the only situation where an exception on that schema could have been needed.
+    /// </summary>
+    /// <param name="operation">The <c>METHOD /template</c> key.</param>
+    /// <param name="schemaName">The component schema name.</param>
+    /// <returns><see langword="true"/> when such an object was evaluated.</returns>
+    public bool WasEvaluated(string operation, string schemaName) => _evaluated.ContainsKey((operation, schemaName));
 
     /// <summary>Gets the exceptions that accepted at least one undeclared property since this validator was created.</summary>
     public IReadOnlyCollection<ContractException> UsedExceptions => [.. _hits.Keys];
@@ -86,7 +127,13 @@ internal sealed class JsonSchemaValidator(
     /// <param name="property">The JSON property name.</param>
     /// <returns><see langword="true"/> when some branch of the schema lists the property.</returns>
     public bool Declares(string schemaName, string property)
-        => DeclaresProperty(Resolve(SchemaPrefix + schemaName), property, [schemaName]);
+        => DeclaresProperty(Resolve(SchemaPrefix + schemaName), property, [SchemaPrefix + schemaName]);
+
+    /// <summary>Returns whether the spec lets a component schema carry any property (<c>additionalProperties</c> <see langword="true"/> or a schema, or an empty schema).</summary>
+    /// <param name="schemaName">The component schema name.</param>
+    /// <returns><see langword="true"/> when some branch accepts arbitrary properties.</returns>
+    public bool AcceptsAnyProperty(string schemaName)
+        => DeclaresProperty(Resolve(SchemaPrefix + schemaName), NoSuchProperty, [SchemaPrefix + schemaName]);
 
     private bool DeclaresProperty(JsonElement schema, string property, HashSet<string> visited)
     {
@@ -98,6 +145,11 @@ internal sealed class JsonSchemaValidator(
         if (schema.TryGetProperty("properties", out var properties) && properties.TryGetProperty(property, out _))
         {
             return true;
+        }
+
+        if (schema.TryGetProperty("additionalProperties", out var additional) && additional.ValueKind is not JsonValueKind.False)
+        {
+            return true; // The spec accepts any property.
         }
 
         if (schema.TryGetProperty("$ref", out var reference))
@@ -272,7 +324,20 @@ internal sealed class JsonSchemaValidator(
     {
         var evaluation = new Evaluation();
         Evaluate(instance, schema, path, errors, evaluation);
-        if (instance.ValueKind == JsonValueKind.Object && !evaluation.Open)
+        if (instance.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        if (_currentOperation is { } operation)
+        {
+            foreach (var name in evaluation.Schemas)
+            {
+                _evaluated[(operation, name)] = 0;
+            }
+        }
+
+        if (!evaluation.Open)
         {
             ReportUndeclared(instance, path, errors, evaluation);
         }
@@ -314,12 +379,20 @@ internal sealed class JsonSchemaValidator(
             return;
         }
 
+        var constrained = false;
         foreach (var keyword in schema.EnumerateObject())
         {
             if (!Supported.Contains(keyword.Name) && !Annotations.Contains(keyword.Name))
             {
                 throw new NotSupportedException($"Unsupported schema keyword '{keyword.Name}' at {path}.");
             }
+
+            constrained |= !Annotations.Contains(keyword.Name);
+        }
+
+        if (!constrained)
+        {
+            evaluation.Open = true; // {} (annotations only) is the true schema: it accepts any value, and so any property.
         }
 
         if (schema.TryGetProperty("$ref", out var reference))
@@ -414,6 +487,7 @@ internal sealed class JsonSchemaValidator(
 
             if (passed == 0)
             {
+                evaluation.Open = true; // No branch declares anything: the failure is reported once, not again as every property undeclared.
                 errors.Add($"{path}: matches none of the oneOf branches: {Summarize(failures)}");
             }
             else if (passed > 1)
@@ -444,6 +518,7 @@ internal sealed class JsonSchemaValidator(
 
             if (!passed)
             {
+                evaluation.Open = true; // As for oneOf: one failure, not one per property.
                 errors.Add($"{path}: matches none of the anyOf branches: {Summarize(failures)}");
             }
         }
