@@ -195,13 +195,51 @@ public sealed class PinMessageTests
         var unknownChannel = await Assert.ThrowsAsync<RestException>(() => rest.PinMessageAsync(123456789, 1, cancellationToken: Ct));
         var unknownMessage = await Assert.ThrowsAsync<RestException>(() => rest.PinMessageAsync(general.Id, 424242, cancellationToken: Ct));
         var forbidden = await Assert.ThrowsAsync<RestException>(() => rest.PinMessageAsync(secret.Id, hidden, cancellationToken: Ct));
-        var otherChannel = await Assert.ThrowsAsync<RestException>(() => rest.PinMessageAsync(secret.Id, elsewhere, cancellationToken: Ct));
+        var foreignMessageInHiddenChannel = await Assert.ThrowsAsync<RestException>(() => rest.PinMessageAsync(secret.Id, elsewhere, cancellationToken: Ct));
 
         AssertError(unknownChannel, HttpStatusCode.NotFound, 10003);
         AssertError(unknownMessage, HttpStatusCode.NotFound, 10008);
         AssertError(forbidden, HttpStatusCode.Forbidden, 50001);
-        AssertError(otherChannel, HttpStatusCode.Forbidden, 50001);
+        AssertError(foreignMessageInHiddenChannel, HttpStatusCode.Forbidden, 50001);
         Assert.False(discord.State.FindMessage(secret.Id, hidden)!.Pinned);
+    }
+
+    [Fact]
+    [Parity("PUT /channels/{channel_id}/messages/pins/{message_id}")]
+    [Parity("50021")]
+    public async Task PinMessageAsync_SystemMessage_Returns50021AndChangesNothing()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        var general = guild.TextChannel("general");
+        var message = general.Message("pin me", guild.Member("alice"));
+        using var rest = discord.CreateRestClient();
+        await rest.PinMessageAsync(general.Id, message, cancellationToken: Ct);
+        var systemMessage = discord.State.FindChannel(general.Id)!.LastMessageId!.Value;
+        Assert.Equal(6, discord.State.FindMessage(general.Id, systemMessage)!.Type);
+        using var subscription = discord.State.SubscribeGateway();
+
+        var exception = await Assert.ThrowsAsync<RestException>(() => rest.PinMessageAsync(general.Id, systemMessage, cancellationToken: Ct));
+
+        AssertError(exception, HttpStatusCode.BadRequest, 50021);
+        Assert.False(discord.State.FindMessage(general.Id, systemMessage)!.Pinned);
+        Assert.Empty(Drain(subscription));
+    }
+
+    [Fact]
+    [Parity("PUT /channels/{channel_id}/messages/pins/{message_id}")]
+    public async Task PinMessageAsync_Reply_IsAccepted()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        var general = guild.TextChannel("general");
+        var original = general.Message("question", guild.Member("alice"));
+        using var rest = discord.CreateRestClient();
+        var reply = await rest.SendMessageAsync(general.Id, new MessageProperties { Content = "answer", MessageReference = MessageReferenceProperties.Reply(original) }, cancellationToken: Ct);
+
+        await rest.PinMessageAsync(general.Id, reply.Id, cancellationToken: Ct);
+
+        Assert.True((await rest.GetMessageAsync(general.Id, reply.Id, cancellationToken: Ct)).IsPinned);
     }
 
     [Fact]

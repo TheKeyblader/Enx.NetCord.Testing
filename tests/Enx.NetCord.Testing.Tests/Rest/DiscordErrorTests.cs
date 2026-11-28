@@ -86,6 +86,7 @@ public sealed class DiscordErrorTests
     [InlineData(HttpStatusCode.BadRequest, 40058)]
     [InlineData(HttpStatusCode.BadRequest, 40033)]
     [InlineData(HttpStatusCode.BadRequest, 30003)]
+    [InlineData(HttpStatusCode.BadRequest, 50021)]
     [InlineData(HttpStatusCode.InternalServerError, 0)]
     [InlineData(HttpStatusCode.BadGateway, 0)]
     public void TryCreateSimple_CatalogPair_ReturnsMatchingError(HttpStatusCode status, int code)

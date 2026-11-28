@@ -12,7 +12,8 @@ internal sealed partial class FakeDiscordState
     // ----- Pins -----------------------------------------------------------------------------
 
     /// <summary>
-    /// Pins a message. Idempotent (hypothesis, <c>docs/parity/errors.md</c>): an already pinned message succeeds, commits nothing and
+    /// Pins a message; only a default message (type 0) or a reply (type 19) can be pinned, any other type is refused with
+    /// <see cref="StateFailureKind.CannotExecuteOnSystemMessage"/> (<c>50021</c>, hypothesis). Idempotent (hypothesis, <c>docs/parity/errors.md</c>): an already pinned message succeeds, commits nothing and
     /// creates no system message. A new pin commits, in this order, a <see cref="MessageEdited"/> (the <c>pinned</c> flag changed, as
     /// Discord fires <c>MESSAGE_UPDATE</c>), a <see cref="ChannelPinsUpdated"/> and a <see cref="MessageCreated"/> for the
     /// <c>CHANNEL_PINNED_MESSAGE</c> system message (type 6) that points at the pinned one and is authored by <paramref name="userId"/>.
@@ -31,6 +32,12 @@ internal sealed partial class FakeDiscordState
             if (!TryGetMessage(caller, channelId, messageId, out var channel, out var message, out var failure))
             {
                 return failure;
+            }
+
+            if (message.Type is not (0 or ReplyMessageType))
+            {
+                // Only a default message or a reply can be pinned: the system messages (join, pin, boost…) cannot (hypothesis, UR en attente).
+                return new StateFailure(StateFailureKind.CannotExecuteOnSystemMessage, message.Id);
             }
 
             if (!_users.TryGetValue(userId, out var pinner))

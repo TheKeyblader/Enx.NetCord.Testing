@@ -22,6 +22,16 @@ internal static class PinValidators
     internal const int DefaultLimit = 50;
     internal const int MaxLimit = 50;
 
+    // ISO 8601 date-times only, with or without a zone (K: Z or ±hh:mm) and fractional seconds; "O" is what the fake writes, "s" what NetCord sends.
+    private static readonly string[] Iso8601Formats =
+    [
+        "O",
+        "s",
+        "yyyy-MM-dd'T'HH:mm:ssK",
+        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF",
+        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK",
+    ];
+
     /// <summary>Validates the <c>channel_id</c> and <c>message_id</c> of <c>PUT</c> and <c>DELETE …/messages/pins/{message_id}</c>.</summary>
     /// <param name="request">The request.</param>
     /// <returns>A <see cref="PinRoute"/> payload, or <c>50035</c>.</returns>
@@ -57,7 +67,7 @@ internal static class PinValidators
             return null;
         }
 
-        if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var value))
+        if (DateTimeOffset.TryParseExact(raw, Iso8601Formats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var value))
         {
             return value;
         }

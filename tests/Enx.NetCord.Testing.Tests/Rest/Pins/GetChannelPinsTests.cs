@@ -149,6 +149,48 @@ public sealed class GetChannelPinsTests
         Assert.Single(FieldErrors(exception, field));
     }
 
+    [Theory]
+    [InlineData("1/2/2024")]
+    [InlineData("2024-13-01T00:00:00")]
+    [InlineData("20240102")]
+    [Parity("GET /channels/{channel_id}/messages/pins")]
+    public async Task GetChannelPinsAsync_NonIso8601Before_Fails50035(string before)
+    {
+        await using var discord = FakeDiscord.Create();
+        var general = discord.Seed.Guild("Test").TextChannel("general");
+        using var rest = discord.CreateRestClient();
+
+        var exception = await Assert.ThrowsAsync<RestException>(async () =>
+        {
+            await using var stream = await rest.SendRequestAsync(HttpMethod.Get, $"/channels/{general.Id}/messages/pins", $"?before={before}", cancellationToken: Ct);
+        });
+
+        AssertError(exception, HttpStatusCode.BadRequest, 50035);
+        Assert.Single(FieldErrors(exception, "before"));
+    }
+
+    [Theory]
+    [InlineData("2026-01-01T00:00:03")]
+    [InlineData("2026-01-01T00:00:03Z")]
+    [InlineData("2026-01-01T01:00:03+01:00")]
+    [InlineData("2026-01-01T00:00:03.5000000+00:00")]
+    [InlineData("2026-01-01T00:00:03.5Z")]
+    [Parity("GET /channels/{channel_id}/messages/pins")]
+    public async Task GetChannelPinsAsync_Iso8601Before_IsAccepted(string before)
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        var general = guild.TextChannel("general");
+        var alice = guild.Member("alice");
+        SeedPinned(discord, general.Id, alice, "a");
+        SeedPinned(discord, general.Id, alice, "b");
+        using var rest = discord.CreateRestClient();
+
+        using var raw = await GetRawAsync(rest, $"/channels/{general.Id}/messages/pins", $"?before={Uri.EscapeDataString(before)}");
+
+        Assert.Equal(2, raw.RootElement.GetProperty("items").GetArrayLength());
+    }
+
     [Fact]
     [Parity("GET /channels/{channel_id}/messages/pins")]
     public async Task GetChannelPinsAsync_MalformedChannelId_Fails50035()
