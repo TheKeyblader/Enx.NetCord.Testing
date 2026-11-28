@@ -26,6 +26,26 @@ description: Recette pour ajouter un opcode ou un event dispatch Gateway au faux
   selon ADR) + barrière `await discord.Gateway.FlushAsync()` qui garantit que NetCord a traité
   tous les messages en file (sans `Task.Delay`).
 
+### Fabrique du client (M2-12, ADR 0008 § 2)
+
+- `discord.CreateGatewayClient()` (sans paramètre) passe par `Gateway/GatewayClientFactory` :
+  une `GatewayClientConfiguration` **neuve par client** (`Hostname` sentinelle,
+  `UncompressedGatewayCompression`, provider WebSocket du fake, et
+  `RestClientConfiguration = RestClientFactory.CreateConfiguration(context)` : ne jamais
+  dupliquer le branchement REST). Toute surcharge (intents, shards, M3-ADR-09) part de cette
+  configuration ; l'appel sans argument doit rester valide.
+- Jusqu'à M3-01, le provider est `UnavailableWebSocketConnectionProvider` : `CreateConnection()`
+  lève `ObjectDisposedException` si le fake est fermé, sinon `NotSupportedException`. NetCord
+  appelle `CreateConnection()` en tête de `ConnectAsync` et **ne réessaie pas** : l'exception
+  sort de `StartAsync`, l'état est remis à zéro (un second `StartAsync` échoue pareil) et
+  l'événement `Connecting` n'est pas levé. Le `ReconnectStrategy` ne joue qu'après une
+  connexion établie : en M3, injecter une stratégie sans délai réel.
+- `GatewayClient` n'expose ni sa compression ni son URI : vérifier la configuration par un test
+  interne sur `GatewayClientFactory.CreateConfiguration(...)` (en complément des tests via le
+  vrai client).
+- `GatewayClient` est `IDisposable` seulement (pas `IAsyncDisposable`) : `using var gateway = …`,
+  pas `await using`. Il possède son `Rest` (construit depuis la configuration) et le dispose.
+
 ## 3. Tests (`tests/Enx.NetCord.Testing.Tests/Gateway/`)
 
 ```csharp
@@ -34,7 +54,8 @@ public async Task MessageCreate_AfterRestSend_IsReceivedByGatewayClient()
 {
     await using var discord = FakeDiscord.Create();
     var channel = discord.Seed.Guild("G").TextChannel("general");
-    await using var client = discord.CreateGatewayClient(GatewayIntents.GuildMessages | GatewayIntents.MessageContent);
+    // Signature indicative : la surcharge avec intents relève de M3-ADR-09.
+    using var client = discord.CreateGatewayClient(GatewayIntents.GuildMessages | GatewayIntents.MessageContent);
     var received = new List<Message>();
     client.MessageCreate += m => { received.Add(m); return default; };
     await client.StartAsync();
