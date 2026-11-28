@@ -76,7 +76,6 @@ internal sealed class RestTestHarness : IDisposable
             RouteTable.Create(RouteInventory.All, bindings),
             new FakeDiscordState(timeProvider ?? Clock, new DefaultSnowflakeGenerator()),
             new BotIdentityResolver(BotRawToken, BotId),
-            timeProvider ?? Clock,
             mode,
             Journal);
         Rest = new FakeDiscordRest(Context.Interceptions);

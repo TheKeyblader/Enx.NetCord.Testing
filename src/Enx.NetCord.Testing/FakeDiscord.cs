@@ -88,7 +88,6 @@ public sealed class FakeDiscord : IAsyncDisposable
             routes,
             state,
             new BotIdentityResolver(token.RawToken, token.Id),
-            state.Clock,
             options.UnimplementedRoutes,
             journal);
         return new FakeDiscord(state, journal, context, token);

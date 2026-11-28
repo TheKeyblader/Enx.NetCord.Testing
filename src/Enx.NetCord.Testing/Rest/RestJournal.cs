@@ -2,7 +2,7 @@ namespace Enx.NetCord.Testing.Rest;
 
 /// <summary>
 /// The fake's journal of terminal REST attempts, in the order they were added. The public <c>Recorded.Requests</c>
-/// projection (<see cref="DiscordRecording"/>) is built from <see cref="Snapshot"/>.
+/// projection (<see cref="DiscordRecording"/>) is built from <see cref="SnapshotFrom"/>.
 /// </summary>
 internal sealed class RestJournal : IRestAttemptSink
 {
