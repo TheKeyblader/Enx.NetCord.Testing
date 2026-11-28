@@ -381,6 +381,12 @@ M2-ADR-08 compose par-dessus, sans accès interne : construire les services NetC
 l'`IExecutionResult`. Les commandes texte (`MESSAGE_CREATE`) ne sont pas des interactions et
 relèvent de M2-ADR-08.
 
+> **Amendée par l'[ADR 0008](0008-services-harness.md), § 4 et 5 (2026-11-28).** Le raccourci
+> `bot.ExecuteSlashCommandAsync(…)` n'est pas retenu : le harnais offre
+> `bot.ExecuteAsync(request)`, qui prend les requêtes de cette ADR. Pour les commandes texte,
+> l'ADR 0008 ne fixe que la direction (un `MESSAGE_CREATE` par la Gateway) ; signature et
+> barrière relèvent de M3-ADR-09.
+
 ## API publique proposée
 
 Tout est dans le namespace `Enx.NetCord.Testing` ; les constructeurs sont non publics, sauf

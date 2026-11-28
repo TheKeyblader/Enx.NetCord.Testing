@@ -91,6 +91,11 @@ remplacer le WebSocket et la compression ; changer le hostname seul est insuffis
 M5-ADR-10 réutilisera le même branchement, gestionnaire compris, et la même identité pour
 Hosting.
 
+> **Amendée par l'[ADR 0008](0008-services-harness.md), § 2 (2026-11-28).** Le harnais Services
+> a besoin d'un `GatewayClient` dès M2 : `FakeDiscord.CreateGatewayClient()` existe sans
+> paramètre, avec le branchement REST décrit ci-dessus et un WebSocket qui refuse de se
+> connecter jusqu'à M3-01. Intents, shards et démarrage restent à M3-ADR-09.
+
 **Seed immédiat.** Un appel réussi vaut un commit dans `FakeDiscordState` (ADR 0003), avec
 les mêmes règles de notification qu'une mutation d'état, sans requête REST fictive. `Guild`
 crée aussi `@everyone`. Seules la guilde et le salon ont besoin de méthodes enfants : leurs

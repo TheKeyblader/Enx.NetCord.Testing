@@ -3,7 +3,8 @@
 - **Statut** : Proposée
 - **Date** : 2026-11-28
 - **Auteur** : agent `architect`
-- **Tâches liées** : M2-ADR-08, M2-07, M2-08, M2-09, M2-10, M2-11, M2-T-01, M3-ADR-09, M3-08, M5-ADR-10
+- **Tâches liées** : M2-ADR-08, M1-ADR-04B, M2-02, M2-04, M2-05, M2-07, M2-08, M2-09, M2-10,
+  M2-11, M2-12, M2-T-01, M3-ADR-09, M3-08, M3-09, M5-ADR-10, PAR-INT-02, PAR-SEAM-01
 
 ## Contexte
 
@@ -113,7 +114,8 @@ aujourd'hui.
 **Option B.** Le harnais ne possède ni les modules, ni le conteneur, ni un second modèle
 d'interaction. Les quatre arbitrages qui dépendaient des préférences de l'utilisateur ont été
 tranchés par lui le 2026-11-28 : fabrique Gateway minimale dans le cœur (§ 2), provider fourni
-par le test (§ 2), exception du module relancée (§ 4), une seule méthode d'exécution (§ 4).
+par le test (§ 2), exception du module relancée (§ 4), une seule méthode d'exécution (§ 4). Il
+a confirmé en review que le harnais crée et possède toujours ses clients (§ 2).
 
 ### 1. Point d'entrée et cycle de vie
 
@@ -160,15 +162,26 @@ transport `Gateway`, `discord.CreateRestClient()` en transport `Http`. L'interac
 `InteractionExecutionOptions.Client` = `gateway.Rest` ou ce `RestClient`, comme en production.
 Il n'accepte **pas** de client venu du test ou du provider : il ne pourrait pas vérifier qu'il
 vise ce fake, et un `RestClient` réel pris dans la racine de composition du bot enverrait les
-réponses sur le réseau. Tant que la Gateway n'existe pas, l'identité de l'instance ne change
-rien : tous les clients d'un fake voient le même état. Un service du bot qui injecte
-`RestClient` reçoit celui que le test enregistre, `discord.CreateRestClient()`. M3-ADR-09 dira
-comment un client **connecté**, dont le cache compte, rejoint le harnais.
+réponses sur le réseau.
+
+- **Pourquoi l'ADR 0007 l'accepte et pas le harnais.** `InteractionExecutionOptions.Client` est
+  un argument que le test écrit lui-même, pour une exécution : un geste explicite, avec sa
+  mise en garde. Un provider vient souvent de la composition du bot, où un client réel peut se
+  trouver sans que le test l'ait choisi. Le harnais ne lit donc aucun client dans le provider.
+- **Mise en garde.** Un `GatewayClient` ou un `RestClient` enregistré dans le provider **n'est
+  pas** `context.Client` : ce sont deux instances. Le test qui réutilise la composition du bot
+  y remplace les clients par `discord.CreateGatewayClient()` et `discord.CreateRestClient()`,
+  sans quoi un service injecté parlerait au vrai Discord. Tant que la Gateway n'existe pas,
+  l'écart entre les deux instances ne s'observe pas : tous les clients d'un fake voient le
+  même état.
+- **Piste pour M3-ADR-09.** Un client **connecté**, dont le cache compte, devra pouvoir
+  rejoindre le harnais. Si le fake sait reconnaître les clients qu'il a émis, le harnais
+  pourra accepter ceux-là et refuser les autres.
 
 **Ajout au cœur : `FakeDiscord.CreateGatewayClient()`.** L'ADR 0004 reportait toute fabrique
-Gateway à M3-ADR-09. Le besoin arrive en M2 : les contextes Gateway exigent un `GatewayClient`
-non nul, que seul le cœur peut brancher. Cette ADR amende donc l'ADR 0004 d'un membre **sans
-paramètre** :
+Gateway à M3-ADR-09. Le besoin arrive en M2 : les contextes Gateway déclarent leur
+`GatewayClient` non nullable et un module lit couramment `Context.Client.Rest` ; seul le cœur
+peut brancher ce client. Cette ADR amende donc l'ADR 0004 d'un membre **sans paramètre** :
 
 - son client REST est branché comme celui de `CreateRestClient()` (handler et gestionnaire sans
   attente neufs, via `GatewayClientConfiguration.RestClientConfiguration`), avec le jeton du bot ;
@@ -194,6 +207,8 @@ avec NetCord nu.
   résout `IServiceScopeFactory`, le harnais crée un scope asynchrone, passe son provider au
   service NetCord et à la fabrique de contexte, puis le dispose avant de rendre la main.
   Sinon il passe le provider tel quel, sans erreur : un provider écrit à la main est légitime.
+  C'est un écart voulu : NetCord.Hosting, scopes actifs, lève `InvalidOperationException` si
+  `IServiceScopeFactory` manque (`ApplicationCommandInteractionHandler.cs:44`).
 - Dépendance ajoutée : `Microsoft.Extensions.DependencyInjection.Abstractions`, seule. Le
   harnais ne référence pas le conteneur.
 - Le harnais n'enregistre rien dans le provider et n'y lit que la fabrique de scopes.
@@ -210,8 +225,9 @@ pas : chaque `PUT` remplace la liste entière et le dernier effacerait les autre
 
 - `applicationId` est l'ID du jeton du client, comme le fait NetCord.Hosting.
 - **Global par défaut**, comme NetCord.Hosting. `RegisterCommandsInGuild(guildId)` envoie tout
-  dans une guilde, seul autre choix de NetCord. Les commandes ne sont alors visibles que là
-  (règle des commandes visibles de l'ADR 0007).
+  dans une guilde, seul autre choix de NetCord ; la méthode est conservée en v1 (review). Les
+  commandes ne sont alors visibles que là (règle des commandes visibles de l'ADR 0007), et le
+  bot doit appartenir à cette guilde au sens que fixera M1-ADR-04B, sinon le `PUT` est refusé.
 - Aucun service de commandes : aucun `PUT`, pour ne pas vider un registre que le test a rempli.
 - Le `PUT` est une vraie requête : elle figure dans `Recorded.Requests`, avant celles du test.
   `InteractionResult.Requests`, rattaché à l'interaction, ne la contient pas.
@@ -224,9 +240,14 @@ pas : chaque `PUT` remplace la liste entière et le dernier effacerait les autre
   requêtes restent *ad hoc* : seul le stockage par nom et type, celui par défaut, retrouve la
   commande.
 
-Limites assumées : une commande `Register = false` n'entre pas dans le registre, donc M2-11
-refuse la requête qui la nomme ; un second harnais global sur le même fake remplace les
-commandes du premier ; un service à stockage par ID ne sert qu'à un seul harnais.
+Limites assumées de l'enregistrement :
+
+- une commande `Register = false` n'entre pas dans le registre, donc M2-11 refuse la requête
+  qui la nomme ;
+- un service de commandes sans aucune commande enregistrable envoie quand même un `PUT []`,
+  qui **vide** le registre visé, comme NetCord.Hosting ;
+- un second harnais global sur le même fake remplace les commandes du premier ;
+- un service à stockage par ID ne sert qu'à un seul harnais.
 
 ### 4. Exécution et résultat
 
@@ -265,18 +286,29 @@ requête d'autocomplétion vers un service qui n'est ni l'un ni l'autre lève
 | Situation | `Execution` | `Interaction` | Exception |
 | --- | --- | --- | --- |
 | Le module se termine | succès (`is not IFailResult`) | ce que le bot a envoyé | — |
-| Précondition, type reader, paramètres, « not found » | `IFailResult` | **rien d'ajouté** par le harnais | — |
+| Précondition refusée, type reader en échec, paramètres, « not found » | `IFailResult` | **rien d'ajouté** par le harnais | — |
+| Un type reader **lève** | `IFailResult` (`…TypeReaderExceptionResult`) | **rien d'ajouté** par le harnais | — |
 | Le module lève, y compris une `RestException` de réponse (`40060`…) | — | — | l'exception d'origine, pile conservée |
+| Une précondition **lève** (`PreconditionExceptionResult`) | — | — | l'exception d'origine, pile conservée |
 | Le module ne répond pas | succès | `Callback` vaut `null` | — |
 | Transport `Http`, réponse inline refusée | succès | `RejectedCallbacks` | — |
 | Aucun service pour ce type d'interaction | — | — | `InvalidOperationException` |
 
-- **L'exception est relancée.** NetCord la range dans un `IExceptionResult` ; le harnais la
-  relance telle quelle depuis le handler, et la voie directe la propage (ADR 0007).
-  `Execution` n'est donc jamais un `IExceptionResult`. Un bug de module fait échouer le test là
-  où il se produit, au lieu d'un `Response` nul trois lignes plus bas ; un test d'erreur
-  s'écrit `Assert.ThrowsAsync`. Contrepartie : l'`InteractionResult` d'une exécution qui lève
-  n'est pas rendu.
+- **L'exception est relancée si et seulement si le résultat de NetCord est un
+  `IExceptionResult`.** Le harnais relance alors son `Exception` telle quelle depuis le handler,
+  et la voie directe la propage (ADR 0007). `Execution` n'est donc jamais un `IExceptionResult`.
+  Un bug de module fait échouer le test là où il se produit, au lieu d'un `Response` nul trois
+  lignes plus bas ; un test d'erreur s'écrit `Assert.ThrowsAsync`. Contrepartie :
+  l'`InteractionResult` d'une exécution qui lève n'est pas rendu.
+- **Le critère est le type, pas l'origine.** NetCord range l'exception d'un module dans
+  `ExecutionExceptionResult` et celle d'une précondition dans `PreconditionExceptionResult`
+  (`PreconditionAttributes/PreconditionResult.cs:19`) : deux `IExceptionResult`, relancés. Il
+  range celle d'un type reader dans `SlashCommandTypeReaderExceptionResult`
+  (`ApplicationCommands/SlashCommandTypeReader.cs:52`) ou
+  `ComponentInteractionTypeReaderExceptionResult`
+  (`ComponentInteractions/ComponentInteractionTypeReader.cs:31`), qui portent une `Exception`
+  **sans** implémenter `IExceptionResult` : elle reste un `IFailResult` rendu. Le harnais ne
+  corrige pas cette asymétrie de NetCord ; M2-08 teste les deux cas.
 - **Un `IFailResult` est rendu, pas traité.** Le harnais n'envoie pas le message d'échec à
   l'utilisateur : c'est le rôle du *result handler* de `NetCord.Hosting.Services`, ou du code
   du bot. Ce pipeline (pré-exécution, *result handler*, `IContextAccessor`) se teste avec le
@@ -523,7 +555,7 @@ async Task Ticket_ButtonThenModal_StoresTicket()
 ```
 
 Échec rendu, exception relancée, contexte propre (même harnais ; `/ban` porte une précondition,
-`/crash` lève) :
+`/crash` lève une exception du bot) :
 
 ```csharp
 var denied = await bot.ExecuteAsync(
@@ -531,7 +563,7 @@ var denied = await bot.ExecuteAsync(
 Assert.IsAssignableFrom<IFailResult>(denied.Execution);
 Assert.Null(denied.Interaction.Callback);   // the harness sends no failure message
 
-await Assert.ThrowsAsync<InvalidOperationException>(
+await Assert.ThrowsAsync<TicketStoreUnavailableException>(   // the bot's own exception, rethrown
     () => bot.ExecuteAsync(discord.Interactions.SlashCommand("crash", alice, general.Id)));
 
 discord.Services().AddHttpApplicationCommands(tenantCommands,
@@ -551,27 +583,47 @@ discord.Services().AddHttpApplicationCommands(tenantCommands,
   consomme l'`IExecutionResult`.
 - La table des contextes suit la liste de NetCord. Un contexte ajouté en amont n'est pas
   reconnu tant qu'elle n'est pas complétée, mais la fabrique sert d'issue : pas de blocage.
-- Un contexte d'autocomplétion **propre** n'est pas pris en charge : NetCord ne permet pas de
-  le détecter sur l'instance sans réflexion. Le test compose alors à la main avec l'ADR 0007.
 - Le cœur gagne `CreateGatewayClient()` avant la Gateway. Ce client ne démarre pas en M2 et
   son cache reste vide : `context.Guild` est `null` jusqu'à M2-10.
-- Une exécution qui lève ne rend pas son `InteractionResult`. Le test qui veut les deux
-  compose avec `request.ExecuteAsync` de l'ADR 0007.
-- L'ADR 0007, § 7, annonçait un raccourci `ExecuteSlashCommandAsync` : il est remplacé par
-  `bot.ExecuteAsync(request)`.
+
+**Limites assumées** (confirmées en review ; celles de l'enregistrement sont au § 3) :
+
+- Le harnais crée et possède toujours son client ; il n'en accepte aucun du test ni du
+  provider (§ 2).
+- `RegisterCommandsInGuild` est conservé : global ou une guilde, comme NetCord, rien de plus fin.
+- Un contexte d'autocomplétion **propre** n'est pas pris en charge : NetCord ne permet pas de
+  le détecter sur l'instance sans réflexion. Le test compose alors à la main avec l'ADR 0007.
+- Une exécution qui lève ne rend pas son `InteractionResult`, et le harnais n'offre pas
+  d'échappatoire. Le test qui veut les deux compose avec `request.ExecuteAsync` de l'ADR 0007.
+- L'exception d'un type reader n'est pas relancée (§ 4).
+
+**Passages rendus caducs.** Cette ADR fait foi là où ils la contredisent :
+
+| Passage | Ce qui change | Traité par |
+| --- | --- | --- |
+| ADR 0004, l. 87-88 : « Pas de fabrique Gateway incomplète en M1 » | `CreateGatewayClient()` minimal dès M2 ; intents, shards et démarrage restent à M3-ADR-09 | note d'amendement, ce commit |
+| `architecture.md:47` : « La fabrique Gateway est reportée à M3-ADR-09 » | idem | ce commit |
+| ADR 0007, l. 379-382 : raccourci `bot.ExecuteSlashCommandAsync(…)` | remplacé par `bot.ExecuteAsync(request)` | note d'amendement, ce commit |
+| ADR 0007, l. 381-382 : « Les commandes texte (`MESSAGE_CREATE`) … relèvent de M2-ADR-08 » | cette ADR n'en fixe que la direction ; signature et barrière relèvent de M3-ADR-09, livraison M3-09 | note d'amendement, ce commit |
+| `vision.md:35-39` : `AddApplicationCommandModule<PingModule>()`, `ExecuteSlashCommandAsync` | exemple 1 de cette ADR | M6-01 |
+| `AGENTS.md:94` : `ExecuteSlashCommandAsync(...)` | `bot.ExecuteAsync(request)` | PAR-SEAM-01 |
+| skill `fake-interaction`, l. 44 : `CreateCommandsAsync` | `RegisterCommandsAsync` | PAR-SEAM-01 |
 
 **Tâches impactées.**
 
 - **M2-07** : le registre doit accepter le `PUT` global et le `PUT` de guilde tels que
   `RegisterCommandsAsync` les envoie (tous les types de commande, type 4 compris, localisations)
   et rendre les commandes **dans l'ordre reçu** : NetCord associe la réponse aux commandes par
-  position (`ApplicationCommandServiceManager.cs:81`).
+  position (`ApplicationCommandServiceManager.cs:81`). Le `PUT` de guilde suit **M1-ADR-04B** :
+  hors d'une guilde dont le bot est membre, il est refusé (`50001`).
 - **M2-08** : extension `Services()`, builder, table des contextes de commandes et
   d'autocomplétion, fabriques, `ApplicationCommandServiceManager`, `ExecuteAsync`,
   `ServiceExecutionResult`, scope, `PackageVersion` de
   `Microsoft.Extensions.DependencyInjection.Abstractions`. Dépend de M2-07, **M2-02** (sans
   route de callback, aucune réponse n'est captée), **M2-04** (commandes user et message,
-  autocomplétion) et de la nouvelle **M2-12**.
+  autocomplétion) et de la nouvelle **M2-12**. Tests attendus : précondition qui lève
+  (relancée) et type reader qui lève (`IFailResult` rendu) ; `RegisterCommandsInGuild` sur une
+  guilde seedée, avec et sans le bot selon **M1-ADR-04B** (`BuildAsync` propage le `50001`).
 - **M2-09** : réduite à `ComponentInteractionService` (table des contextes de composants,
   routage) ; dépend de M2-05 et M2-08. Les commandes texte partent en M3.
 - **M2-10** : conditionne `context.Guild` en transport `Gateway`.
@@ -586,8 +638,8 @@ discord.Services().AddHttpApplicationCommands(tenantCommands,
 **Tâches à créer** (l'orchestrateur les ajoute à `docs/roadmap.md`) :
 
 - `M2-12` — `FakeDiscord.CreateGatewayClient()` : REST branché, compression désactivée,
-  provider WebSocket qui refuse la connexion jusqu'à M3-01 ; mise à jour de la couche « Façade »
-  d'`architecture.md` — rest-implementer — M1-02.
+  provider WebSocket dans `Gateway/` qui refuse la connexion, remplacé par M3-01 —
+  gateway-implementer — M1-02.
 - `M3-09` — Harnais Services : `CommandService` par `MESSAGE_CREATE` sur un client connecté
   (préfixe, résultat par ID de message) — interactions-implementer — M3-ADR-09, M3-03, M3-04, M2-08.
 - `PAR-INT-02` — dans `interactions.md` : `services:register-commands` cite `RegisterCommandsAsync`
@@ -596,7 +648,8 @@ discord.Services().AddHttpApplicationCommands(tenantCommands,
   `services:execution-result` (échec rendu, exception relancée), `services:scoped-services` et
   `services:custom-context` — parity-auditor — M2-ADR-08.
 - `PAR-SEAM-01` — remplacer `CreateCommandsAsync` par `RegisterCommandsAsync` dans la skill
-  `fake-interaction` — orchestrator — M2-ADR-08.
+  `fake-interaction` (l. 44) et `ExecuteSlashCommandAsync(...)` par `bot.ExecuteAsync(request)`
+  dans `AGENTS.md:94` — orchestrator — M2-ADR-08.
 
 **Parité.** Prépare, dans `docs/parity/interactions.md`, `services:application-commands`,
 `services:register-commands`, `services:autocomplete`, `services:component-interactions` et la

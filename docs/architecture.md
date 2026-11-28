@@ -44,7 +44,9 @@
   `await using var discord = FakeDiscord.Create(options)` crée un fake isolé et une identité
   bot/application. `discord.CreateRestClient()` fournit un vrai client dont l'appelant est
   propriétaire. Chaque client a son handler en mémoire ; tous ceux du même fake voient le même
-  état et alimentent le même journal. La fabrique Gateway est reportée à M3-ADR-09.
+  état et alimentent le même journal. `discord.CreateGatewayClient()` est minimal
+  ([ADR 0008](adr/0008-services-harness.md)) : sans paramètre, REST branché sur le fake, non
+  démarrable avant M3 ; intents, shards et démarrage relèvent de M3-ADR-09.
 - `var channel = discord.Seed.Guild("Test").TextChannel("general")` crée les deux ressources
   immédiatement. La guilde et le salon sont des poignées avec `Id` ; les feuilles renvoient
   des IDs (`Member` renvoie celui de l'utilisateur). Pas de `out`, de `Build()` ni de faux POST.
