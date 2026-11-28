@@ -456,13 +456,13 @@ de la route et non par le handler :
   n'est pas d'une guilde qui n'existe pas. **Profil « refusée »** (tout le reste) : la ressource
   existe, l'accès manque.
 - **Helper central** (nom indicatif `GuildAccess`, dans `State/`). Toute opération d'état **qui
-  reçoit de son appelant un ID de guilde ou de salon** commence par lui **sous le verrou** : il
-  résout la guilde, ou le salon puis sa guilde, applique le profil et rend l'entité ou un échec
-  `UnknownGuild`, `UnknownChannel` ou `MissingAccess` (nouveau `StateFailureKind`). La
-  traduction en `DiscordError` est faite une fois pour toutes les routes : fabriques
-  `DiscordError.UnknownGuild()` (404, `10004`) et `DiscordError.MissingAccess()` (403, `50001`),
-  à ajouter au catalogue avec leurs lignes de `errors.md`. Un handler ne teste jamais l'adhésion
-  du bot lui-même.
+  reçoit de son appelant un ID de guilde ou de salon**, sauf la création d'interaction
+  (ci-dessous), commence par lui **sous le verrou** : il résout la guilde, ou le salon puis sa
+  guilde, applique le profil et rend l'entité ou un échec `UnknownGuild`, `UnknownChannel` ou
+  `MissingAccess` (nouveau `StateFailureKind`). La traduction en `DiscordError` est faite une
+  fois pour toutes les routes : fabriques `DiscordError.UnknownGuild()` (404, `10004`) et
+  `DiscordError.MissingAccess()` (403, `50001`), à ajouter au catalogue avec leurs lignes de
+  `errors.md`. Un handler ne teste jamais l'adhésion du bot lui-même.
 - **Test ou bot : un argument d'appelant, obligatoire.** Ces opérations restent **communes** au
   seed et au REST ; chacune reçoit un appelant interne (nom indicatif `StateCaller`) qu'elle
   transmet au helper. Deux valeurs :
@@ -669,8 +669,9 @@ async Task SlashCommand_GuildWithoutBot_IsRejectedLocally()
   *Rejeté :* ignorer l'adhésion quand l'identité manque (l'état tairait une demande non
   satisfaite) ; la refuser toujours sans identité, ou la rendre vraie par défaut dans l'input
   (tous les tests d'état nu devraient créer un bot qui n'est pas leur sujet).
-- Le paramètre d'appelant obligatoire du § 2 touche la signature des opérations d'état à portée
-  de guilde ou de salon, donc leurs appels dans les tests de `State/` : coût mécanique de M1-05.
+- Le paramètre d'appelant obligatoire du § 2 touche la signature des opérations d'état qui
+  reçoivent de leur appelant un ID de guilde ou de salon, donc leurs appels dans les tests de
+  `State/` : coût mécanique de M1-05.
 - Un contrôle de plus par opération de guilde ou de salon, sous le verrou, et un seul endroit où
   le corriger. Coût : la plupart des lignes du tableau reposent sur l'observation ou sur une
   hypothèse, faute de documentation.
