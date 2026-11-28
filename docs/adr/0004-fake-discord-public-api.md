@@ -4,7 +4,8 @@
 - **Date** : 2026-11-26
 - **Auteur** : agent `architect`
 - **Tâches liées** : M1-ADR-04, M1-ADR-03, M1-02, M1-04, M2-ADR-07, M3-ADR-09, M5-ADR-10 ;
-  amendement 04B : M1-ADR-04B, M1-REST-02, M1-REST-06 à M1-REST-08, M2-07, M2-08, M3-02, M3-03
+  amendement 04B : M1-ADR-04B, M1-REST-02 à M1-REST-09, M2-01, M2-07, M2-08, M2-10, M2-11,
+  M3-ADR-09, M3-02, M3-03, M3-06 ; proposées : M1-05, M1-REST-10, M2-13, PAR-ERR-02, PAR-GW-01
 - **Amendements** : [04B — Adhésion du bot aux guildes seedées](#amendement-04b--adhésion-du-bot-aux-guildes-seedées)
   (**Proposé**, 2026-11-28)
 
@@ -444,8 +445,8 @@ de la route et non par le handler :
 | --- | --- | --- | --- |
 | La guilde elle-même : `/guilds/{guild_id}`, `/guilds/{guild_id}/preview` | 404 `10004` | **404 `10004`** | `GET` : discord-api-docs#5840 ; autres méthodes et `preview` (pas de guilde *discoverable* dans le fake) : hypothèse |
 | Sous-ressources : `/guilds/{guild_id}/…` (salons, membres, rôles, bans…) | 404 `10004` | **403 `50001`** | observé, non documenté ; même partage que fauxcord (`guild-advanced.ts:202-218`) |
-| Salon de guilde : `/channels/{channel_id}` et tout ce qui en dépend (messages, réactions, pins, typing) | 404 `10003` | **403 `50001`** | observé ; fauxcord `soundboard.ts:52-68` |
-| Commandes de guilde : `/applications/{application_id}/guilds/{guild_id}/commands…` | 404 `10004` | **403 `50001`** | précondition : `application-commands.mdx:171` ; code observé ; guilde inexistante : fauxcord, hypothèse |
+| Salon de guilde : `/channels/{channel_id}` et tout ce qui en dépend (messages, réactions, pins, typing) | salon inexistant : 404 `10003` | **403 `50001`** | observé ; fauxcord `soundboard.ts:52-68` |
+| Commandes de guilde : `/applications/{application_id}/guilds/{guild_id}/commands…` | 404 `10004` | **403 `50001`** | précondition documentée : scope `applications.commands` (`application-commands.mdx:171`), assimilé en v1 à l'adhésion du bot (§ 4, Conséquences) ; code observé ; guilde inexistante : fauxcord, hypothèse |
 | `GET /users/@me/guilds` | — | la guilde n'est pas listée | `user.mdx:275-278` |
 | `DELETE /users/@me/guilds/{guild_id}` | 404 `10004` | 404 `10004` | hypothèse |
 | Routes à jeton : callback d'interaction, `/webhooks/{webhook_id}/{webhook_token}…` | — | **aucun contrôle d'adhésion** | le jeton fait foi ([ADR 0007](0007-interaction-model.md)) |
@@ -455,18 +456,31 @@ de la route et non par le handler :
   n'est pas d'une guilde qui n'existe pas. **Profil « refusée »** (tout le reste) : la ressource
   existe, l'accès manque.
 - **Helper central** (nom indicatif `GuildAccess`, dans `State/`). Toute opération d'état à
-  portée de guilde ou de salon, exécutée pour un appelant REST, commence par lui **sous le
-  verrou** : il résout la guilde, ou le salon puis sa guilde, applique le profil et rend
-  l'entité ou un échec `UnknownGuild`, `UnknownChannel` ou `MissingAccess` (nouveau
-  `StateFailureKind`). La traduction en `DiscordError` est faite une fois pour toutes les
-  routes : fabriques `DiscordError.UnknownGuild()` (404, `10004`) et `DiscordError.MissingAccess()`
-  (403, `50001`), à ajouter au catalogue avec leurs lignes de `errors.md`. Un handler ne teste
-  jamais l'adhésion du bot lui-même.
+  portée de guilde ou de salon commence par lui **sous le verrou** : il résout la guilde, ou le
+  salon puis sa guilde, applique le profil et rend l'entité ou un échec `UnknownGuild`,
+  `UnknownChannel` ou `MissingAccess` (nouveau `StateFailureKind`). La traduction en
+  `DiscordError` est faite une fois pour toutes les routes : fabriques
+  `DiscordError.UnknownGuild()` (404, `10004`) et `DiscordError.MissingAccess()` (403, `50001`),
+  à ajouter au catalogue avec leurs lignes de `errors.md`. Un handler ne teste jamais l'adhésion
+  du bot lui-même.
+- **Seed ou REST : un argument d'appelant, obligatoire.** Les opérations d'état restent
+  **communes** au seed et au REST ; chacune reçoit un appelant interne (nom indicatif
+  `StateCaller`) qu'elle transmet au helper. Deux valeurs : `Seed`, sans contrôle d'accès, pour
+  le seed et la création d'une interaction (geste d'un utilisateur, contrôlé par le § 4) ; `Bot`,
+  qui applique le tableau, pour tout handler REST authentifié par le jeton du bot. Le paramètre
+  n'a **pas de valeur par défaut** : un handler qui l'oublie ne compile pas, au lieu de
+  contourner le contrôle en silence. Aucun fichier de `Rest/` ne passe `Seed`. Une identité
+  `Bearer` (ADR 0005) ajoutera une valeur sans changer les signatures.
+  *Rejeté :* des opérations d'état propres au REST. Elles doubleraient chaque mutation, avec
+  deux chemins à garder alignés pour un même fait (ADR 0003) ; et un appelant facultatif, que
+  le seed ne passerait pas, car l'oubli et l'intention s'y écrivent de la même façon.
 - **Ordre**, dans l'étape 4 de l'[ADR 0005](0005-rest-routing-and-pipeline.md) : accès à la
   guilde ou au salon (cette règle), puis existence de la ressource visée (`10007`, `10011`,
   `10008`), puis permissions (`50013`, M4-REST-05), puis règles métier. Un message inexistant
   dans un salon que le bot ne voit pas rend donc `50001`, pas `10008`. La validation
   structurelle reste avant, à l'étape 3 : un corps mal formé rend `50035` même hors de la guilde.
+  Cet ordre est celui du pipeline de l'ADR 0005, pas un comportement confirmé de Discord
+  (hypothèse, `PAR-ERR-02`).
 - **`50001` et `50013`.** `50001` dit « le bot ne voit pas cette ressource » ; `50013` dit « il la
   voit, mais n'a pas la permission ». M4-REST-05 réutilisera `MissingAccess` pour un salon dont
   `VIEW_CHANNEL` est refusé au bot, par le même helper.
@@ -482,14 +496,18 @@ toucher aux handlers.
 - `READY.guilds` contient un objet `{ "id": …, "unavailable": true }` par guilde **dont le bot
   est membre** à l'instant de la projection de session, quels que soient les intents, filtré par
   shard (M3-06). Avec l'intent `GUILDS`, un `GUILD_CREATE` complet suit pour chacune (M3-02) ;
-  le bot figure dans ses `members`.
+  le bot figure dans ses `members` : même réduite, cette liste « will only contain your bot and
+  users in voice channels » (`gateway-events.mdx:768`).
 - Une guilde sans le bot n'apparaît ni dans `READY` ni dans un `GUILD_CREATE`, et **aucun** de
   ses faits (messages, membres, rôles, salons) n'est dispatché : M3-03 filtre par adhésion
   avant de filtrer par intents.
 - **Le bot rejoint** (`guild.Member(discord.ApplicationId)`) : le fait d'adhésion du bot se
-  traduit en `GUILD_CREATE` disponible et complet, pas en `GUILD_MEMBER_ADD`.
+  traduit en `GUILD_CREATE` disponible et complet (`gateway-events.mdx:738`). Le fake n'y
+  ajoute pas de `GUILD_MEMBER_ADD` pour le bot lui-même : **hypothèse**, aucune source ne dit si
+  Discord en envoie un (`PAR-GW-01`).
 - **Le bot part ou est retiré** (`LeaveGuildAsync`, expulsion, bannissement) : `GUILD_DELETE`
-  avec le seul `id`, sans `unavailable` (lecture de `gateway-events.mdx:777-779`, à confirmer).
+  avec le seul `id`, sans `unavailable` : **hypothèse**, lue dans `gateway-events.mdx:777-779`
+  (`PAR-GW-01`).
   Les faits suivants de cette guilde ne sont plus dispatchés ; le REST suit aussitôt le § 2.
 - **Renvoyé à M3-ADR-09 :** la forme des faits d'arrivée et de départ du bot (un `GUILD_CREATE`
   tardif a besoin de la projection complète de la guilde, prise au commit), la barrière de
@@ -516,8 +534,9 @@ toucher aux handlers.
 
 ### API publique proposée
 
-Deux ajouts, aucun retrait. `Guild` garde ses deux premiers paramètres : les appels existants
-compilent sans changement.
+Deux ajouts. `Guild` garde ses deux premiers paramètres : le changement est compatible source ;
+la rupture binaire (la surcharge à deux paramètres disparaît) est sans effet avant la première
+publication (M6-05).
 
 ```csharp
 // DiscordSeed — replaces Guild(string name, ulong? id = null)
@@ -606,8 +625,22 @@ async Task SlashCommand_GuildWithoutBot_IsRejectedLocally()
   la guilde seedée contient le bot, et `RegisterCommandsInGuild` y réussit.
 - **La liste des membres compte le bot.** `GET /guilds/{guild_id}/members`, `member_count` et le
   `GUILD_CREATE` rendent un membre de plus que ceux que le test a seedés. C'est ce que fait
-  Discord ; un test qui compte les membres doit en tenir compte. Les tests existants de `State/`
-  et de `Seed/` qui comptent les membres d'une guilde sont à ajuster avec l'implémentation.
+  Discord (`gateway-events.mdx:768`) ; un test qui compte les membres doit en tenir compte.
+  Trois tests existants passent par `discord.Seed.Guild` et sont à ajuster avec M1-05 :
+  `tests/Enx.NetCord.Testing.Tests/Facade/DiscordSeedTests.cs:202, 214, 364` attendent 1, 0 et
+  500 membres et en verront 2, 1 et 501.
+- **Au niveau de l'état, l'adhésion est une donnée de l'input, fausse par défaut.**
+  `CreateGuildInput` gagne `WithBot = false` ; `DiscordSeed.Guild` y passe son `withBot`, seul
+  endroit où le défaut vaut `true`. `WithBot: true` sans identité de bot lève
+  `InvalidOperationException` avant tout commit, comme un second `CreateBotIdentity` : par l'API
+  publique le cas n'arrive pas, `FakeDiscord.Create` créant l'identité avant tout seed. Les
+  tests qui créent un état nu (`StateChangeFlowTests.cs:141`, `FakeDiscordStateTests.cs`,
+  `StateTestSupport.cs:30`) restent donc valables sans modification.
+  *Rejeté :* ignorer l'adhésion quand l'identité manque (l'état tairait une demande non
+  satisfaite) ; la refuser toujours sans identité, ou la rendre vraie par défaut dans l'input
+  (tous les tests d'état nu devraient créer un bot qui n'est pas leur sujet).
+- Le paramètre d'appelant obligatoire du § 2 touche la signature des opérations d'état à portée
+  de guilde ou de salon, donc leurs appels dans les tests de `State/` : coût mécanique de M1-05.
 - Un contrôle de plus par opération de guilde ou de salon, sous le verrou, et un seul endroit où
   le corriger. Coût : la plupart des lignes du tableau reposent sur l'observation ou sur une
   hypothèse, faute de documentation.
@@ -639,8 +672,9 @@ async Task SlashCommand_GuildWithoutBot_IsRejectedLocally()
   dans `GuildCreated`, `FakeDiscord.ApplicationId`, helper `GuildAccess`,
   `StateFailureKind.MissingAccess`, `DiscordError.UnknownGuild()` et `MissingAccess()` avec
   leurs lignes de `errors.md`, couples acceptés par `RestEffect.Error` — rest-implementer —
-  M1-ADR-04B, M1-02, M1-04 (même fichier `FakeDiscord.cs`). À placer avant M1-REST-02,
-  M1-REST-06 et M2-07.
+  M1-ADR-04B, M1-02, M1-04 (`FakeDiscord.cs`, fusionné). Porte aussi `CreateGuildInput.WithBot`,
+  l'appelant `StateCaller` et l'ajustement des trois tests cités. À placer avant M1-REST-02,
+  M1-REST-06 et M2-07, et avant **M2-01** et **M2-11**, qui en ont besoin pour le contrôle du § 4.
 - `M1-REST-10` — `GET /users/@me/guilds` et `DELETE /users/@me/guilds/{guild_id}`, absentes de
   M1-REST-01 ; le départ produit le fait que M3-03 traduira en `GUILD_DELETE` —
   rest-implementer — M1-05, M1-REST-06.
@@ -651,8 +685,11 @@ async Task SlashCommand_GuildWithoutBot_IsRejectedLocally()
 - `PAR-ERR-02` — Confirmer contre Discord les lignes du tableau du § 2 marquées « hypothèse » ou
   « observé » : sous-ressources de guilde et salons (`50001` ou `10004`), `PATCH` et `preview`
   de la guilde, commandes d'une guilde inexistante (`10004` ici, peut-être `50001`), départ
-  d'une guilde dont le bot n'est pas membre ; et l'absence du champ `unavailable` dans le
-  `GUILD_DELETE` d'un départ — parity-auditor — M1-REST-06.
+  d'une guilde dont le bot n'est pas membre ; et l'ordre des refus, `50035` avant `50001` ou
+  `10004` pour un corps mal formé hors de la guilde — parity-auditor — M1-REST-06.
+- `PAR-GW-01` — Confirmer contre Discord les deux hypothèses du § 3 : pas de `GUILD_MEMBER_ADD`
+  pour le bot quand il rejoint une guilde, et absence du champ `unavailable` dans le
+  `GUILD_DELETE` d'un départ — parity-auditor — M3-02.
 
 **Parité.** Prépare, sans les promouvoir :
 
