@@ -16,6 +16,13 @@ public sealed class RestIsolationTests
     /// a channel ID, or the channel is a direct message, which has no guild and is never access-controlled. Adding a name
     /// here is a decision to review, not a way to silence the test.
     /// </summary>
+    /// <remarks>
+    /// The token-scoped operations of M2 (interaction callback, followups, webhooks) are expected to be added here
+    /// explicitly: by design they take no <see cref="StateCaller"/> because the token resolves their scope and they do
+    /// not check the bot's membership (ADR 0004, amendment 04B). The rule covers only the members of
+    /// <see cref="FakeDiscordState"/> (a partial class: every state operation must remain a member of that type, whatever
+    /// the file). State exposed through another type is not seen by this test.
+    /// </remarks>
     private static readonly string[] AllowedUnguardedMembers =
     [
         nameof(FakeDiscordState.FindUser),
@@ -23,21 +30,39 @@ public sealed class RestIsolationTests
         nameof(FakeDiscordState.FindBotIdentity),
         nameof(FakeDiscordState.UpdateUser),
         nameof(FakeDiscordState.GetOrCreateDmChannel),
+        nameof(FakeDiscordState.Clock),
     ];
 
+    private const BindingFlags InstanceMembers =
+        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+
     /// <summary>
-    /// Every instance member of <see cref="FakeDiscordState"/> that does not take a <see cref="StateCaller"/> cannot apply
-    /// the visibility table, so it is forbidden to <c>Rest/</c> unless it is in <see cref="AllowedUnguardedMembers"/>.
-    /// A new state read is therefore forbidden by default, which is the safe side.
+    /// Every instance member of <see cref="FakeDiscordState"/> (method, property, indexer or field, public or internal)
+    /// that does not take a <see cref="StateCaller"/> cannot apply the visibility table, so it is forbidden to
+    /// <c>Rest/</c> unless it is in <see cref="AllowedUnguardedMembers"/>. A new state member is therefore forbidden by
+    /// default, which is the safe side.
     /// </summary>
-    private static HashSet<string> ForbiddenMembers() =>
-        typeof(FakeDiscordState)
-            .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
-            .Where(method => !method.IsSpecialName && (method.IsPublic || method.IsAssembly || method.IsFamilyOrAssembly))
+    private static HashSet<string> ForbiddenMembers()
+    {
+        var type = typeof(FakeDiscordState);
+        var methods = type.GetMethods(InstanceMembers)
+            .Where(method => !method.IsSpecialName && IsVisible(method.IsPublic, method.IsAssembly, method.IsFamilyOrAssembly))
             .Where(method => method.GetParameters().All(parameter => parameter.ParameterType != typeof(StateCaller)))
-            .Select(method => method.Name)
-            .Except(AllowedUnguardedMembers)
-            .ToHashSet(StringComparer.Ordinal);
+            .Select(method => method.Name);
+        var properties = type.GetProperties(InstanceMembers)
+            .Where(property => property.GetMethod is { } getter && IsVisible(getter.IsPublic, getter.IsAssembly, getter.IsFamilyOrAssembly)
+                || property.SetMethod is { } setter && IsVisible(setter.IsPublic, setter.IsAssembly, setter.IsFamilyOrAssembly))
+            .Where(property => property.GetIndexParameters().All(parameter => parameter.ParameterType != typeof(StateCaller)))
+            .Select(property => property.Name);
+        var fields = type.GetFields(InstanceMembers)
+            .Where(field => IsVisible(field.IsPublic, field.IsAssembly, field.IsFamilyOrAssembly))
+            .Select(field => field.Name);
+
+        return methods.Concat(properties).Concat(fields).Except(AllowedUnguardedMembers).ToHashSet(StringComparer.Ordinal);
+    }
+
+    private static bool IsVisible(bool isPublic, bool isAssembly, bool isFamilyOrAssembly) =>
+        isPublic || isAssembly || isFamilyOrAssembly;
 
     private static IReadOnlySet<string> Forbidden { get; } = ForbiddenMembers();
 
@@ -86,8 +111,23 @@ public sealed class RestIsolationTests
         Assert.All(
             AllowedUnguardedMembers,
             name => Assert.True(
-                typeof(FakeDiscordState).GetMethod(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) is not null,
+                typeof(FakeDiscordState).GetMember(name, InstanceMembers).Length > 0,
                 $"'{name}' is in the allowlist but is no longer a FakeDiscordState member: remove it."));
+    }
+
+    [Fact]
+    public void ForbiddenMembers_NonMethodMembersOfTheState_AreForbiddenExceptClock()
+    {
+        var nonMethods = typeof(FakeDiscordState).GetMembers(InstanceMembers)
+            .Where(member => member is PropertyInfo or FieldInfo)
+            .Where(member => member is not FieldInfo { IsPrivate: true } and not FieldInfo { IsFamily: true })
+            .Where(member => member is not PropertyInfo { GetMethod.IsPrivate: true, SetMethod: null or { IsPrivate: true } })
+            .Select(member => member.Name)
+            .ToList();
+
+        Assert.Contains(nameof(FakeDiscordState.Clock), nonMethods);
+        Assert.All(nonMethods.Except([nameof(FakeDiscordState.Clock)]), name => Assert.Contains(name, Forbidden));
+        Assert.DoesNotContain(nameof(FakeDiscordState.Clock), Forbidden);
     }
 
     [Theory]
@@ -100,6 +140,10 @@ public sealed class RestIsolationTests
     [InlineData("using Who = Enx.NetCord.Testing.State.StateCaller;", "using Who = Enx.NetCord.Testing.State.StateCaller;")]
     [InlineData("var c = (StateCaller)1;", "(StateCaller)")]
     [InlineData("var c = (Enx.NetCord.Testing.State.StateCaller)1;", "(Enx.NetCord.Testing.State.StateCaller)")]
+    [InlineData("var c = (global::Enx.NetCord.Testing.State.StateCaller)1;", "(global::Enx.NetCord.Testing.State.StateCaller)")]
+    [InlineData("var c = (StateCaller?)1;", "(StateCaller?)")]
+    [InlineData("var c = default(StateCaller);", "(StateCaller)")]
+    [InlineData("using static global::Enx.NetCord.Testing.State.StateCaller;", "using static global::Enx.NetCord.Testing.State.StateCaller;")]
     [InlineData("var g = state.FindGuild(id);", ".FindGuild")]
     [InlineData("var g = state?.FindChannel(id);", ".FindChannel")]
     [InlineData("var g = state\n    .FindMember(a, b);", ".FindMember")]
@@ -144,6 +188,26 @@ public sealed class RestIsolationTests
         Assert.Equal(new RestIsolationViolation("Sample.cs", 12, "Second", "calls a FakeDiscordState member that bypasses GuildAccess", ".FindMessage"), violation);
         Assert.Equal("Sample.cs:12 [Second] calls a FakeDiscordState member that bypasses GuildAccess: .FindMessage", violation.ToString());
     }
+
+    [Theory]
+    [InlineData("record struct")]
+    [InlineData("record class")]
+    [InlineData("readonly record struct")]
+    [InlineData("record")]
+    [InlineData("struct")]
+    public void Scan_ViolationInsideAnyTypeKind_ReportsTheEnclosingType(string kind)
+    {
+        var violation = Assert.Single(ScanSample($"internal {kind} Holder\n{{\n    void M() => _ = StateCaller.Fixture;\n}}\n"));
+
+        Assert.Equal("Holder", violation.Type);
+    }
+
+    [Theory]
+    [InlineData("var t = typeof(StateCaller);")]
+    [InlineData("var n = nameof(StateCaller);")]
+    [InlineData("void M(StateCaller caller) { }")]
+    public void Scan_TypeofNameofAndParameterDeclarations_ReportNothing(string source) =>
+        Assert.Empty(ScanSample($"class Sample {{ {source} }}"));
 
     [Fact]
     public void Scan_StateCallerBotAndAllowedMembers_ReportsNothing()
@@ -226,6 +290,27 @@ public sealed class RestIsolationTests
         finally
         {
             Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ScanDirectory_RootUnderAnObjOrBinFolder_StillScansTheDirectory()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "enx-rest-isolation-" + Guid.NewGuid().ToString("N"), "bin", "checkout");
+        var rest = Path.Combine(root, "Rest");
+        Directory.CreateDirectory(rest);
+        try
+        {
+            File.WriteAllText(Path.Combine(rest, "Bad.cs"), "class Bad { void M() => _ = StateCaller.Fixture; }");
+
+            var (fileCount, violations) = RestIsolationScanner.ScanDirectory(root, rest, Forbidden);
+
+            Assert.Equal(1, fileCount);
+            Assert.Single(violations);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(root))!, recursive: true);
         }
     }
 

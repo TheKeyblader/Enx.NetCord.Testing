@@ -21,6 +21,13 @@ internal sealed record RestIsolationViolation(string File, int Line, string Type
 /// a message is never a violation. Matching is by name, not by receiver type: IL inspection cannot see
 /// <c>StateCaller.Fixture</c> because the compiler inlines enum constants.
 /// </summary>
+/// <remarks>
+/// Known limits of the cast rule (a textual heuristic, not a semantic analysis): a cast is recognised only as a
+/// parenthesised <c>StateCaller</c> name (plain, namespace-qualified, <c>global::</c>-qualified or nullable), and
+/// <c>default(StateCaller)</c> is reported too because the zero value is undefined. <c>typeof</c> and <c>nameof</c>
+/// are skipped. Not detected: a <c>Fixture</c> value obtained without spelling <c>StateCaller.Fixture</c> or a cast,
+/// such as <c>Enum.Parse</c>, <c>Enum.ToObject</c> or enum arithmetic.
+/// </remarks>
 internal static partial class RestIsolationScanner
 {
     private const string FixtureRule = "uses a StateCaller value other than Bot (Fixture is reserved to the seed and test commands)";
@@ -31,13 +38,15 @@ internal static partial class RestIsolationScanner
     [GeneratedRegex(@"\bStateCaller\s*\.\s*(?!Bot\b)(?<value>\w+)")]
     private static partial Regex OtherCallerValue();
 
-    [GeneratedRegex(@"\busing\s+(?:static\s+[\w.]*|\w+\s*=\s*[\w.]*)\bStateCaller\s*;")]
+    [GeneratedRegex(@"\busing\s+(?:static\s+[\w.:]*|\w+\s*=\s*[\w.:]*)\bStateCaller\s*;")]
     private static partial Regex CallerImport();
 
-    [GeneratedRegex(@"\(\s*(?:[\w.]*\.)?StateCaller\s*\)")]
+    // A cast `(StateCaller)n`, `(X.StateCaller)n`, `(global::X.StateCaller)n` or `(StateCaller?)n`, and
+    // `default(StateCaller)` (the undefined zero value), but not `typeof(StateCaller)` or `nameof(StateCaller)`.
+    [GeneratedRegex(@"(?<!\b(?:typeof|nameof)\s*)\(\s*(?:global\s*::\s*)?(?:[\w.]*\.)?StateCaller\s*\??\s*\)")]
     private static partial Regex CallerCast();
 
-    [GeneratedRegex(@"\b(?:class|struct|record|interface|enum)\s+(?<name>\w+)")]
+    [GeneratedRegex(@"\b(?:record\s+(?:class|struct)|class|struct|record|interface|enum)\s+(?<name>\w+)")]
     private static partial Regex TypeDeclaration();
 
     /// <summary>Scans one file.</summary>
@@ -368,7 +377,7 @@ internal static partial class RestIsolationScanner
         IReadOnlySet<string> forbiddenMembers)
     {
         var files = Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
-            .Where(path => !path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Where(path => !Path.GetRelativePath(directory, path).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                 .Any(segment => segment is "bin" or "obj"))
             .Order(StringComparer.Ordinal)
             .ToList();
