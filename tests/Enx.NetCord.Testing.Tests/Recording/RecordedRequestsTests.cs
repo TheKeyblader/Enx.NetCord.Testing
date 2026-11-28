@@ -324,7 +324,7 @@ public sealed class RecordedRequestsTests
     [Fact]
     public async Task Requests_UnimplementedRouteWithABody_HasNoRequestBodyBecauseItWasNeverRead()
     {
-        await using var discord = FakeDiscord.Create();
+        await using var discord = Facade.FacadeTestSupport.CreateWithoutHandlers();
         using var rest = discord.CreateRestClient();
 
         await Assert.ThrowsAsync<RestException>(
