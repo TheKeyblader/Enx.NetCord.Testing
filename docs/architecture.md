@@ -56,6 +56,12 @@
   `guild.Member(discord.ApplicationId)` l'y fait entrer plus tard. L'adhésion n'alloue aucun ID.
 - Le seed accepte un ID explicite non nul, jamais attribué dans ce fake. Sa milliseconde
   encodée fixe la date de création sans faire reculer l'horloge ni avancer le générateur.
+- [ADR 0013 — Hiérarchie et types de salons](adr/0013-channel-hierarchy-and-types.md), § 6
+  (**proposée**) : tout salon seedé est une poignée. `guild.Category("Lobby")` rend une
+  `SeededCategory`, d'où l'on crée ses salons (`lobby.TextChannel("general")`) ; s'ajoutent
+  `AnnouncementChannel`, `VoiceChannel`, `StageChannel` et `ForumChannel`. Un
+  `SeededChannelOptions` facultatif porte `Topic`, `Nsfw`, `Slowmode` et `Position` ; une option
+  sans objet pour le type demandé lève `ArgumentException`.
 
 ### State
 
@@ -69,6 +75,18 @@
 - `TimeProvider` et `ISnowflakeGenerator` injectables ; par défaut une horloge virtuelle fixe
   et des Snowflakes Discord strictement croissants, alloués avec un compteur de 22 bits
   par milliseconde.
+- [ADR 0013 — Hiérarchie et types de salons](adr/0013-channel-hierarchy-and-types.md)
+  (**proposée**) : une seule entité de salon pour texte, annonces, voix, stage, catégorie, forum
+  et media, avec un bloc par famille (`Voice`, `Forum`) et une table de traits par type (champs
+  applicables, groupe de tri, parent permis). Threads en M4-REST-01.
+  - Invariants tenus pour tout appelant, seed compris : le parent est une catégorie de la même
+    guilde, une catégorie n'a pas de parent et au plus 50 enfants.
+  - Supprimer une catégorie détache ses enfants dans le même commit : un `ChannelUpdated` par
+    enfant, puis le `ChannelDeleted`.
+  - `position` est une valeur stockée, jamais renumérotée chez les voisins ; par défaut, la
+    suivante du groupe de tri (textuel, vocal, catégorie). Le listing d'une guilde est rendu par
+    ID croissant.
+  - Seule conversion de type : texte ↔ annonces.
 
 ### REST
 
