@@ -30,9 +30,9 @@ internal static class ChannelRoutes
     {
         var patch = request.GetPayload<ChannelPatch>();
 
-        // One state operation checks access and the rules that depend on the channel (type, parent, name) and commits, all under
-        // the state lock (ADR 0005). Until M1-REST-02B2 (ADR 0013, § 2 and § 5) a type change or a parent is refused there
-        // (hypothesis, see docs/parity/errors.md); a field the channel's type has no use for is ignored.
+        // One state operation checks access and the rules that depend on the channel (type conversion, parent invariants, bounds
+        // of the type) and commits, all under the state lock (ADR 0005, ADR 0013); a field the channel's type has no use for is
+        // ignored there.
         var updated = request.State.UpdateChannel(
             StateCaller.Bot,
             new UpdateChannelInput(
@@ -44,7 +44,18 @@ internal static class ChannelRoutes
                 patch.RateLimitPerUser,
                 patch.Position,
                 patch.Type,
-                patch.ParentId));
+                patch.ParentId,
+                patch.ChangeParent,
+                patch.Bitrate,
+                patch.UserLimit,
+                patch.ChangeRtcRegion,
+                patch.RtcRegion,
+                patch.VideoQualityMode,
+                patch.DefaultAutoArchiveDuration,
+                patch.DefaultThreadRateLimitPerUser,
+                patch.ChangeDefaultSortOrder,
+                patch.DefaultSortOrder,
+                patch.DefaultForumLayout));
         return updated.TryGetValue(out var result) ? Render(request, result) : DiscordError.FromStateFailure(updated.Failure);
     }
 

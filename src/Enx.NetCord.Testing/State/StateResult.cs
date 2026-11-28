@@ -37,6 +37,15 @@ internal enum StateFailureKind
     /// <summary>A guild channel name must not be empty: 400 <c>50035</c> on <c>name</c> (a DM accepts an empty one).</summary>
     InvalidChannelName,
 
+    /// <summary>The topic is longer than the channel type allows, 1024 outside forum and media channels (ADR 0013, § 1): 400 <c>50035</c> on <c>topic</c> (form is a hypothesis).</summary>
+    InvalidChannelTopic,
+
+    /// <summary>The bitrate exceeds what the voice or stage channel allows (ADR 0013, § 1): 400 <c>30052</c> (status is a hypothesis).</summary>
+    ChannelBitrateTooHigh,
+
+    /// <summary>The user limit exceeds what the voice or stage channel allows, carried by <see cref="StateFailure.Limit"/> (ADR 0013, § 1): 400 <c>50035</c> on <c>user_limit</c> (form is a hypothesis).</summary>
+    InvalidChannelUserLimit,
+
     /// <summary>The bot edits the content, embeds or attachments of another user's message: 403 <c>50005</c>.</summary>
     CannotEditOtherAuthor,
 
@@ -57,9 +66,12 @@ internal enum StateFailureKind
 }
 
 /// <summary>A refused operation: the reason and the ID of the resource it concerns. No HTTP here.</summary>
-internal readonly record struct StateFailure(StateFailureKind Kind, ulong ResourceId)
+/// <param name="Kind">The reason.</param>
+/// <param name="ResourceId">The ID of the resource the refusal concerns.</param>
+/// <param name="Limit">The bound the request exceeded when the message needs it (a user limit), otherwise 0.</param>
+internal readonly record struct StateFailure(StateFailureKind Kind, ulong ResourceId, int Limit = 0)
 {
-    public override string ToString() => $"{Kind} ({ResourceId})";
+    public override string ToString() => Limit == 0 ? $"{Kind} ({ResourceId})" : $"{Kind} ({ResourceId}, limit {Limit})";
 }
 
 /// <summary>

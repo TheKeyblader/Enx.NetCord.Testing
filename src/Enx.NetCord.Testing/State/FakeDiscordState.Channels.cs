@@ -116,16 +116,22 @@ internal sealed partial class FakeDiscordState
     }
 
     /// <summary>
-    /// Applies a partial update to a guild channel. A change is committed (and <see cref="ChannelUpdated"/> published) only when at
-    /// least one value actually differs. A DM channel has nothing to update: it is returned as it is, with no change.
-    /// For a guild channel, a type other than its own, any parent and an empty name are refused before anything is written.
+    /// Applies a partial update to a guild channel (ADR 0013). A change is committed (and one <see cref="ChannelUpdated"/> published)
+    /// only when at least one value actually differs. A DM channel has nothing to update: it is returned as it is, with no change.
+    /// For a guild channel every refusal comes before the first write, in this order: the type (only text &lt;-&gt; announcement converts),
+    /// the parent (the four invariants of § 2; the current parent, or no parent for a channel without one, changes nothing and is
+    /// not checked), the name (not empty), the topic, the bitrate, the user limit. The conversion applies first, so the other fields
+    /// are checked and applied against the new type; a field the type has no use for is ignored.
     /// </summary>
     /// <param name="caller">The caller; the bot is refused a channel of a guild it is not a member of.</param>
     /// <param name="input">The update.</param>
     /// <returns>
     /// The channel after the update, <see cref="StateFailureKind.UnknownChannel"/>, <see cref="StateFailureKind.MissingAccess"/>,
-    /// <see cref="StateFailureKind.InvalidChannelType"/>, <see cref="StateFailureKind.InvalidChannelParent"/> or
-    /// <see cref="StateFailureKind.InvalidChannelName"/>.
+    /// <see cref="StateFailureKind.InvalidChannelType"/>, <see cref="StateFailureKind.InvalidChannelParent"/>,
+    /// <see cref="StateFailureKind.ChannelParentNotCategory"/>, <see cref="StateFailureKind.ChannelCannotHaveParent"/>,
+    /// <see cref="StateFailureKind.ChannelParentFull"/>, <see cref="StateFailureKind.InvalidChannelName"/>,
+    /// <see cref="StateFailureKind.InvalidChannelTopic"/>, <see cref="StateFailureKind.ChannelBitrateTooHigh"/> or
+    /// <see cref="StateFailureKind.InvalidChannelUserLimit"/>.
     /// </returns>
     internal StateResult<ChannelSnapshot> UpdateChannel(StateCaller caller, UpdateChannelInput input)
     {
@@ -140,22 +146,70 @@ internal sealed partial class FakeDiscordState
             }
 
             var changed = false;
-            if (channel.GuildId is not null)
+            if (channel.GuildId is { } guildId)
             {
-                // Every refusal comes before the first write: a refused update changes nothing.
-                if (input.Type is { } type && type != (int)channel.Kind)
+                var guild = _guilds[guildId];
+
+                // Every refusal comes before the first write: a refused update changes nothing. The kind the channel will have after
+                // the conversion decides what the other fields mean.
+                var kind = channel.Kind;
+                if (input.Type is { } type && type != (int)kind)
                 {
-                    return new StateFailure(StateFailureKind.InvalidChannelType, channel.Id);
+                    if (!TryConvertKind(kind, type, out kind))
+                    {
+                        return new StateFailure(StateFailureKind.InvalidChannelType, channel.Id);
+                    }
                 }
 
-                if (input.ParentId is not null)
+                var traits = ChannelTraits.Of(kind);
+                var moveParent = input.ChangeParent && input.ParentId != channel.ParentId;
+                if (moveParent && input.ParentId is { } parentId && CheckParent(guild, kind, parentId) is { } parentFailure)
                 {
-                    return new StateFailure(StateFailureKind.InvalidChannelParent, input.ParentId.Value);
+                    return parentFailure;
                 }
 
                 if (input.Name is { Length: 0 })
                 {
                     return new StateFailure(StateFailureKind.InvalidChannelName, channel.Id);
+                }
+
+                if (traits.TopicMaxLength > 0
+                    && input.ChangeTopic
+                    && input.Topic is { } topic
+                    && topic.EnumerateRunes().Count() > traits.TopicMaxLength)
+                {
+                    return new StateFailure(StateFailureKind.InvalidChannelTopic, channel.Id);
+                }
+
+                if (traits.Family == ChannelFamily.Voice)
+                {
+                    if (input.Bitrate > traits.BitrateMax)
+                    {
+                        return new StateFailure(StateFailureKind.ChannelBitrateTooHigh, channel.Id);
+                    }
+
+                    if (input.UserLimit > traits.UserLimitMax)
+                    {
+                        return new StateFailure(StateFailureKind.InvalidChannelUserLimit, channel.Id, traits.UserLimitMax);
+                    }
+                }
+
+                // Writes. A field the type has no use for is validated upstream and ignored here (ADR 0013, § 1).
+                if (kind != channel.Kind)
+                {
+                    channel.Kind = kind;
+                    if (!traits.HasSlowmode)
+                    {
+                        channel.RateLimitPerUser = 0; // announcement channels have no slowmode (hypothesis, ADR 0013 lot C)
+                    }
+
+                    changed = true;
+                }
+
+                if (moveParent)
+                {
+                    channel.ParentId = input.ParentId;
+                    changed = true;
                 }
 
                 if (input.Name is { } name && !string.Equals(channel.Name, name, StringComparison.Ordinal))
@@ -164,9 +218,6 @@ internal sealed partial class FakeDiscordState
                     changed = true;
                 }
 
-                // A field the type has no use for is validated upstream and ignored here (ADR 0013, § 1). The per-type bounds and the
-                // 0 <-> 5 conversion come with M1-REST-02B2.
-                var traits = ChannelTraits.Of(channel.Kind);
                 if (traits.TopicMaxLength > 0 && input.ChangeTopic && !string.Equals(channel.Topic, input.Topic, StringComparison.Ordinal))
                 {
                     channel.Topic = input.Topic;
@@ -190,6 +241,51 @@ internal sealed partial class FakeDiscordState
                     channel.Position = position;
                     changed = true;
                 }
+
+                if (traits.HasThreadDefaults)
+                {
+                    if (input.DefaultAutoArchiveDuration is { } archive && channel.DefaultAutoArchiveDuration != archive)
+                    {
+                        channel.DefaultAutoArchiveDuration = archive;
+                        changed = true;
+                    }
+
+                    if (input.DefaultThreadRateLimitPerUser is { } threadSlowmode && channel.DefaultThreadRateLimitPerUser != threadSlowmode)
+                    {
+                        channel.DefaultThreadRateLimitPerUser = threadSlowmode;
+                        changed = true;
+                    }
+                }
+
+                if (traits.Family == ChannelFamily.Voice && channel.Voice is { } voice)
+                {
+                    var updated = voice with
+                    {
+                        Bitrate = input.Bitrate ?? voice.Bitrate,
+                        UserLimit = input.UserLimit ?? voice.UserLimit,
+                        RtcRegion = input.ChangeRtcRegion ? input.RtcRegion : voice.RtcRegion,
+                        VideoQualityMode = input.VideoQualityMode ?? voice.VideoQualityMode,
+                    };
+                    if (updated != voice)
+                    {
+                        channel.Voice = updated;
+                        changed = true;
+                    }
+                }
+
+                if (traits.Family == ChannelFamily.Forum && channel.Forum is { } forum)
+                {
+                    var updated = forum with
+                    {
+                        DefaultSortOrder = input.ChangeDefaultSortOrder ? input.DefaultSortOrder : forum.DefaultSortOrder,
+                        DefaultForumLayout = kind == ChannelKind.GuildForum ? input.DefaultForumLayout ?? forum.DefaultForumLayout : forum.DefaultForumLayout,
+                    };
+                    if (updated != forum)
+                    {
+                        channel.Forum = updated;
+                        changed = true;
+                    }
+                }
             }
 
             var snapshot = channel.ToSnapshot();
@@ -199,6 +295,23 @@ internal sealed partial class FakeDiscordState
             }
 
             return snapshot;
+        }
+    }
+
+    /// <summary>The only conversion Discord supports: text &lt;-&gt; announcement (ADR 0013, § 5). Any other target, type 14 included, is refused.</summary>
+    private static bool TryConvertKind(ChannelKind from, int requested, out ChannelKind to)
+    {
+        to = from;
+        switch (from, requested)
+        {
+            case (ChannelKind.GuildText, (int)ChannelKind.GuildAnnouncement):
+                to = ChannelKind.GuildAnnouncement;
+                return true;
+            case (ChannelKind.GuildAnnouncement, (int)ChannelKind.GuildText):
+                to = ChannelKind.GuildText;
+                return true;
+            default:
+                return false;
         }
     }
 
