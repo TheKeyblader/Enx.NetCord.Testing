@@ -663,6 +663,35 @@ public sealed class SendMessageTests
 
     [Fact]
     [Parity("POST /channels/{channel_id}/messages")]
+    public async Task SendRequest_MultipartWithNonContiguousFileIndexes_PairsEachFileWithItsMetadata()
+    {
+        await using var discord = FakeDiscord.Create();
+        var general = discord.Seed.Guild("Test").TextChannel("general");
+        using var rest = discord.CreateRestClient();
+        using var content = new MultipartFormDataContent
+        {
+            { new StringContent("""{"content":"gaps","attachments":[{"id":5,"filename":"five.txt","description":"the sixth"}]}""", Encoding.UTF8, "application/json"), "payload_json" },
+            { new ByteArrayContent([1]), "files[0]", "zero.txt" },
+            { new ByteArrayContent([1, 2, 3, 4, 5]), "files[5]", "ignored-name.txt" },
+        };
+
+        using var json = await SendMultipartAsync(rest, content, general.Id);
+
+        var attachments = json.RootElement.GetProperty("attachments").EnumerateArray().ToList();
+        Assert.Equal(["zero.txt", "five.txt"], attachments.Select(a => a.GetProperty("filename").GetString()));
+        Assert.Equal(5, attachments[1].GetProperty("size").GetInt32());
+        Assert.Equal("the sixth", attachments[1].GetProperty("description").GetString());
+        Assert.False(attachments[0].TryGetProperty("description", out _));
+    }
+
+    private static async Task<System.Text.Json.JsonDocument> SendMultipartAsync(RestClient rest, HttpContent content, ulong channelId)
+    {
+        await using var stream = await rest.SendRequestAsync(HttpMethod.Post, content, $"/channels/{channelId}/messages", cancellationToken: Ct);
+        return await System.Text.Json.JsonDocument.ParseAsync(stream, cancellationToken: Ct);
+    }
+
+    [Fact]
+    [Parity("POST /channels/{channel_id}/messages")]
     public async Task SendMessageAsync_Multipart_JournalKeepsThePayloadJsonWithoutTheFileBytes()
     {
         await using var discord = FakeDiscord.Create();

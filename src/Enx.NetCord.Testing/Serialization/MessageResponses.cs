@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Enx.NetCord.Testing.Serialization;
@@ -265,8 +266,40 @@ internal sealed class MessageResponse
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public MessageReferenceResponse? MessageReference { get; init; }
 
-    /// <summary>Gets the replied-to message, if it still exists.</summary>
+    /// <summary>
+    /// Gets the replied-to message of a reply: absent for a message that is no reply, <c>null</c> when the replied-to message was
+    /// deleted (Discord: absent means unknown, <c>null</c> means deleted).
+    /// </summary>
     [JsonPropertyName("referenced_message")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public MessageResponse? ReferencedMessage { get; init; }
+    public ReferencedMessageResponse? ReferencedMessage { get; init; }
+}
+
+/// <summary>
+/// Holds the <c>referenced_message</c> of a reply so that "deleted" (<c>null</c>) can be told from "not a reply" (property omitted):
+/// the property is omitted when this wrapper is <see langword="null"/>, and written as <c>null</c> when <see cref="Message"/> is.
+/// </summary>
+/// <param name="Message">The replied-to message, or <see langword="null"/> when it was deleted.</param>
+[JsonConverter(typeof(ReferencedMessageResponseConverter))]
+internal sealed record ReferencedMessageResponse(MessageResponse? Message);
+
+/// <summary>Writes a <see cref="ReferencedMessageResponse"/> as the message it holds, or <c>null</c>.</summary>
+internal sealed class ReferencedMessageResponseConverter : JsonConverter<ReferencedMessageResponse>
+{
+    /// <inheritdoc />
+    public override ReferencedMessageResponse Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => throw new NotSupportedException("The fake only writes referenced messages.");
+
+    /// <inheritdoc />
+    public override void Write(Utf8JsonWriter writer, ReferencedMessageResponse value, JsonSerializerOptions options)
+    {
+        if (value.Message is null)
+        {
+            writer.WriteNullValue();
+        }
+        else
+        {
+            JsonSerializer.Serialize(writer, value.Message, FakeDiscordJsonContext.Default.MessageResponse);
+        }
+    }
 }

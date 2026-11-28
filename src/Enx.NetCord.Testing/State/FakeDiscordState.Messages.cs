@@ -59,7 +59,8 @@ internal sealed partial class FakeDiscordState
                 && now - prior.At <= NonceWindow
                 && _messages.TryGetValue(prior.MessageId, out var duplicate))
             {
-                return Snapshot(duplicate, channel.GuildId);
+                // The nonce is per author, not per channel: the duplicate may live in another channel (or a DM).
+                return Snapshot(duplicate, _channels.TryGetValue(duplicate.ChannelId, out var duplicateChannel) ? duplicateChannel.GuildId : null);
             }
 
             MessageEntity? referenced = null;
@@ -274,7 +275,12 @@ internal sealed partial class FakeDiscordState
             if (input.ChangeContent)
             {
                 message.Content = input.Content ?? string.Empty;
-                ApplyMentions(message, message.Content, channel.GuildId, input.AllowedMentions, null);
+
+                // A reply keeps pinging the author it replies to (unless replied_user is false), as when it was sent.
+                var repliedAuthorId = message.Reference is { } reference && _messages.TryGetValue(reference.MessageId, out var referenced)
+                    ? referenced.AuthorId
+                    : (ulong?)null;
+                ApplyMentions(message, message.Content, channel.GuildId, input.AllowedMentions, repliedAuthorId);
             }
 
             if (input.Embeds is not null)
@@ -323,6 +329,13 @@ internal sealed partial class FakeDiscordState
             if (!TryGetMessage(caller, channelId, messageId, out var channel, out var message, out var failure))
             {
                 return failure;
+            }
+
+            // In a DM nobody may delete the other party's messages (hypothesis, docs/parity/errors.md: 50003). In a guild the
+            // MANAGE_MESSAGES permission would allow it, but permissions are not computed yet.
+            if (caller == StateCaller.Bot && channel.GuildId is null && message.AuthorId != _botId)
+            {
+                return new StateFailure(StateFailureKind.CannotExecuteInDm, message.Id);
             }
 
             var snapshot = Snapshot(message, channel.GuildId);

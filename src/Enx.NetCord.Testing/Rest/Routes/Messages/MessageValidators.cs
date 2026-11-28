@@ -373,7 +373,7 @@ internal static class MessageValidators
                     FormValidation.CheckMaxLength(description, "description", MaxAttachmentText, scope);
                 }
 
-                if (id < (ulong)files.Count && files.ContainsKey((int)id))
+                if (id <= int.MaxValue && files.ContainsKey((int)id))
                 {
                     metadata[(int)id] = (fileName, title, description);
                 }

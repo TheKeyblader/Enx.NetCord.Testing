@@ -42,6 +42,21 @@ public sealed class MessageStateTests
     }
 
     [Fact]
+    public void CreateMessage_EnforcedNonceDuplicateInADm_IsProjectedWithTheGuildOfTheDuplicateNotOfTheTarget()
+    {
+        var state = NewState();
+        var (_, channel, user) = Seed(state);
+        var dm = state.GetOrCreateDmChannel(new CreateDmChannelInput(user.Id)).Value.Channel;
+        var first = state.CreateMessage(StateCaller.Fixture, new CreateMessageInput(dm.Id, user.Id, "a", Nonce: "n", EnforceNonce: true)).Value;
+
+        var duplicate = state.CreateMessage(StateCaller.Fixture, new CreateMessageInput(channel.Id, user.Id, "b", Nonce: "n", EnforceNonce: true)).Value;
+
+        Assert.Equal(first.Id, duplicate.Id);
+        Assert.Equal(dm.Id, duplicate.ChannelId);
+        Assert.Null(duplicate.GuildId);
+    }
+
+    [Fact]
     public void BulkDeleteMessages_ExactlyTwoWeeksOld_IsAccepted()
     {
         var clock = new FakeTimeProvider(Start);

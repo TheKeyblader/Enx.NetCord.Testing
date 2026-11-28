@@ -51,6 +51,28 @@ public sealed class DeleteMessageTests
 
     [Fact]
     [Parity("DELETE /channels/{channel_id}/messages/{message_id}")]
+    [Parity("50003")]
+    public async Task DeleteMessageAsync_DirectMessageOfTheOtherParty_Returns403CannotExecuteOnDmAndKeepsIt()
+    {
+        await using var discord = FakeDiscord.Create();
+        var aliceId = discord.Seed.User("alice");
+        using var rest = discord.CreateRestClient();
+        var dm = await rest.GetDMChannelAsync(aliceId, cancellationToken: Ct);
+        var theirs = discord.State.CreateMessage(StateCaller.Fixture, new CreateMessageInput(dm.Id, aliceId, "from alice")).Value;
+        var mine = await rest.SendMessageAsync(dm.Id, "from the bot", cancellationToken: Ct);
+        using var subscription = discord.State.SubscribeGateway();
+
+        var exception = await Assert.ThrowsAsync<RestException>(() => rest.DeleteMessageAsync(dm.Id, theirs.Id, cancellationToken: Ct));
+        await rest.DeleteMessageAsync(dm.Id, mine.Id, cancellationToken: Ct);
+
+        AssertError(exception, HttpStatusCode.Forbidden, 50003);
+        Assert.NotNull(discord.State.FindMessage(dm.Id, theirs.Id));
+        Assert.Null(discord.State.FindMessage(dm.Id, mine.Id));
+        Assert.Equal(mine.Id, Assert.IsType<MessageDeleted>(Assert.Single(Drain(subscription))).MessageId);
+    }
+
+    [Fact]
+    [Parity("DELETE /channels/{channel_id}/messages/{message_id}")]
     [Parity("10008")]
     public async Task DeleteMessageAsync_UnknownOrAlreadyDeleted_Returns404UnknownMessage()
     {

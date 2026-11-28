@@ -50,7 +50,11 @@ internal static class MessageWire
                     GuildId = reference.GuildId is { } guildId ? Id(guildId) : null,
                 }
                 : null,
-            ReferencedMessage = message.ReferencedMessage is { } referenced ? ToResponse(referenced, findUser) : null,
+
+            // A reference whose target is gone is written as an explicit null (Discord: absent = unknown, null = deleted).
+            ReferencedMessage = message.Reference is null
+                ? null
+                : new ReferencedMessageResponse(message.ReferencedMessage is { } referenced ? ToResponse(referenced, findUser) : null),
         };
     }
 

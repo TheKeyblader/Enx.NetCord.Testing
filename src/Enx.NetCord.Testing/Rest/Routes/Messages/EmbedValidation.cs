@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Text.Json;
 using Enx.NetCord.Testing.State;
 
@@ -57,7 +58,7 @@ internal static class EmbedValidation
         var index = 0;
         foreach (var item in array.EnumerateArray())
         {
-            var path = $"embeds.{index}";
+            var path = $"embeds.{index.ToString(CultureInfo.InvariantCulture)}";
             index++;
             if (item.ValueKind != JsonValueKind.Object)
             {
@@ -126,7 +127,7 @@ internal static class EmbedValidation
         var index = 0;
         foreach (var item in array.EnumerateArray())
         {
-            var path = $"fields.{index}";
+            var path = $"fields.{index.ToString(CultureInfo.InvariantCulture)}";
             index++;
             if (item.ValueKind != JsonValueKind.Object)
             {
