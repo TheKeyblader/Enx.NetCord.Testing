@@ -36,7 +36,7 @@ internal sealed partial class FakeDiscordState
 
             if (message.Type is not (0 or ReplyMessageType))
             {
-                // Only a default message or a reply can be pinned: the system messages (join, pin, boost…) cannot (hypothesis, UR en attente).
+                // Only a default message or a reply can be pinned: the system messages (join, pin, boost…) cannot (hypothesis, pending user review).
                 return new StateFailure(StateFailureKind.CannotExecuteOnSystemMessage, message.Id);
             }
 
