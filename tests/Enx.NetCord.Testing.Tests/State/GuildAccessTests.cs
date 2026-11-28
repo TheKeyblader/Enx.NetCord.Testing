@@ -196,7 +196,7 @@ public sealed class GuildAccessTests
         var guild = CreateGuild(state, "elsewhere", withBot: false).Guild;
 
         Assert.Single(state.ListGuildRoles(StateCaller.Fixture, guild.Id).Value);
-        Assert.True(state.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "c")).IsSuccess);
+        Assert.True(state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "c")).IsSuccess);
         Assert.True(state.CreateRole(StateCaller.Fixture, new CreateRoleInput(guild.Id, "r")).IsSuccess);
         Assert.True(state.CreateUserAndMember(StateCaller.Fixture, guild.Id, new CreateUserInput("carol")).IsSuccess);
     }
@@ -210,7 +210,7 @@ public sealed class GuildAccessTests
         using var subscription = state.SubscribeGateway();
         var denied = new StateFailure(StateFailureKind.MissingAccess, guild.Id);
 
-        Assert.Equal(denied, state.CreateTextChannel(StateCaller.Bot, new CreateTextChannelInput(guild.Id, "c")).Failure);
+        Assert.Equal(denied, state.CreateGuildChannel(StateCaller.Bot, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "c")).Failure);
         Assert.Equal(denied, state.CreateRole(StateCaller.Bot, new CreateRoleInput(guild.Id, "r")).Failure);
         Assert.Equal(denied, state.AddMember(StateCaller.Bot, new AddMemberInput(guild.Id, user.Id)).Failure);
         Assert.Equal(denied, state.CreateUserAndMember(StateCaller.Bot, guild.Id, new CreateUserInput("dave")).Failure);
@@ -236,7 +236,7 @@ public sealed class GuildAccessTests
     {
         var (state, _) = NewStateWithBot();
         var guild = CreateGuild(state, "elsewhere", withBot: false).Guild;
-        var channel = state.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "general")).Value;
+        var channel = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "general")).Value;
 
         Assert.Equal(new StateFailure(StateFailureKind.MissingAccess, channel.Id), state.GetChannel(StateCaller.Bot, channel.Id).Failure);
         Assert.Equal(new StateFailure(StateFailureKind.UnknownChannel, 999), state.GetChannel(StateCaller.Bot, 999).Failure);
@@ -248,7 +248,7 @@ public sealed class GuildAccessTests
     {
         var (state, _) = NewStateWithBot();
         var guild = CreateGuild(state, "home", withBot: true).Guild;
-        var channel = state.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "general")).Value;
+        var channel = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "general")).Value;
         var user = state.CreateUser(new CreateUserInput("alice"));
         var dm = state.GetOrCreateDmChannel(new CreateDmChannelInput(user.Id)).Value.Channel;
 
@@ -261,7 +261,7 @@ public sealed class GuildAccessTests
     {
         var (state, _) = NewStateWithBot();
         var guild = CreateGuild(state, "elsewhere", withBot: false).Guild;
-        var channel = state.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "general")).Value;
+        var channel = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "general")).Value;
         var alice = state.CreateUser(new CreateUserInput("alice"));
         var message = state.CreateMessage(StateCaller.Fixture, new CreateMessageInput(channel.Id, alice.Id, "hi")).Value;
         using var subscription = state.SubscribeGateway();
@@ -283,7 +283,7 @@ public sealed class GuildAccessTests
     {
         var (state, _) = NewStateWithBot();
         var guild = CreateGuild(state, "home", withBot: true).Guild;
-        var channel = state.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "general")).Value;
+        var channel = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "general")).Value;
         var alice = state.CreateUser(new CreateUserInput("alice"));
 
         var message = state.CreateMessage(StateCaller.Bot, new CreateMessageInput(channel.Id, alice.Id, "hi")).Value;

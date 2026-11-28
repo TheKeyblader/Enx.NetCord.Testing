@@ -25,6 +25,15 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
   2. applique la mutation sous verrou ;
   3. publie un **événement de domaine** (`StateChange`) que la Gateway traduit en dispatch.
 - IDs : `ISnowflakeGenerator` injecté ; dates : `TimeProvider`.
+- **Salons** (ADR 0013, M1-REST-02B1) : une seule entité/`ChannelSnapshot` pour tous les types ; ce qui s'applique à un type
+  se lit dans `ChannelTraits.Of(kind)` (famille, groupe de tri, parent permis, bornes, `HasNsfw`/`HasSlowmode`), jamais
+  par un `switch` de plus dans un handler. Un salon de guilde se crée **uniquement** par `CreateGuildChannel` (seed et
+  futur `POST /guilds/{id}/channels` : les invariants de parent, les 50/500 salons et la position par défaut y sont) ;
+  un échec d'invariant sort **avant** d'allouer un ID (un refus ne consomme pas le générateur). Supprimer une catégorie
+  détache ses enfants dans le même commit (`ChannelUpdated` par enfant, puis `ChannelDeleted`). Un champ que le type n'a
+  pas est ignoré par l'état (et validé en amont), jamais stocké. Les listes de salons sont rendues par ID croissant.
+- Tests d'état qui comptent les salons d'une guilde : `FakeDiscordState.MaxChannelsPerGuild` / `MaxChannelsPerCategory`.
+  Un `[Theory]` public ne peut pas prendre un type `internal` (`ChannelKind`…) en paramètre : passer des `int`/`string`.
 
 ## 3. Handler (`src/Enx.NetCord.Testing/Rest/Routes/<Domaine>/`)
 
@@ -73,6 +82,11 @@ Prérequis : avoir lu `docs/architecture.md` §REST et l'ADR sur la table de rou
 - Une projection qui nomme d'autres entités (auteur, mentions, message cité) reçoit `request.State.FindUser` (membre autorisé
   de la liste blanche de `RestIsolationTests`) ; ce que l'état renvoie est déjà détaché (`MessageSnapshot.ReferencedMessage`).
 - Pour une réponse JSON, projeter le résultat dans un DTO interne conforme à la spec Discord et le sérialiser avec `FakeDiscordJsonContext` (source-gen STJ). Le vrai client désérialise la réponse ; réserver les `NetCord.JsonModels` aux API NetCord qui les exigent, comme `Interaction.CreateFromJson`.
+- **Réponse qui dépend d'une famille** (salons : texte/annonces, voix/stage, catégorie, forum/media) : un DTO par famille dans
+  `Serialization/`, tous inscrits dans `FakeDiscordJsonContext`, et une méthode de rendu unique (`ChannelWire.RenderGuildChannel`)
+  qui choisit le DTO d'après les traits du type ; un champ « présent si défini » est un nullable
+  `[JsonIgnore(Condition = WhenWritingNull)]` **sur ce champ seulement** (ADR 0006, règle 4). Les rendus de liste d'une route
+  (M1-REST-06) auront besoin d'un `JsonConverter` fermé (règle 5), pas d'un repli sur `object`.
 - Erreurs : `DiscordError.*` (404 `10003 Unknown Channel`, 400 `50035 Invalid Form Body`
   avec arbre `errors`, 403 `50013 Missing Permissions`, 401 `0 401: Unauthorized`…). Ajouter
   le code à `docs/parity/errors.md` s'il est nouveau.

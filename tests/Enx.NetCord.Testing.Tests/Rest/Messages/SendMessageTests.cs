@@ -388,7 +388,7 @@ public sealed class SendMessageTests
     {
         using var harness = Users.UsersTestSupport.CreateRealRoutesHarness();
         var guild = harness.Context.State.CreateGuild(new CreateGuildInput("Test", WithBot: true)).Value.Guild;
-        var channel = harness.Context.State.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "general")).Value;
+        var channel = harness.Context.State.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "general")).Value;
         var author = harness.Context.State.CreateUser(new CreateUserInput("alice"));
         var existing = harness.Context.State.CreateMessage(StateCaller.Fixture, new CreateMessageInput(channel.Id, author.Id, "kept")).Value;
         using var anonymous = harness.CreateClient(rawToken: null);

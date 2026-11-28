@@ -9,7 +9,10 @@ namespace Enx.NetCord.Testing.Serialization;
 [JsonSerializable(typeof(UserResponse))]
 [JsonSerializable(typeof(CurrentUserResponse))]
 [JsonSerializable(typeof(PrivateChannelResponse))]
-[JsonSerializable(typeof(GuildChannelResponse))]
+[JsonSerializable(typeof(TextChannelResponse))]
+[JsonSerializable(typeof(VoiceChannelResponse))]
+[JsonSerializable(typeof(CategoryChannelResponse))]
+[JsonSerializable(typeof(ForumChannelResponse))]
 [JsonSerializable(typeof(MessageResponse))]
 [JsonSerializable(typeof(List<MessageResponse>))]
 internal sealed partial class FakeDiscordJsonContext : JsonSerializerContext;

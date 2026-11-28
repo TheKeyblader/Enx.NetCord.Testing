@@ -157,7 +157,7 @@ public sealed class FakeDiscordStateTests
         var guild = state.CreateGuild(new CreateGuildInput("g")).Value.Guild; // guild + @everyone
         Assert.Equal(1, clock.Reads);
 
-        state.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "c"));
+        state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "c"));
         Assert.Equal(2, clock.Reads);
 
         var user = state.CreateUser(new CreateUserInput("u"));
@@ -506,9 +506,9 @@ public sealed class FakeDiscordStateTests
     }
 
     [Fact]
-    public void CreateTextChannel_UnknownGuild_Fails()
+    public void CreateGuildChannel_UnknownGuild_Fails()
     {
-        var result = NewState().CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(1, "c"));
+        var result = NewState().CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(1, ChannelKind.GuildText, "c"));
 
         Assert.Equal(new StateFailure(StateFailureKind.UnknownGuild, 1), result.Failure);
     }
@@ -596,13 +596,13 @@ public sealed class FakeDiscordStateTests
     }
 
     [Fact]
-    public void CreateTextChannel_Several_AreListedInCreationOrderWithPositions()
+    public void CreateGuildChannel_Several_AreListedByIdWithPositionsPerSortingGroup()
     {
         var state = NewState();
         var guild = state.CreateGuild(new CreateGuildInput("g")).Value.Guild;
 
-        var a = state.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "a", Topic: "t")).Value;
-        var b = state.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "b", Nsfw: true)).Value;
+        var a = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "a", Topic: "t")).Value;
+        var b = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "b", Nsfw: true)).Value;
 
         Assert.Equal(ChannelKind.GuildText, a.Kind);
         Assert.Equal(guild.Id, a.GuildId);
@@ -610,6 +610,34 @@ public sealed class FakeDiscordStateTests
         Assert.Equal("t", a.Topic);
         Assert.True(b.Nsfw);
         Assert.Equal([a.Id, b.Id], state.ListGuildChannels(StateCaller.Fixture, guild.Id).Value.Select(c => c.Id));
+    }
+
+    [Fact]
+    public void CreateGuildChannel_ExplicitIds_AreListedByAscendingIdNotByCreationOrder()
+    {
+        var state = NewState();
+        var guild = state.CreateGuild(new CreateGuildInput("g")).Value.Guild;
+
+        var late = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "late", Id: IdAt(Start.AddDays(2)))).Value;
+        var early = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "early", Id: IdAt(Start.AddDays(1)))).Value;
+
+        Assert.Equal([early.Id, late.Id], state.ListGuildChannels(StateCaller.Fixture, guild.Id).Value.Select(c => c.Id));
+        Assert.Equal((0, 1), (late.Position, early.Position));
+    }
+
+    [Fact]
+    public void CreateGuildChannel_AfterADeletion_TakesOneMoreThanTheHighestPositionOfItsGroup()
+    {
+        var state = NewState();
+        var guild = state.CreateGuild(new CreateGuildInput("g")).Value.Guild;
+        var first = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "a")).Value;
+        state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "b"));
+        state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "c"));
+        state.DeleteChannel(StateCaller.Fixture, first.Id);
+
+        var next = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "d")).Value;
+
+        Assert.Equal(3, next.Position);
     }
 
     [Fact]
@@ -710,7 +738,7 @@ public sealed class FakeDiscordStateTests
     {
         var state = NewState();
         var (guild, channel, user) = Seed(state);
-        var other = state.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "other")).Value;
+        var other = state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "other")).Value;
         var message = state.CreateMessage(StateCaller.Fixture, new CreateMessageInput(channel.Id, user.Id, "x")).Value;
 
         Assert.Null(state.FindMessage(other.Id, message.Id));
@@ -765,7 +793,7 @@ public sealed class FakeDiscordStateTests
 
         state.CreateGuild(new CreateGuildInput("g", OwnerId: 999));
         state.CreateRole(StateCaller.Fixture, new CreateRoleInput(999, "r"));
-        state.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(999, "c"));
+        state.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(999, ChannelKind.GuildText, "c"));
         state.GetOrCreateDmChannel(new CreateDmChannelInput(999));
         state.AddMember(StateCaller.Fixture, new AddMemberInput(999, user.Id));
         state.AddMember(StateCaller.Fixture, new AddMemberInput(guild.Id, 999));
@@ -892,7 +920,7 @@ public sealed class FakeDiscordStateTests
     [Fact]
     public void ValueOrThrow_OnFailure_ThrowsInvalidOperation()
     {
-        var result = NewState().CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(1, "c"));
+        var result = NewState().CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(1, ChannelKind.GuildText, "c"));
 
         Assert.Throws<InvalidOperationException>(() => result.ValueOrThrow());
     }

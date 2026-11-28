@@ -16,11 +16,23 @@ internal enum StateFailureKind
     /// <summary>The resource exists but the bot cannot see it: it is not a member of the guild (403 <c>50001</c>).</summary>
     MissingAccess,
 
-    /// <summary>A guild channel cannot become the requested type (the fake models only guild text channels): 400 <c>50035</c> on <c>type</c>.</summary>
+    /// <summary>A guild channel cannot become, or be created as, the requested type (ADR 0013, § 5): 400 <c>50035</c> on <c>type</c>.</summary>
     InvalidChannelType,
 
-    /// <summary>The requested parent category does not exist (the fake models no category): 400 <c>50035</c> on <c>parent_id</c>.</summary>
+    /// <summary>The requested parent does not exist, or belongs to another guild (ADR 0013, § 2): 400 <c>50035</c> on <c>parent_id</c>.</summary>
     InvalidChannelParent,
+
+    /// <summary>The requested parent exists but is not a category (ADR 0013, § 2): 400 <c>50035</c> on <c>parent_id</c> (hypothesis).</summary>
+    ChannelParentNotCategory,
+
+    /// <summary>The channel is a category, which cannot have a parent (ADR 0013, § 2): 400 <c>50035</c> on <c>parent_id</c> (hypothesis).</summary>
+    ChannelCannotHaveParent,
+
+    /// <summary>The requested parent category already holds 50 channels (ADR 0013, § 2): 400 <c>50035</c> on <c>parent_id</c> (hypothesis).</summary>
+    ChannelParentFull,
+
+    /// <summary>The guild already has 500 channels (ADR 0013, § 1): 400 <c>30013</c> (status is a hypothesis).</summary>
+    MaxGuildChannels,
 
     /// <summary>A guild channel name must not be empty: 400 <c>50035</c> on <c>name</c> (a DM accepts an empty one).</summary>
     InvalidChannelName,

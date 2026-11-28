@@ -169,7 +169,7 @@ public sealed class GetChannelTests
     {
         using var harness = CreateRealRoutesHarness();
         var guild = harness.Context.State.CreateGuild(new CreateGuildInput("Test", WithBot: true)).Value.Guild;
-        var channel = harness.Context.State.CreateTextChannel(StateCaller.Fixture, new CreateTextChannelInput(guild.Id, "general")).Value;
+        var channel = harness.Context.State.CreateGuildChannel(StateCaller.Fixture, new CreateGuildChannelInput(guild.Id, ChannelKind.GuildText, "general")).Value;
         using var anonymous = harness.CreateClient(rawToken: null);
         using var stranger = harness.CreateClient("NDM.other.token");
 

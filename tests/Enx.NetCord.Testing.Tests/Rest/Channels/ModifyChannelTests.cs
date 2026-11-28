@@ -416,4 +416,41 @@ public sealed class ModifyChannelTests
         Assert.Equal("secret", discord.State.FindChannel(hidden.Id)!.Name);
         Assert.Empty(Drain(subscription));
     }
+
+    [Fact]
+    [Parity("PATCH /channels/{channel_id}")]
+    public async Task ModifyGuildChannelAsync_CategoryAndVoiceChannel_RenameAndKeepTheirType()
+    {
+        await using var discord = FakeDiscord.Create();
+        var lobby = discord.Seed.Guild("Test").Category("Lobby");
+        var voice = lobby.VoiceChannel("Voice");
+        using var rest = discord.CreateRestClient();
+
+        var renamedCategory = await rest.ModifyGuildChannelAsync(lobby.Id, o => o.Name = "Hall", cancellationToken: Ct);
+        var renamedVoice = await rest.ModifyGuildChannelAsync(voice.Id, o => { o.Name = "Talk"; o.Position = 2; }, cancellationToken: Ct);
+
+        Assert.Equal("Hall", Assert.IsType<CategoryGuildChannel>(renamedCategory).Name);
+        var read = Assert.IsType<VoiceGuildChannel>(renamedVoice);
+        Assert.Equal(("Talk", 2, lobby.Id), (read.Name, read.Position, read.ParentId));
+    }
+
+    [Fact]
+    [Parity("PATCH /channels/{channel_id}")]
+    public async Task ModifyGuildChannelAsync_TopicAndNsfwOnACategoryOrAVoiceChannel_AreIgnoredWithoutAChange()
+    {
+        await using var discord = FakeDiscord.Create();
+        var guild = discord.Seed.Guild("Test");
+        var lobby = guild.Category("Lobby");
+        var voice = guild.VoiceChannel("Voice");
+        using var rest = discord.CreateRestClient();
+        using var subscription = discord.State.SubscribeGateway();
+
+        await rest.ModifyGuildChannelAsync(lobby.Id, o => { o.Topic = "x"; o.Nsfw = true; o.Slowmode = 5; }, cancellationToken: Ct);
+        await rest.ModifyGuildChannelAsync(voice.Id, o => o.Topic = "x", cancellationToken: Ct);
+
+        Assert.Empty(Drain(subscription));
+        var storedCategory = discord.State.FindChannel(lobby.Id)!;
+        Assert.Equal((null, false, 0), (storedCategory.Topic, storedCategory.Nsfw, storedCategory.RateLimitPerUser));
+        Assert.Null(discord.State.FindChannel(voice.Id)!.Topic);
+    }
 }
