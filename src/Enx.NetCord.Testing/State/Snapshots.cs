@@ -103,7 +103,7 @@ internal sealed record MessageSnapshot(
 /// A guild with its <c>@everyone</c> role and, if requested, the bot's membership, as produced by the single
 /// guild-creating commit.
 /// </summary>
-internal sealed record GuildCreation(GuildSnapshot Guild, RoleSnapshot Everyone, MemberSnapshot? BotMember = null);
+internal sealed record GuildCreation(GuildSnapshot Guild, RoleSnapshot Everyone, MemberSnapshot? BotMember);
 
 /// <summary>
 /// A detached picture of the whole state (messages excluded) taken under the lock, together with the

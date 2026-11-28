@@ -19,7 +19,7 @@ internal sealed record UserUpdated(long Number, UserSnapshot User) : StateChange
 /// A guild was created with its <c>@everyone</c> role and, when the bot joined in the same commit, the bot's membership
 /// (<see cref="BotMember"/>, <see langword="null"/> for a guild the bot cannot see).
 /// </summary>
-internal sealed record GuildCreated(long Number, GuildSnapshot Guild, RoleSnapshot Everyone, MemberSnapshot? BotMember = null)
+internal sealed record GuildCreated(long Number, GuildSnapshot Guild, RoleSnapshot Everyone, MemberSnapshot? BotMember)
     : StateChange(Number);
 
 internal sealed record ChannelCreated(long Number, ChannelSnapshot Channel) : StateChange(Number);

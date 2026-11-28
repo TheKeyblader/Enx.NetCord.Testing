@@ -1,13 +1,15 @@
 using System.Globalization;
 using System.Net;
-using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
+using System.Text.Json.Serialization;
 using Enx.NetCord.Testing.Rest;
 using Enx.NetCord.Testing.State;
 using NetCord.Rest;
 using Xunit;
 
 namespace Enx.NetCord.Testing.Tests.Rest;
+
+[JsonSerializable(typeof(string[]))]
+internal sealed partial class GuildAccessJsonContext : JsonSerializerContext;
 
 /// <summary>
 /// ADR 0004, amendment 04B, § 2, through the real NetCord <see cref="RestClient"/>. No guild or channel route exists yet
@@ -29,7 +31,6 @@ public sealed class GuildAccessRestTests
 
     private static FakeDiscord CreateFake()
     {
-        var emptyList = (JsonTypeInfo<object[]>)JsonSerializerOptions.Default.GetTypeInfo(typeof(object[]));
         RouteBinding[] bindings =
         [
             RouteBinding.Of(GuildKey, request => Answer(request.State.GetGuild(StateCaller.Bot, Id(request, "guild_id")))),
@@ -38,7 +39,7 @@ public sealed class GuildAccessRestTests
                 request =>
                 {
                     var roles = request.State.ListGuildRoles(StateCaller.Bot, Id(request, "guild_id"));
-                    return roles.IsSuccess ? RestResult.Ok([], emptyList) : DiscordError.FromStateFailure(roles.Failure);
+                    return roles.IsSuccess ? RestResult.Ok<string[]>([], GuildAccessJsonContext.Default.StringArray) : DiscordError.FromStateFailure(roles.Failure);
                 }),
             RouteBinding.Of(ChannelKey, request => Answer(request.State.GetChannel(StateCaller.Bot, Id(request, "channel_id")))),
         ];
