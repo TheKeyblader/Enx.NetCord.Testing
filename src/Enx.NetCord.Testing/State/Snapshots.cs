@@ -56,7 +56,8 @@ internal sealed record ChannelSnapshot(
     ulong? LastMessageId,
     ImmutableArray<ulong> RecipientIds,
     DateTimeOffset CreatedAt,
-    long Ordinal);
+    long Ordinal,
+    int RateLimitPerUser = 0);
 
 internal sealed record RoleSnapshot(
     ulong Id,

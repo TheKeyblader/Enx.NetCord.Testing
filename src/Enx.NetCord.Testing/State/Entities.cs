@@ -58,6 +58,7 @@ internal sealed class ChannelEntity(ulong id, ChannelKind kind, long ordinal)
     internal string? Topic { get; set; }
     internal int Position { get; set; }
     internal bool Nsfw { get; set; }
+    internal int RateLimitPerUser { get; set; }
     internal ulong? LastMessageId { get; set; }
     internal List<ulong> RecipientIds { get; } = [];
 
@@ -66,7 +67,7 @@ internal sealed class ChannelEntity(ulong id, ChannelKind kind, long ordinal)
 
     internal ChannelSnapshot ToSnapshot() =>
         new(Id, Kind, GuildId, Name, Topic, Position, Nsfw, LastMessageId,
-            [.. RecipientIds], Snowflake.CreatedAt(Id), Ordinal);
+            [.. RecipientIds], Snowflake.CreatedAt(Id), Ordinal, RateLimitPerUser);
 }
 
 internal sealed class RoleEntity(ulong id, ulong guildId, string name, long ordinal)

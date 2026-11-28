@@ -8,7 +8,8 @@ namespace Enx.NetCord.Testing.Rest;
 /// Shared building blocks for the structural validators of every route family (ADR 0005, step 3). They read no state
 /// and only produce the errors Discord produces: <c>50109</c> for a body that is not JSON and <c>50035</c> with the
 /// field-level codes of the <c>errors</c> tree (<c>MODEL_TYPE_CONVERT</c>, <c>BASE_TYPE_BAD_TYPE</c>,
-/// <c>BASE_TYPE_REQUIRED</c>, <c>BASE_TYPE_BAD_LENGTH</c>, <c>NUMBER_TYPE_COERCE</c>).
+/// <c>BASE_TYPE_REQUIRED</c>, <c>BASE_TYPE_BAD_LENGTH</c>, <c>NUMBER_TYPE_COERCE</c>, <c>NUMBER_TYPE_MIN</c>, <c>NUMBER_TYPE_MAX</c>,
+/// <c>BOOLEAN_TYPE_COERCE</c>).
 /// </summary>
 /// <remarks>
 /// Typical validator: <see cref="TryReadJsonObject"/> (disposing the document), read each field with the
@@ -124,6 +125,114 @@ internal static class FormValidation
         }
 
         return element.GetString()!;
+    }
+
+    /// <summary>
+    /// Reads an optional, nullable string property (<c>?string</c>): absent or <c>null</c> are both reported by <paramref name="present"/>
+    /// so a caller can tell "not sent" from "cleared"; any other non-string value is a bad type.
+    /// </summary>
+    /// <param name="root">The JSON object.</param>
+    /// <param name="name">The property name, also the error path.</param>
+    /// <param name="errors">The collector.</param>
+    /// <param name="present">Whether the property was sent (including as <c>null</c>) with a valid type.</param>
+    /// <returns>The value, or <see langword="null"/> when absent, <c>null</c> or of the wrong type (an error was then added).</returns>
+    public static string? ReadNullableString(JsonElement root, string name, FormErrors errors, out bool present)
+    {
+        ArgumentNullException.ThrowIfNull(errors);
+        present = false;
+        if (!root.TryGetProperty(name, out var element))
+        {
+            return null;
+        }
+
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Null:
+                present = true;
+                return null;
+
+            case JsonValueKind.String:
+                present = true;
+                return element.GetString()!;
+
+            default:
+                AddBadType(errors, name, "string");
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Reads an optional, nullable integer property (<c>?integer</c>) and checks its bounds. Like Discord it accepts a JSON integer or a
+    /// numeric string; anything else is <c>NUMBER_TYPE_COERCE</c>, a value out of range <c>NUMBER_TYPE_MIN</c>/<c>NUMBER_TYPE_MAX</c>.
+    /// Absent and <c>null</c> both give <see langword="null"/> (the field is left as it is).
+    /// </summary>
+    /// <param name="root">The JSON object.</param>
+    /// <param name="name">The property name, also the error path.</param>
+    /// <param name="minimum">The inclusive lower bound.</param>
+    /// <param name="maximum">The inclusive upper bound.</param>
+    /// <param name="errors">The collector.</param>
+    /// <returns>The value, or <see langword="null"/> when absent, <c>null</c> or invalid (an error was then added).</returns>
+    public static int? ReadOptionalInteger(JsonElement root, string name, int minimum, int maximum, FormErrors errors)
+    {
+        ArgumentNullException.ThrowIfNull(errors);
+        if (!root.TryGetProperty(name, out var element) || element.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        string? raw = element.ValueKind switch
+        {
+            JsonValueKind.Number => element.GetRawText(),
+            JsonValueKind.String => element.GetString(),
+            _ => null,
+        };
+        if (raw is null || !long.TryParse(raw, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value))
+        {
+            errors.Add(name, "NUMBER_TYPE_COERCE", $"Value \"{raw ?? element.GetRawText()}\" is not int.");
+            return null;
+        }
+
+        if (value < minimum)
+        {
+            errors.Add(name, "NUMBER_TYPE_MIN", $"int value should be greater than or equal to {minimum.ToString(CultureInfo.InvariantCulture)}.");
+            return null;
+        }
+
+        if (value > maximum)
+        {
+            errors.Add(name, "NUMBER_TYPE_MAX", $"int value should be less than or equal to {maximum.ToString(CultureInfo.InvariantCulture)}.");
+            return null;
+        }
+
+        return (int)value;
+    }
+
+    /// <summary>
+    /// Reads an optional, nullable boolean property (<c>?boolean</c>): a JSON boolean; anything else is <c>BOOLEAN_TYPE_COERCE</c>.
+    /// Absent and <c>null</c> both give <see langword="null"/> (the field is left as it is).
+    /// </summary>
+    /// <param name="root">The JSON object.</param>
+    /// <param name="name">The property name, also the error path.</param>
+    /// <param name="errors">The collector.</param>
+    /// <returns>The value, or <see langword="null"/> when absent, <c>null</c> or of the wrong type (an error was then added).</returns>
+    public static bool? ReadOptionalBoolean(JsonElement root, string name, FormErrors errors)
+    {
+        ArgumentNullException.ThrowIfNull(errors);
+        if (!root.TryGetProperty(name, out var element) || element.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.True:
+                return true;
+            case JsonValueKind.False:
+                return false;
+            default:
+                errors.Add(name, "BOOLEAN_TYPE_COERCE", $"Value \"{(element.ValueKind == JsonValueKind.String ? element.GetString() : element.GetRawText())}\" is not boolean.");
+                return null;
+        }
     }
 
     /// <summary>Checks the length of a string in Unicode code points, as Discord does, and adds <c>BASE_TYPE_BAD_LENGTH</c> when out of range.</summary>

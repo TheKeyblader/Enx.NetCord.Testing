@@ -1,3 +1,4 @@
+using Enx.NetCord.Testing.Rest.Routes.Channels;
 using Enx.NetCord.Testing.Rest.Routes.Users;
 
 namespace Enx.NetCord.Testing.Rest;
@@ -12,5 +13,6 @@ internal static class RestRoutes
     internal static IReadOnlyList<RouteBinding> Bindings { get; } =
     [
         .. UserRoutes.Bindings,
+        .. ChannelRoutes.Bindings,
     ];
 }
